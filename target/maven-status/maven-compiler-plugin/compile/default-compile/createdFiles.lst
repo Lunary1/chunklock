@@ -1,0 +1,14 @@
+me\chunklock\ChunkLockManager.class
+me\chunklock\ChunklockCommand.class
+me\chunklock\PlayerListener.class
+me\chunklock\BiomeUnlockRegistry.class
+me\chunklock\PlayerProgressTracker.class
+me\chunklock\TickTask.class
+me\chunklock\Difficulty.class
+me\chunklock\ChunkEvaluator$ChunkValueData.class
+me\chunklock\ChunkEvaluator.class
+me\chunklock\UnlockItemListener.class
+me\chunklock\ChunkData.class
+me\chunklock\PlayerDataManager.class
+me\chunklock\ChunklockPlugin.class
+me\chunklock\ChunkValueRegistry.class

@@ -1,0 +1,18 @@
+name: Chunklock
+version: 1.0.0
+main: me.chunklock.ChunklockPlugin
+api-version: 1.20
+author: You
+description: Locks Minecraft chunks based on biome-specific item requirements.
+
+commands:
+  chunklock:
+    description: View your chunklock status or run admin commands
+    usage: /chunklock [status|reload|help|reset <player>]
+    permission: chunklock.admin
+    aliases: [cl]
+
+permissions:
+  chunklock.admin:
+    description: Allows access to /chunklock reset and other admin functions
+    default: op
