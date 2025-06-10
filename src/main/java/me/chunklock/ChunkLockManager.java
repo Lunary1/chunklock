@@ -1,15 +1,22 @@
-// ChunkLockManager.java
 package me.chunklock;
 
 import org.bukkit.Chunk;
+import org.bukkit.entity.Player;
+
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
-import java.util.Random;
+import java.util.Set;
+import java.util.UUID;
 
 public class ChunkLockManager {
 
     private final Map<String, ChunkData> chunkDataMap = new HashMap<>();
-    private final Random random = new Random();
+    private final ChunkEvaluator chunkEvaluator;
+
+    public ChunkLockManager(ChunkEvaluator chunkEvaluator) {
+        this.chunkEvaluator = chunkEvaluator;
+    }
 
     public boolean isLocked(Chunk chunk) {
         return getChunkData(chunk).isLocked();
@@ -29,20 +36,18 @@ public class ChunkLockManager {
         data.setLocked(false);
     }
 
-    public void initializeChunk(Chunk chunk) {
+    public void initializeChunk(Chunk chunk, UUID playerId) {
         String key = getChunkKey(chunk);
         if (!chunkDataMap.containsKey(key)) {
-            Difficulty difficulty = randomizeDifficulty();
-            chunkDataMap.put(key, new ChunkData(true, difficulty));
+            // Use ChunkEvaluator to determine difficulty based on actual chunk properties
+            ChunkEvaluator.ChunkValueData evaluation = chunkEvaluator.evaluateChunk(playerId, chunk);
+            chunkDataMap.put(key, new ChunkData(true, evaluation.difficulty));
         }
     }
 
-    private Difficulty randomizeDifficulty() {
-        int roll = random.nextInt(100);
-        if (roll < 50) return Difficulty.EASY;
-        if (roll < 80) return Difficulty.NORMAL;
-        if (roll < 95) return Difficulty.HARD;
-        return Difficulty.IMPOSSIBLE;
+    // Overload for backward compatibility
+    public void initializeChunk(Chunk chunk) {
+        initializeChunk(chunk, null); // Will use fallback logic in ChunkEvaluator
     }
 
     private ChunkData getChunkData(Chunk chunk) {
@@ -53,4 +58,23 @@ public class ChunkLockManager {
     private String getChunkKey(Chunk chunk) {
         return chunk.getWorld().getName() + ":" + chunk.getX() + ":" + chunk.getZ();
     }
+
+    // Method to get chunk evaluation info for display
+    public ChunkEvaluator.ChunkValueData evaluateChunk(UUID playerId, Chunk chunk) {
+        return chunkEvaluator.evaluateChunk(playerId, chunk);
+    }
+
+    private final Set<UUID> bypassingPlayers = new HashSet<>();
+
+    public void setBypassing(Player player, boolean bypassing) {
+        if (bypassing) {
+            bypassingPlayers.add(player.getUniqueId());
+        } else {
+            bypassingPlayers.remove(player.getUniqueId());
+        }
+    }
+
+    public boolean isBypassing(Player player) {
+        return bypassingPlayers.contains(player.getUniqueId());
+}
 }

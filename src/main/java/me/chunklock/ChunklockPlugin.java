@@ -10,31 +10,54 @@ public class ChunklockPlugin extends JavaPlugin {
     private BiomeUnlockRegistry biomeUnlockRegistry;
     private PlayerProgressTracker progressTracker;
     private PlayerDataManager playerDataManager;
+    private ChunkValueRegistry chunkValueRegistry;
+    private ChunkEvaluator chunkEvaluator;
 
     @Override
     public void onEnable() {
         instance = this;
-        this.chunkLockManager = new ChunkLockManager();
+        
+        // Initialize registries first
+        this.chunkValueRegistry = new ChunkValueRegistry(this);
         this.biomeUnlockRegistry = new BiomeUnlockRegistry(this);
-        this.progressTracker = new PlayerProgressTracker();
+        this.progressTracker = new PlayerProgressTracker(this);
         this.playerDataManager = new PlayerDataManager(this);
+        
+        // Initialize evaluator and manager
+        this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry);
+        this.chunkLockManager = new ChunkLockManager(chunkEvaluator);
 
+        // Register event listeners
         Bukkit.getPluginManager().registerEvents(new PlayerListener(chunkLockManager, progressTracker, playerDataManager), this);
         Bukkit.getPluginManager().registerEvents(new UnlockItemListener(chunkLockManager, biomeUnlockRegistry, progressTracker), this);
 
-        new TickTask(chunkLockManager, biomeUnlockRegistry).runTaskTimer(this, 0L, 10L); // every 10 ticks
-        getLogger().info("Chunklock plugin enabled.");
+        // Start tick task for visual effects
+        new TickTask(chunkLockManager, biomeUnlockRegistry).runTaskTimer(this, 0L, 10L);
+        
+        // Register commands
         getCommand("chunklock").setExecutor(new ChunklockCommand(progressTracker));
         
+        getLogger().info("Chunklock plugin enabled with ChunkEvaluator integration!");
     }
 
     @Override
     public void onDisable() {
-        playerDataManager.saveAll();
+        if (playerDataManager != null) {
+            playerDataManager.saveAll();
+        }
         getLogger().info("Chunklock plugin disabled.");
     }
 
     public static ChunklockPlugin getInstance() {
         return instance;
+    }
+    
+    // Getters for other classes to access components
+    public ChunkLockManager getChunkLockManager() {
+        return chunkLockManager;
+    }
+    
+    public ChunkEvaluator getChunkEvaluator() {
+        return chunkEvaluator;
     }
 }

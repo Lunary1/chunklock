@@ -22,11 +22,11 @@ public class TickTask extends BukkitRunnable {
     public void run() {
         for (Player player : Bukkit.getOnlinePlayers()) {
             Chunk center = player.getLocation().getChunk();
-            chunkLockManager.initializeChunk(center);
+            chunkLockManager.initializeChunk(center, player.getUniqueId());
             maybeDrawBorder(player, center);
 
             for (Chunk adjacent : getAdjacentChunks(center)) {
-                chunkLockManager.initializeChunk(adjacent);
+                chunkLockManager.initializeChunk(adjacent, player.getUniqueId());
                 maybeDrawBorder(player, adjacent);
             }
         }

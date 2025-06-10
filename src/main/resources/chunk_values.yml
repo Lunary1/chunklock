@@ -1,8 +1,8 @@
 # Thresholds for score → difficulty mapping
 thresholds:
-  easy: 30
-  normal: 60
-  hard: 90
+  easy: 25 # Lower threshold for easier progression
+  normal: 50
+  hard: 80
 
 # How valuable each biome is (higher = more difficulty)
 biomes:
