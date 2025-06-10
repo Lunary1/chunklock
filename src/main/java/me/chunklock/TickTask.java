@@ -21,6 +21,9 @@ public class TickTask extends BukkitRunnable {
     @Override
     public void run() {
         for (Player player : Bukkit.getOnlinePlayers()) {
+            if (chunkLockManager.isBypassing(player)) {
+                continue;
+            }
             Chunk center = player.getLocation().getChunk();
             chunkLockManager.initializeChunk(center, player.getUniqueId());
             maybeDrawBorder(player, center);
