@@ -13,16 +13,18 @@ import org.bukkit.entity.Player;
 public class ChunklockCommand implements CommandExecutor {
 
     private final PlayerProgressTracker progressTracker;
+    private final ChunkLockManager chunkLockManager;
 
-    public ChunklockCommand(PlayerProgressTracker progressTracker) {
+    public ChunklockCommand(PlayerProgressTracker progressTracker, ChunkLockManager chunkLockManager) {
         this.progressTracker = progressTracker;
+        this.chunkLockManager = chunkLockManager;
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
 
         if (args.length == 0) {
-            sender.sendMessage(Component.text("Usage: /chunklock <status|reset|help>").color(NamedTextColor.YELLOW));
+            sender.sendMessage(Component.text("Usage: /chunklock <status|reset|bypass|help>").color(NamedTextColor.YELLOW));
             return true;
         }
 
@@ -74,10 +76,40 @@ public class ChunklockCommand implements CommandExecutor {
                 target.sendMessage(Component.text("Your chunk progress and spawn were reset by an admin.").color(NamedTextColor.RED));
             }
 
+            case "bypass" -> {
+                if (!sender.hasPermission("chunklock.admin")) {
+                    sender.sendMessage(Component.text("You don't have permission to use this command.").color(NamedTextColor.RED));
+                    return true;
+                }
+
+                Player target;
+                if (args.length >= 2) {
+                    target = Bukkit.getPlayer(args[1]);
+                    if (target == null) {
+                        sender.sendMessage(Component.text("Player not found or not online.").color(NamedTextColor.RED));
+                        return true;
+                    }
+                } else {
+                    if (!(sender instanceof Player p)) {
+                        sender.sendMessage(Component.text("Only players can toggle their own bypass.").color(NamedTextColor.RED));
+                        return true;
+                    }
+                    target = p;
+                }
+
+                chunkLockManager.setBypassing(target, !chunkLockManager.isBypassing(target));
+                boolean state = chunkLockManager.isBypassing(target);
+                sender.sendMessage(Component.text("Chunklock bypass " + (state ? "enabled" : "disabled") + " for " + target.getName()).color(NamedTextColor.GREEN));
+                if (sender != target) {
+                    target.sendMessage(Component.text("Chunklock bypass " + (state ? "enabled" : "disabled") + " by admin.").color(NamedTextColor.YELLOW));
+                }
+            }
+
             case "help" -> {
                 sender.sendMessage(Component.text("Chunklock Commands:").color(NamedTextColor.AQUA));
                 sender.sendMessage(Component.text("/chunklock status - View your unlocked chunks").color(NamedTextColor.GRAY));
                 sender.sendMessage(Component.text("/chunklock reset <player> - Admin: Reset a player's chunks and spawn").color(NamedTextColor.GRAY));
+                sender.sendMessage(Component.text("/chunklock bypass [player] - Admin: Toggle bypass mode").color(NamedTextColor.GRAY));
             }
 
             default -> {
