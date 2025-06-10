@@ -35,7 +35,9 @@ public class ChunklockPlugin extends JavaPlugin {
         new TickTask(chunkLockManager, biomeUnlockRegistry).runTaskTimer(this, 0L, 10L);
         
         // Register commands
-        getCommand("chunklock").setExecutor(new ChunklockCommand(progressTracker, chunkLockManager));
+        var chunklockCmd = new ChunklockCommand(progressTracker, chunkLockManager);
+        getCommand("chunklock").setExecutor(chunklockCmd);
+        getCommand("chunklock").setTabCompleter(chunklockCmd);
         
         getLogger().info("Chunklock plugin enabled with ChunkEvaluator integration!");
     }
