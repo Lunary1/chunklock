@@ -8,9 +8,13 @@ import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import org.bukkit.entity.Player;
 
-public class ChunklockCommand implements CommandExecutor {
+public class ChunklockCommand implements CommandExecutor, TabCompleter {
 
     private final PlayerProgressTracker progressTracker;
     private final ChunkLockManager chunkLockManager;
@@ -118,5 +122,32 @@ public class ChunklockCommand implements CommandExecutor {
         }
 
         return true;
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        List<String> completions = new ArrayList<>();
+
+        if (args.length == 1) {
+            String prefix = args[0].toLowerCase();
+            for (String sub : List.of("status", "reset", "bypass", "help")) {
+                if (sub.startsWith(prefix)) {
+                    completions.add(sub);
+                }
+            }
+            return completions;
+        }
+
+        if (args.length == 2 && (args[0].equalsIgnoreCase("reset") || args[0].equalsIgnoreCase("bypass"))) {
+            String prefix = args[1].toLowerCase();
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (p.getName().toLowerCase().startsWith(prefix)) {
+                    completions.add(p.getName());
+                }
+            }
+            return completions;
+        }
+
+        return Collections.emptyList();
     }
 }
