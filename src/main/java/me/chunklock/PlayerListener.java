@@ -128,8 +128,12 @@ public class PlayerListener implements Listener {
 
         if (!from.equals(to)) {
             chunkLockManager.initializeChunk(to, event.getPlayer().getUniqueId());
+            Player player = event.getPlayer();
+            if (chunkLockManager.isBypassing(player)) {
+                return;
+            }
+
             if (chunkLockManager.isLocked(to)) {
-                Player player = event.getPlayer();
                 long now = System.currentTimeMillis();
                 long last = lastWarned.getOrDefault(player.getUniqueId(), 0L);
 
