@@ -4,6 +4,6 @@ Chunklock is a Minecraft plugin that restricts players to specific chunks until 
 ## Commands
 
 - `/chunklock status` – show how many chunks you have unlocked.
-- `/chunklock unlock` – open a small GUI to attempt unlocking the chunk you are standing in.
+- `/chunklock unlock` – open a GUI to attempt unlocking your current chunk. The same interface appears automatically when you try to enter a locked chunk.
 - `/chunklock bypass [player]` – admin: toggle bypass mode for a player.
 - `/chunklock reset <player>` – admin: reset a player's progress.

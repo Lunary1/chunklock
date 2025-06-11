@@ -31,9 +31,9 @@ public class ChunklockPlugin extends JavaPlugin {
         this.chunkLockManager = new ChunkLockManager(chunkEvaluator);
 
         // Register event listeners
-        Bukkit.getPluginManager().registerEvents(new PlayerListener(chunkLockManager, progressTracker, playerDataManager), this);
-        Bukkit.getPluginManager().registerEvents(new UnlockItemListener(chunkLockManager, biomeUnlockRegistry, progressTracker), this);
         this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker);
+        Bukkit.getPluginManager().registerEvents(new PlayerListener(chunkLockManager, progressTracker, playerDataManager, unlockGui), this);
+        Bukkit.getPluginManager().registerEvents(new UnlockItemListener(chunkLockManager, biomeUnlockRegistry, progressTracker), this);
         Bukkit.getPluginManager().registerEvents(unlockGui, this);
 
         // Start tick task for visual effects
