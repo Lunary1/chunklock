@@ -2,6 +2,7 @@ package me.chunklock;
 
 import org.bukkit.Chunk;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.block.Biome;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
@@ -30,15 +31,12 @@ public class UnlockItemListener implements Listener {
     public void onUseUnlockItem(PlayerInteractEvent event) {
         Player player = event.getPlayer();
 
-        // Only allow right-click with item
         Action action = event.getAction();
         if (action != Action.RIGHT_CLICK_BLOCK && action != Action.RIGHT_CLICK_AIR) return;
 
-        // Check if player is holding an unlock item (optional)
         ItemStack heldItem = player.getInventory().getItemInMainHand();
         if (heldItem.getType() != Material.NETHER_STAR) return;
 
-        // Get the block player is looking at
         Block targetBlock = player.getTargetBlockExact(5);
         if (targetBlock == null) {
             player.sendMessage(Component.text("No valid block in sight to unlock a chunk.").color(NamedTextColor.RED));
@@ -58,15 +56,14 @@ public class UnlockItemListener implements Listener {
 
         ItemStack requiredStack = new ItemStack(requirement.material(), requirement.amount());
         if (!player.getInventory().containsAtLeast(requiredStack, requirement.amount())) {
-            player.sendMessage(Component.text("You do not have the required items to unlock this biome: " + biome.name()).color(NamedTextColor.RED));
+            // Use helper method instead of deprecated name()
+            String biomeName = BiomeUnlockRegistry.getBiomeDisplayName(biome);
+            player.sendMessage(Component.text("You do not have the required items to unlock this biome: " + biomeName).color(NamedTextColor.RED));
             player.sendMessage(Component.text("Required: " + requirement.amount() + " " + requirement.material().name()).color(NamedTextColor.YELLOW));
             return;
         }
 
-        // Consume the required item(s)
         player.getInventory().removeItem(requiredStack);
-
-        // Unlock the chunk and track progress
         chunkLockManager.unlockChunk(chunk);
         progressTracker.incrementUnlockedChunks(player.getUniqueId());
 

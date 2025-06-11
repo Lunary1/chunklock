@@ -1,6 +1,7 @@
 package me.chunklock;
 
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.block.Biome;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -30,11 +31,15 @@ public class ChunkValueRegistry {
             plugin.getLogger().info("[ChunkValueRegistry] Loading biome weights...");
             for (String key : config.getConfigurationSection("biomes").getKeys(false)) {
                 try {
-                    Biome biome = Biome.valueOf(key.toUpperCase());
-                    int weight = config.getInt("biomes." + key);
-                    biomeWeights.put(biome, weight);
-                } catch (IllegalArgumentException e) {
-                    plugin.getLogger().warning("Invalid biome in chunk_values.yml: " + key);
+                    Biome biome = getBiomeFromString(key);
+                    if (biome != null) {
+                        int weight = config.getInt("biomes." + key);
+                        biomeWeights.put(biome, weight);
+                    } else {
+                        plugin.getLogger().warning("Invalid biome in chunk_values.yml: " + key);
+                    }
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Error loading biome weight for: " + key);
                 }
             }
         }
@@ -60,6 +65,23 @@ public class ChunkValueRegistry {
         }
     }
 
+    private Biome getBiomeFromString(String biomeKey) {
+        try {
+            // First try direct enum name match
+            return Biome.valueOf(biomeKey.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            // Try matching by key
+            for (Biome biome : Biome.values()) {
+                NamespacedKey key = biome.getKey();
+                if (key.getKey().equalsIgnoreCase(biomeKey) || 
+                    key.toString().equalsIgnoreCase(biomeKey)) {
+                    return biome;
+                }
+            }
+            return null;
+        }
+    }
+
     public int getBiomeWeight(Biome biome) {
         return biomeWeights.getOrDefault(biome, 8); // default fallback weight
     }
@@ -75,5 +97,12 @@ public class ChunkValueRegistry {
             case "hard" -> 90;
             default -> 120;
         });
+    }
+
+    // Helper method to get biome display name
+    public static String getBiomeDisplayName(Biome biome) {
+        if (biome == null) return "Unknown";
+        NamespacedKey key = biome.getKey();
+        return key.getKey().replace("_", " ");
     }
 }

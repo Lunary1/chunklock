@@ -1,6 +1,7 @@
 package me.chunklock;
 
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.block.Biome;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -40,7 +41,8 @@ public class BiomeUnlockRegistry {
 
         for (String biomeKey : config.getKeys(false)) {
             try {
-                Biome biome = Biome.valueOf(biomeKey.toUpperCase(Locale.ROOT));
+                // Use the key string directly to match biome names
+                Biome biome = getBiomeFromString(biomeKey);
                 if (biome == null) {
                     plugin.getLogger().warning("Invalid biome in config: " + biomeKey);
                     continue;
@@ -63,9 +65,26 @@ public class BiomeUnlockRegistry {
                 if (!list.isEmpty()) {
                     unlockOptions.put(biome, list);
                 }
-            } catch (IllegalArgumentException ignored) {
+            } catch (Exception ex) {
                 plugin.getLogger().warning("Invalid biome format in biome_costs.yml: " + biomeKey);
             }
+        }
+    }
+
+    private Biome getBiomeFromString(String biomeKey) {
+        try {
+            // First try direct enum name match
+            return Biome.valueOf(biomeKey.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            // Try matching by key
+            for (Biome biome : Biome.values()) {
+                NamespacedKey key = biome.getKey();
+                if (key.getKey().equalsIgnoreCase(biomeKey) || 
+                    key.toString().equalsIgnoreCase(biomeKey)) {
+                    return biome;
+                }
+            }
+            return null;
         }
     }
 
@@ -90,5 +109,12 @@ public class BiomeUnlockRegistry {
     public void consumeRequiredItem(Player player, Biome biome, int score) {
         UnlockRequirement req = calculateRequirement(player, biome, score);
         player.getInventory().removeItem(new ItemStack(req.material(), req.amount()));
+    }
+
+    // Helper method to get biome display name
+    public static String getBiomeDisplayName(Biome biome) {
+        if (biome == null) return "Unknown";
+        NamespacedKey key = biome.getKey();
+        return key.getKey().replace("_", " ");
     }
 }

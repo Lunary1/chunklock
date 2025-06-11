@@ -6,6 +6,7 @@ import org.bukkit.block.Biome;
 import org.bukkit.block.Block;
 
 import java.util.UUID;
+import java.util.logging.Level;
 
 public class ChunkEvaluator {
 
@@ -18,58 +19,137 @@ public class ChunkEvaluator {
     }
 
     public ChunkValueData evaluateChunk(UUID playerId, Chunk chunk) {
-        int score = 0;
+        try {
+            if (chunk == null) {
+                ChunklockPlugin.getInstance().getLogger().warning("Attempted to evaluate null chunk for player " + playerId);
+                return new ChunkValueData(0, Difficulty.EASY, Biome.PLAINS);
+            }
 
-        // 1. Distance factor
-        Chunk originChunk = null;
-        if (playerDataManager.getChunkSpawn(playerId) != null) {
-            originChunk = playerDataManager.getChunkSpawn(playerId).getChunk();
-        } else {
-            // fallback: treat this as spawn chunk
-            originChunk = chunk;
+            if (chunk.getWorld() == null) {
+                ChunklockPlugin.getInstance().getLogger().warning("Chunk has null world for player " + playerId);
+                return new ChunkValueData(0, Difficulty.EASY, Biome.PLAINS);
+            }
+
+            int score = 0;
+
+            // 1. Distance factor with error handling
+            try {
+                Chunk originChunk = getOriginChunk(playerId, chunk);
+                int dx = originChunk.getX() - chunk.getX();
+                int dz = originChunk.getZ() - chunk.getZ();
+                int distance = Math.abs(dx) + Math.abs(dz);
+                score += distance * 5;
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error calculating distance for chunk evaluation", e);
+                // Continue with score = 0 for distance
+            }
+
+            // 2. Biome factor with error handling
+            Biome biome = Biome.PLAINS; // Default fallback
+            try {
+                biome = getBiomeSafely(chunk);
+                score += chunkValueRegistry.getBiomeWeight(biome);
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error getting biome for chunk evaluation", e);
+                score += chunkValueRegistry.getBiomeWeight(Biome.PLAINS);
+            }
+
+            // 3. Block scan factor with error handling
+            try {
+                score += scanSurfaceBlocks(chunk);
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error scanning surface blocks for chunk evaluation", e);
+                // Continue without surface block score
+            }
+
+            // 4. Determine difficulty with bounds checking
+            Difficulty difficulty = calculateDifficulty(score);
+
+            return new ChunkValueData(score, difficulty, biome);
+
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Critical error in chunk evaluation for player " + playerId, e);
+            return new ChunkValueData(0, Difficulty.EASY, Biome.PLAINS);
         }
-        int dx = originChunk.getX() - chunk.getX();
-        int dz = originChunk.getZ() - chunk.getZ();
-        int distance = Math.abs(dx) + Math.abs(dz);
-        score += distance * 5; // distance weight
+    }
 
-        // 2. Biome factor
-        Biome biome = chunk.getBlock(8, chunk.getWorld().getHighestBlockYAt(chunk.getBlock(8, 0, 8).getLocation()), 8).getBiome();
-        score += chunkValueRegistry.getBiomeWeight(biome);
-
-        // 3. Block scan factor
-        score += scanSurfaceBlocks(chunk);
-
-        // 4. Determine difficulty using thresholds from config
-        int easyMax = chunkValueRegistry.getThreshold("easy");
-        int normalMax = chunkValueRegistry.getThreshold("normal");
-        int hardMax = chunkValueRegistry.getThreshold("hard");
-
-        Difficulty difficulty;
-        if (score < easyMax) {
-            difficulty = Difficulty.EASY;
-        } else if (score < normalMax) {
-            difficulty = Difficulty.NORMAL;
-        } else if (score < hardMax) {
-            difficulty = Difficulty.HARD;
-        } else {
-            difficulty = Difficulty.IMPOSSIBLE;
+    private Chunk getOriginChunk(UUID playerId, Chunk fallbackChunk) {
+        try {
+            if (playerDataManager != null && playerDataManager.getChunkSpawn(playerId) != null) {
+                return playerDataManager.getChunkSpawn(playerId).getChunk();
+            }
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error getting origin chunk for player " + playerId, e);
         }
+        return fallbackChunk;
+    }
 
-        return new ChunkValueData(score, difficulty, biome);
+    private Biome getBiomeSafely(Chunk chunk) {
+        try {
+            // Try to get biome from center of chunk at surface level
+            int surfaceY = chunk.getWorld().getHighestBlockYAt(chunk.getBlock(8, 0, 8).getLocation());
+            surfaceY = Math.max(chunk.getWorld().getMinHeight(), Math.min(surfaceY, chunk.getWorld().getMaxHeight() - 1));
+            return chunk.getBlock(8, surfaceY, 8).getBiome();
+        } catch (Exception e) {
+            // Fallback: try getting biome from a simpler location
+            try {
+                return chunk.getBlock(8, 64, 8).getBiome();
+            } catch (Exception e2) {
+                ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Failed to get biome from chunk, using PLAINS as fallback", e2);
+                return Biome.PLAINS;
+            }
+        }
     }
 
     private int scanSurfaceBlocks(Chunk chunk) {
         int score = 0;
+        int successfulScans = 0;
+        
         for (int x = 0; x < 16; x += 4) {
             for (int z = 0; z < 16; z += 4) {
-                int y = chunk.getWorld().getHighestBlockYAt(chunk.getBlock(x, 0, z).getLocation());
-                Block block = chunk.getBlock(x, y - 1, z);
-                Material mat = block.getType();
-                score += chunkValueRegistry.getBlockWeight(mat);
+                try {
+                    int y = chunk.getWorld().getHighestBlockYAt(chunk.getBlock(x, 0, z).getLocation());
+                    y = Math.max(chunk.getWorld().getMinHeight(), Math.min(y - 1, chunk.getWorld().getMaxHeight() - 1));
+                    
+                    Block block = chunk.getBlock(x, y, z);
+                    if (block != null && block.getType() != null) {
+                        Material mat = block.getType();
+                        score += chunkValueRegistry.getBlockWeight(mat);
+                        successfulScans++;
+                    }
+                } catch (Exception e) {
+                    ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Error scanning block at " + x + "," + z + " in chunk", e);
+                    // Continue with other blocks
+                }
             }
         }
+        
+        if (successfulScans == 0) {
+            ChunklockPlugin.getInstance().getLogger().warning("No blocks could be scanned in chunk surface scan");
+        }
+        
         return score;
+    }
+
+    private Difficulty calculateDifficulty(int score) {
+        try {
+            int easyMax = chunkValueRegistry.getThreshold("easy");
+            int normalMax = chunkValueRegistry.getThreshold("normal");
+            int hardMax = chunkValueRegistry.getThreshold("hard");
+
+            if (score < easyMax) {
+                return Difficulty.EASY;
+            } else if (score < normalMax) {
+                return Difficulty.NORMAL;
+            } else if (score < hardMax) {
+                return Difficulty.HARD;
+            } else {
+                return Difficulty.IMPOSSIBLE;
+            }
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error calculating difficulty, using NORMAL as fallback", e);
+            return Difficulty.NORMAL;
+        }
     }
 
     public static class ChunkValueData {
@@ -78,9 +158,9 @@ public class ChunkEvaluator {
         public final Biome biome;
 
         public ChunkValueData(int score, Difficulty difficulty, Biome biome) {
-            this.score = score;
-            this.difficulty = difficulty;
-            this.biome = biome;
+            this.score = Math.max(0, score); // Ensure non-negative score
+            this.difficulty = difficulty != null ? difficulty : Difficulty.EASY;
+            this.biome = biome != null ? biome : Biome.PLAINS;
         }
     }
 }
