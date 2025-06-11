@@ -3,6 +3,8 @@ package me.chunklock;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import me.chunklock.UnlockGui;
+
 public class ChunklockPlugin extends JavaPlugin {
 
     private static ChunklockPlugin instance;
@@ -12,6 +14,7 @@ public class ChunklockPlugin extends JavaPlugin {
     private PlayerDataManager playerDataManager;
     private ChunkValueRegistry chunkValueRegistry;
     private ChunkEvaluator chunkEvaluator;
+    private UnlockGui unlockGui;
 
     @Override
     public void onEnable() {
@@ -30,12 +33,14 @@ public class ChunklockPlugin extends JavaPlugin {
         // Register event listeners
         Bukkit.getPluginManager().registerEvents(new PlayerListener(chunkLockManager, progressTracker, playerDataManager), this);
         Bukkit.getPluginManager().registerEvents(new UnlockItemListener(chunkLockManager, biomeUnlockRegistry, progressTracker), this);
+        this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker);
+        Bukkit.getPluginManager().registerEvents(unlockGui, this);
 
         // Start tick task for visual effects
         new TickTask(chunkLockManager, biomeUnlockRegistry).runTaskTimer(this, 0L, 10L);
         
         // Register commands
-        var chunklockCmd = new ChunklockCommand(progressTracker, chunkLockManager);
+        var chunklockCmd = new ChunklockCommand(progressTracker, chunkLockManager, unlockGui);
         getCommand("chunklock").setExecutor(chunklockCmd);
         getCommand("chunklock").setTabCompleter(chunklockCmd);
         
@@ -61,5 +66,9 @@ public class ChunklockPlugin extends JavaPlugin {
     
     public ChunkEvaluator getChunkEvaluator() {
         return chunkEvaluator;
+    }
+
+    public UnlockGui getUnlockGui() {
+        return unlockGui;
     }
 }
