@@ -72,7 +72,7 @@ public class PlayerListener implements Listener {
             if (evaluation.difficulty == Difficulty.EASY && evaluation.score < bestScore) {
                 int worldX = cx * 16 + 8;
                 int worldZ = cz * 16 + 8;
-                int y = world.getHighestBlockYAt(worldX, worldZ);
+                int y = world.getHighestBlockAt(worldX, worldZ).getY();
                 
                 // Check if it's a safe spawn location
                 if (isSafeSpawnLocation(world, worldX, y, worldZ)) {
@@ -89,7 +89,7 @@ public class PlayerListener implements Listener {
                 int cz = random.nextInt(FALLBACK_RANGE * 2) - FALLBACK_RANGE;
                 int worldX = cx * 16 + 8;
                 int worldZ = cz * 16 + 8;
-                int y = world.getHighestBlockYAt(worldX, worldZ);
+                int y = world.getHighestBlockAt(worldX, worldZ).getY();
                 
                 if (isSafeSpawnLocation(world, worldX, y, worldZ)) {
                     bestSpawn = new Location(world, worldX + 0.5, y + 1, worldZ + 0.5);

@@ -17,6 +17,7 @@ import org.bukkit.Chunk;
 
 import me.chunklock.UnlockGui;
 import me.chunklock.TeamManager;
+import me.chunklock.ChunklockPlugin;
 
 public class ChunklockCommand implements CommandExecutor, TabCompleter {
 
@@ -72,17 +73,42 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
 
                 World world = target.getWorld();
                 int border = (int) world.getWorldBorder().getSize() / 2;
-                int min = (int) world.getWorldBorder().getCenter().getX() - border;
-                int max = (int) world.getWorldBorder().getCenter().getX() + border;
+                int centerX = (int) world.getWorldBorder().getCenter().getX();
+                int centerZ = (int) world.getWorldBorder().getCenter().getZ();
+                int minChunkX = (centerX - border) >> 4;
+                int maxChunkX = (centerX + border) >> 4;
+                int minChunkZ = (centerZ - border) >> 4;
+                int maxChunkZ = (centerZ + border) >> 4;
 
-                int randomX = min + (int) (Math.random() * (max - min));
-                int randomZ = min + (int) (Math.random() * (max - min));
-                int y = world.getHighestBlockYAt(randomX, randomZ);
+                Location spawn = null;
+                final int MAX_ATTEMPTS = 50;
+                final int SCORE_THRESHOLD = 5;
+                for (int i = 0; i < MAX_ATTEMPTS; i++) {
+                    int cx = minChunkX + (int) (Math.random() * (maxChunkX - minChunkX + 1));
+                    int cz = minChunkZ + (int) (Math.random() * (maxChunkZ - minChunkZ + 1));
+                    Chunk chunk = world.getChunkAt(cx, cz);
+                    ChunkEvaluator.ChunkValueData eval = chunkLockManager.evaluateChunk(target.getUniqueId(), chunk);
+                    if (eval.score <= SCORE_THRESHOLD) {
+                        int x = cx * 16 + 8;
+                        int z = cz * 16 + 8;
+                        int y = world.getHighestBlockAt(x, z).getY();
+                        spawn = new Location(world, x + 0.5, y + 1, z + 0.5);
+                        chunkLockManager.unlockChunk(chunk);
+                        ChunklockPlugin.getInstance().getPlayerDataManager().setChunk(target.getUniqueId(), spawn);
+                        break;
+                    }
+                }
 
-                Location randomSpawn = new Location(world, randomX + 0.5, y + 1, randomZ + 0.5);
-                target.teleport(randomSpawn);
+                if (spawn == null) {
+                    int x = centerX;
+                    int z = centerZ;
+                    int y = world.getHighestBlockAt(x, z).getY();
+                    spawn = new Location(world, x + 0.5, y + 1, z + 0.5);
+                }
+
+                target.teleport(spawn);
                 target.getInventory().clear(); // Clear inventory as part of reset
-                target.setRespawnLocation(randomSpawn, true);
+                target.setRespawnLocation(spawn, true);
 
                 sender.sendMessage(Component.text("Reset chunk progress and spawn for " + target.getName()).color(NamedTextColor.GREEN));
                 target.sendMessage(Component.text("Your chunk progress and spawn were reset by an admin.").color(NamedTextColor.RED));
