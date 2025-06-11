@@ -22,6 +22,8 @@ public class PlayerListener implements Listener {
     private final Random random = new Random();
     private static final long COOLDOWN_MS = 2000L;
     private static final int MAX_SPAWN_ATTEMPTS = 50;
+    private static final int START_RANGE = 16;
+    private static final int FALLBACK_RANGE = 10;
 
     public PlayerListener(ChunkLockManager chunkLockManager, PlayerProgressTracker progressTracker, PlayerDataManager playerDataManager, UnlockGui unlockGui) {
         this.chunkLockManager = chunkLockManager;
@@ -48,6 +50,9 @@ public class PlayerListener implements Listener {
         }
     }
 
+    /**
+     * Locate a suitable starting chunk for the player and teleport them there.
+     */
     private void assignStartingChunk(Player player) {
         World world = player.getWorld();
         Location bestSpawn = null;
@@ -55,8 +60,8 @@ public class PlayerListener implements Listener {
 
         // Try to find a good starting chunk (prefer easier chunks near spawn)
         for (int attempt = 0; attempt < MAX_SPAWN_ATTEMPTS; attempt++) {
-            int cx = random.nextInt(32) - 16; // -16 to +16 chunk range
-            int cz = random.nextInt(32) - 16;
+            int cx = random.nextInt(START_RANGE * 2) - START_RANGE;
+            int cz = random.nextInt(START_RANGE * 2) - START_RANGE;
             
             Chunk chunk = world.getChunkAt(cx, cz);
             
@@ -80,8 +85,8 @@ public class PlayerListener implements Listener {
         // Fallback to any safe location if no easy chunk found
         if (bestSpawn == null) {
             for (int attempt = 0; attempt < MAX_SPAWN_ATTEMPTS; attempt++) {
-                int cx = random.nextInt(20) - 10;
-                int cz = random.nextInt(20) - 10;
+                int cx = random.nextInt(FALLBACK_RANGE * 2) - FALLBACK_RANGE;
+                int cz = random.nextInt(FALLBACK_RANGE * 2) - FALLBACK_RANGE;
                 int worldX = cx * 16 + 8;
                 int worldZ = cz * 16 + 8;
                 int y = world.getHighestBlockYAt(worldX, worldZ);

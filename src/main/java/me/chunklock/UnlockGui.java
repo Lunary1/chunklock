@@ -20,6 +20,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Simple inventory GUI allowing players to spend items to unlock the chunk they are
+ * currently inspecting.
+ */
 public class UnlockGui implements Listener {
     private final ChunkLockManager chunkLockManager;
     private final BiomeUnlockRegistry biomeUnlockRegistry;
@@ -49,6 +53,9 @@ public class UnlockGui implements Listener {
         this.progressTracker = progressTracker;
     }
 
+    /**
+     * Display the unlock GUI for the given player and chunk.
+     */
     public void open(Player player, Chunk chunk) {
         var eval = chunkLockManager.evaluateChunk(player.getUniqueId(), chunk);
         Biome biome = eval.biome;
