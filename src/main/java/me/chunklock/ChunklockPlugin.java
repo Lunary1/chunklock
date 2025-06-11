@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import me.chunklock.UnlockGui;
+import me.chunklock.TeamManager;
 
 public class ChunklockPlugin extends JavaPlugin {
 
@@ -11,6 +12,7 @@ public class ChunklockPlugin extends JavaPlugin {
     private ChunkLockManager chunkLockManager;
     private BiomeUnlockRegistry biomeUnlockRegistry;
     private PlayerProgressTracker progressTracker;
+    private TeamManager teamManager;
     private PlayerDataManager playerDataManager;
     private ChunkValueRegistry chunkValueRegistry;
     private ChunkEvaluator chunkEvaluator;
@@ -20,9 +22,10 @@ public class ChunklockPlugin extends JavaPlugin {
     public void onEnable() {
         instance = this;
         
-        // Initialize registries first
+        // Initialize registries and managers first
         this.chunkValueRegistry = new ChunkValueRegistry(this);
-        this.progressTracker = new PlayerProgressTracker(this);
+        this.teamManager = new TeamManager(this);
+        this.progressTracker = new PlayerProgressTracker(this, teamManager);
         this.biomeUnlockRegistry = new BiomeUnlockRegistry(this, progressTracker);
         this.playerDataManager = new PlayerDataManager(this);
         
@@ -40,7 +43,7 @@ public class ChunklockPlugin extends JavaPlugin {
         new TickTask(chunkLockManager, biomeUnlockRegistry).runTaskTimer(this, 0L, 10L);
         
         // Register commands
-        var chunklockCmd = new ChunklockCommand(progressTracker, chunkLockManager, unlockGui);
+        var chunklockCmd = new ChunklockCommand(progressTracker, chunkLockManager, unlockGui, teamManager);
         getCommand("chunklock").setExecutor(chunklockCmd);
         getCommand("chunklock").setTabCompleter(chunklockCmd);
         
@@ -51,6 +54,9 @@ public class ChunklockPlugin extends JavaPlugin {
     public void onDisable() {
         if (playerDataManager != null) {
             playerDataManager.saveAll();
+        }
+        if (teamManager != null) {
+            teamManager.saveAll();
         }
         getLogger().info("Chunklock plugin disabled.");
     }
@@ -71,4 +77,11 @@ public class ChunklockPlugin extends JavaPlugin {
     public UnlockGui getUnlockGui() {
         return unlockGui;
     }
-}
+
+    public PlayerDataManager getPlayerDataManager() {
+        return playerDataManager;
+    }
+
+    public TeamManager getTeamManager() {
+        return teamManager;
+    }

@@ -4,6 +4,8 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import me.chunklock.TeamManager;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
@@ -11,13 +13,16 @@ import java.util.Map;
 import java.util.UUID;
 
 public class PlayerProgressTracker {
+    /** Counts unlocked chunks per team leader UUID. */
     private final Map<UUID, Integer> unlockedChunkCount = new HashMap<>();
     private final JavaPlugin plugin;
     private final File file;
     private FileConfiguration config;
+    private final TeamManager teamManager;
 
-    public PlayerProgressTracker(JavaPlugin plugin) {
+    public PlayerProgressTracker(JavaPlugin plugin, TeamManager teamManager) {
         this.plugin = plugin;
+        this.teamManager = teamManager;
         this.file = new File(plugin.getDataFolder(), "player_progress.yml");
         loadAll();
     }
@@ -37,9 +42,9 @@ public class PlayerProgressTracker {
         
         for (String uuidString : config.getKeys(false)) {
             try {
-                UUID uuid = UUID.fromString(uuidString);
+                UUID teamId = UUID.fromString(uuidString);
                 int count = config.getInt(uuidString + ".unlocked_chunks", 0);
-                unlockedChunkCount.put(uuid, count);
+                unlockedChunkCount.put(teamId, count);
             } catch (Exception e) {
                 plugin.getLogger().warning("Failed to load progress for UUID: " + uuidString);
             }
@@ -60,18 +65,21 @@ public class PlayerProgressTracker {
     }
 
     public void incrementUnlockedChunks(UUID playerId) {
-        unlockedChunkCount.put(playerId, getUnlockedChunkCount(playerId) + 1);
-        saveProgress(playerId); // Save immediately for safety
+        UUID teamId = teamManager.getTeamLeader(playerId);
+        unlockedChunkCount.put(teamId, getUnlockedChunkCount(playerId) + 1);
+        saveProgress(teamId); // Save immediately for safety
     }
 
     public int getUnlockedChunkCount(UUID playerId) {
-        return unlockedChunkCount.getOrDefault(playerId, 0);
+        UUID teamId = teamManager.getTeamLeader(playerId);
+        return unlockedChunkCount.getOrDefault(teamId, 0);
     }
 
     public void resetPlayer(UUID playerId) {
-        unlockedChunkCount.remove(playerId);
+        UUID teamId = teamManager.getTeamLeader(playerId);
+        unlockedChunkCount.remove(teamId);
         if (config != null) {
-            config.set(playerId.toString(), null);
+            config.set(teamId.toString(), null);
             try {
                 config.save(file);
             } catch (IOException e) {
@@ -80,13 +88,13 @@ public class PlayerProgressTracker {
         }
     }
 
-    private void saveProgress(UUID playerId) {
+    private void saveProgress(UUID teamId) {
         if (config != null) {
-            config.set(playerId.toString() + ".unlocked_chunks", getUnlockedChunkCount(playerId));
+            config.set(teamId.toString() + ".unlocked_chunks", unlockedChunkCount.getOrDefault(teamId, 0));
             try {
                 config.save(file);
             } catch (IOException e) {
-                plugin.getLogger().warning("Could not save progress for player: " + playerId);
+                plugin.getLogger().warning("Could not save progress for team: " + teamId);
             }
         }
     }
