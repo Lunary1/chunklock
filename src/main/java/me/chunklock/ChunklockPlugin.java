@@ -31,7 +31,7 @@ public class ChunklockPlugin extends JavaPlugin {
         
         // Initialize evaluator and manager
         this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry);
-        this.chunkLockManager = new ChunkLockManager(chunkEvaluator);
+        this.chunkLockManager = new ChunkLockManager(chunkEvaluator, this);
 
         // Register event listeners
         this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker);
@@ -57,6 +57,9 @@ public class ChunklockPlugin extends JavaPlugin {
         }
         if (teamManager != null) {
             teamManager.saveAll();
+        }
+        if (chunkLockManager != null) {
+            chunkLockManager.saveAll();
         }
         getLogger().info("Chunklock plugin disabled.");
     }
