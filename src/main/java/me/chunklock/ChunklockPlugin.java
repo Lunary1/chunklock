@@ -1,10 +1,20 @@
 package me.chunklock;
 
 import org.bukkit.Bukkit;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+
 import java.util.logging.Level;
 
-public class ChunklockPlugin extends JavaPlugin {
+public class ChunklockPlugin extends JavaPlugin implements Listener {
 
     private static ChunklockPlugin instance;
     private ChunkLockManager chunkLockManager;
@@ -15,6 +25,10 @@ public class ChunklockPlugin extends JavaPlugin {
     private ChunkValueRegistry chunkValueRegistry;
     private ChunkEvaluator chunkEvaluator;
     private UnlockGui unlockGui;
+    private HologramManager hologramManager;
+    
+    // Keep track of active tasks for cleanup
+    private TickTask activeTickTask;
 
     @Override
     public void onEnable() {
@@ -23,35 +37,130 @@ public class ChunklockPlugin extends JavaPlugin {
             
             getLogger().info("Starting Chunklock plugin initialization...");
             
-            // Initialize components with error handling
             if (!initializeComponents()) {
                 getLogger().severe("Failed to initialize core components - disabling plugin");
                 Bukkit.getPluginManager().disablePlugin(this);
                 return;
             }
             
-            // Register event listeners with error handling
             if (!registerEventListeners()) {
                 getLogger().severe("Failed to register event listeners - disabling plugin");
                 Bukkit.getPluginManager().disablePlugin(this);
                 return;
             }
             
-            // Start tasks with error handling
             if (!startTasks()) {
                 getLogger().warning("Some tasks failed to start - plugin may have reduced functionality");
             }
             
-            // Register commands with error handling
             if (!registerCommands()) {
                 getLogger().warning("Failed to register some commands - some functionality may be unavailable");
             }
             
-            getLogger().info("Chunklock plugin enabled successfully!");
+            getLogger().info("Chunklock plugin enabled successfully with visual effects!");
             
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "Critical error during plugin enable", e);
             Bukkit.getPluginManager().disablePlugin(this);
+        }
+    }
+
+    /**
+     * Performs a hot reload of the plugin without restarting the server
+     */
+    public boolean performReload(CommandSender sender) {
+        try {
+            sender.sendMessage(Component.text("Step 1/6: Cleaning up existing systems...").color(NamedTextColor.GRAY));
+            
+            // 1. Stop and cleanup existing systems
+            if (hologramManager != null) {
+                hologramManager.cleanup();
+            }
+            
+            if (activeTickTask != null && !activeTickTask.isCancelled()) {
+                activeTickTask.cancel();
+            }
+
+            // 2. Save all current data before reload
+            sender.sendMessage(Component.text("Step 2/6: Saving current data...").color(NamedTextColor.GRAY));
+            saveAllData();
+
+            // 3. Reinitialize core components
+            sender.sendMessage(Component.text("Step 3/6: Reinitializing components...").color(NamedTextColor.GRAY));
+            boolean componentsOk = initializeComponents();
+            if (!componentsOk) {
+                sender.sendMessage(Component.text("Warning: Some components failed to reinitialize").color(NamedTextColor.YELLOW));
+            }
+
+            // 4. Restart background tasks
+            sender.sendMessage(Component.text("Step 4/6: Restarting background tasks...").color(NamedTextColor.GRAY));
+            boolean tasksOk = startTasks();
+            if (!tasksOk) {
+                sender.sendMessage(Component.text("Warning: Some tasks failed to restart").color(NamedTextColor.YELLOW));
+            }
+
+            // 5. Restart visual effects for online players
+            sender.sendMessage(Component.text("Step 5/6: Restarting visual effects...").color(NamedTextColor.GRAY));
+            restartVisualEffects();
+
+            // 6. Validate reload success
+            sender.sendMessage(Component.text("Step 6/6: Validating reload...").color(NamedTextColor.GRAY));
+            
+            boolean success = validateReload();
+            
+            // Notify all online players
+            Component reloadMessage = Component.text("Chunklock plugin has been reloaded by an admin.").color(NamedTextColor.YELLOW);
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                player.sendMessage(reloadMessage);
+            }
+            
+            getLogger().info("Plugin reload completed " + (success ? "successfully" : "with warnings"));
+            return success;
+            
+        } catch (Exception e) {
+            getLogger().log(Level.SEVERE, "Error during plugin reload", e);
+            sender.sendMessage(Component.text("Reload failed: " + e.getMessage()).color(NamedTextColor.RED));
+            return false;
+        }
+    }
+
+    private void restartVisualEffects() {
+        if (hologramManager != null) {
+            // Restart holograms for all online players
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                Bukkit.getScheduler().runTaskLater(this, () -> {
+                    hologramManager.startHologramDisplay(player);
+                }, 20L); // 1 second delay
+            }
+        }
+    }
+
+    private boolean validateReload() {
+        try {
+            // Check that all core components are properly initialized
+            boolean valid = chunkLockManager != null &&
+                           biomeUnlockRegistry != null &&
+                           progressTracker != null &&
+                           teamManager != null &&
+                           playerDataManager != null &&
+                           chunkValueRegistry != null &&
+                           chunkEvaluator != null &&
+                           unlockGui != null &&
+                           hologramManager != null;
+            
+            if (!valid) {
+                getLogger().warning("Reload validation failed: Some components are null");
+                return false;
+            }
+            
+            // Test a basic operation
+            int totalChunks = chunkLockManager.getTotalUnlockedChunks();
+            getLogger().info("Reload validation passed. Total unlocked chunks: " + totalChunks);
+            
+            return true;
+        } catch (Exception e) {
+            getLogger().log(Level.WARNING, "Reload validation failed", e);
+            return false;
         }
     }
 
@@ -65,6 +174,7 @@ public class ChunklockPlugin extends JavaPlugin {
             this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry);
             this.chunkLockManager = new ChunkLockManager(chunkEvaluator, this);
             this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker);
+            this.hologramManager = new HologramManager(chunkLockManager, biomeUnlockRegistry);
             
             getLogger().info("All core components initialized successfully");
             return true;
@@ -77,11 +187,16 @@ public class ChunklockPlugin extends JavaPlugin {
 
     private boolean registerEventListeners() {
         try {
-            Bukkit.getPluginManager().registerEvents(
-                new PlayerListener(chunkLockManager, progressTracker, playerDataManager, unlockGui), this);
-            Bukkit.getPluginManager().registerEvents(
-                new UnlockItemListener(chunkLockManager, biomeUnlockRegistry, progressTracker), this);
-            Bukkit.getPluginManager().registerEvents(unlockGui, this);
+            // We don't re-register event listeners during reload as they persist
+            // Only register during initial startup
+            if (Bukkit.getPluginManager().getPlugin("Chunklock").isEnabled()) {
+                Bukkit.getPluginManager().registerEvents(
+                    new PlayerListener(chunkLockManager, progressTracker, playerDataManager, unlockGui), this);
+                Bukkit.getPluginManager().registerEvents(
+                    new UnlockItemListener(chunkLockManager, biomeUnlockRegistry, progressTracker), this);
+                Bukkit.getPluginManager().registerEvents(unlockGui, this);
+                Bukkit.getPluginManager().registerEvents(this, this);
+            }
             
             getLogger().info("Event listeners registered successfully");
             return true;
@@ -94,7 +209,15 @@ public class ChunklockPlugin extends JavaPlugin {
 
     private boolean startTasks() {
         try {
-            new TickTask(chunkLockManager, biomeUnlockRegistry).runTaskTimer(this, 0L, 10L);
+            // Cancel existing task if it exists
+            if (activeTickTask != null && !activeTickTask.isCancelled()) {
+                activeTickTask.cancel();
+            }
+            
+            // Start new task
+            activeTickTask = new TickTask(chunkLockManager, biomeUnlockRegistry);
+            activeTickTask.runTaskTimer(this, 0L, 2L);
+            
             getLogger().info("Background tasks started successfully");
             return true;
             
@@ -124,12 +247,41 @@ public class ChunklockPlugin extends JavaPlugin {
         }
     }
 
+    // Hologram management events
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        // Start holograms for joining player after a short delay
+        Bukkit.getScheduler().runTaskLater(this, () -> {
+            if (hologramManager != null) {
+                hologramManager.startHologramDisplay(event.getPlayer());
+            }
+        }, 20L); // 1 second delay
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        // Clean up holograms for leaving player
+        if (hologramManager != null) {
+            hologramManager.stopHologramDisplay(event.getPlayer());
+        }
+    }
+
     @Override
     public void onDisable() {
         try {
             getLogger().info("Disabling Chunklock plugin...");
             
-            // Save all data with error handling
+            // Clean up visual effects
+            if (hologramManager != null) {
+                hologramManager.cleanup();
+            }
+            
+            // Cancel background tasks
+            if (activeTickTask != null && !activeTickTask.isCancelled()) {
+                activeTickTask.cancel();
+            }
+            
+            // Save all data
             saveAllData();
             
             // Clear static references
@@ -221,5 +373,12 @@ public class ChunklockPlugin extends JavaPlugin {
             getLogger().warning("TeamManager accessed before initialization");
         }
         return teamManager;
+    }
+
+    public HologramManager getHologramManager() {
+        if (hologramManager == null) {
+            getLogger().warning("HologramManager accessed before initialization");
+        }
+        return hologramManager;
     }
 }

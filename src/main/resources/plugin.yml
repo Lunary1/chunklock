@@ -1,18 +1,50 @@
 name: Chunklock
-version: 1.0.0
+version: 1.2.0
 main: me.chunklock.ChunklockPlugin
 api-version: 1.20
-author: You
-description: Locks Minecraft chunks based on biome-specific item requirements.
+author: LunaryCraft Dev Team
+description: Advanced chunk-locking system with visual effects and strategic progression
 
 commands:
   chunklock:
-    description: View your chunklock status or run admin commands
-    usage: /chunklock [status|reset <player>|bypass [player]|unlock|spawn|team <player>|help]
-    permission: chunklock.admin
+    description: Chunklock main command with full functionality
+    usage: /chunklock [status|reset <player>|bypass [player]|unlock|spawn|team <player>|reload|debug|resetall|help]
+    permission: chunklock.use
     aliases: [cl]
 
 permissions:
+  chunklock.use:
+    description: Allows basic use of chunklock commands
+    default: true
+    children:
+      chunklock.status: true
+      chunklock.unlock: true
+      chunklock.spawn: true
+      chunklock.team: true
+
   chunklock.admin:
-    description: Allows access to /chunklock reset and other admin functions
+    description: Allows access to all admin functions including reload
+    default: op
+    children:
+      chunklock.use: true
+      chunklock.reset: true
+      chunklock.bypass: true
+      chunklock.reload: true
+      chunklock.debug: true
+      chunklock.resetall: true
+
+  chunklock.reload:
+    description: Allows reloading the plugin configuration
+    default: op
+
+  chunklock.reset:
+    description: Allows resetting player progress and chunks
+    default: op
+
+  chunklock.bypass:
+    description: Allows toggling chunk bypass mode
+    default: op
+
+  chunklock.debug:
+    description: Allows viewing debug information
     default: op

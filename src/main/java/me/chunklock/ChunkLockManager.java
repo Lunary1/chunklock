@@ -47,6 +47,80 @@ public class ChunkLockManager {
         data.setLocked(false);
     }
 
+    /**
+     * Resets all chunks for a specific player by re-locking everything except their new starting chunk
+     */
+    public void resetPlayerChunks(UUID playerId, Chunk newStartingChunk) {
+        plugin.getLogger().info("Resetting all chunks for player " + playerId + ", keeping chunk " + 
+            newStartingChunk.getX() + "," + newStartingChunk.getZ() + " unlocked");
+        
+        int chunksLocked = 0;
+        String startingChunkKey = getChunkKey(newStartingChunk);
+        
+        // Re-lock all chunks except the new starting chunk
+        for (Map.Entry<String, ChunkData> entry : chunkDataMap.entrySet()) {
+            String chunkKey = entry.getKey();
+            ChunkData chunkData = entry.getValue();
+            
+            // Don't lock the new starting chunk
+            if (!chunkKey.equals(startingChunkKey)) {
+                if (!chunkData.isLocked()) {
+                    chunkData.setLocked(true);
+                    chunksLocked++;
+                }
+            }
+        }
+        
+        // Ensure the starting chunk is unlocked
+        ChunkData startingData = getChunkData(newStartingChunk);
+        startingData.setLocked(false);
+        
+        plugin.getLogger().info("Re-locked " + chunksLocked + " chunks for player " + playerId);
+        
+        // Save the changes immediately
+        saveAll();
+    }
+
+    /**
+     * Gets all unlocked chunks in the world (for debugging/admin purposes)
+     */
+    public Set<String> getUnlockedChunks() {
+        Set<String> unlockedChunks = new HashSet<>();
+        for (Map.Entry<String, ChunkData> entry : chunkDataMap.entrySet()) {
+            if (!entry.getValue().isLocked()) {
+                unlockedChunks.add(entry.getKey());
+            }
+        }
+        return unlockedChunks;
+    }
+
+    /**
+     * Counts total unlocked chunks in the world
+     */
+    public int getTotalUnlockedChunks() {
+        int count = 0;
+        for (ChunkData data : chunkDataMap.values()) {
+            if (!data.isLocked()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Forces a re-evaluation and re-locking of all chunks
+     */
+    public void resetAllChunks() {
+        plugin.getLogger().info("Performing complete chunk reset - locking all chunks");
+        
+        for (ChunkData data : chunkDataMap.values()) {
+            data.setLocked(true);
+        }
+        
+        saveAll();
+        plugin.getLogger().info("All chunks have been locked");
+    }
+
     private void loadAll() {
         if (!file.exists()) {
             try {
@@ -152,5 +226,5 @@ public class ChunkLockManager {
 
     public boolean isBypassing(Player player) {
         return bypassingPlayers.contains(player.getUniqueId());
-}
+    }
 }

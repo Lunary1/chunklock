@@ -5,6 +5,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.block.Biome;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -37,7 +38,6 @@ public class UnlockGui implements Listener {
     }
 
     private final Map<UUID, PendingUnlock> pending = new HashMap<>();
-
     private static final String GUI_TITLE = "Unlock Chunk";
 
     public UnlockGui(ChunkLockManager chunkLockManager,
@@ -88,16 +88,22 @@ public class UnlockGui implements Listener {
 
         ItemStack requiredStack = new ItemStack(state.requirement.material(), state.requirement.amount());
         if (!player.getInventory().containsAtLeast(requiredStack, state.requirement.amount())) {
+            // Play error sound
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
             player.sendMessage(Component.text("Missing required items: " + state.requirement.amount() + " " + state.requirement.material().name()).color(NamedTextColor.RED));
             return;
         }
 
+        // Remove items and unlock chunk
         player.getInventory().removeItem(requiredStack);
         chunkLockManager.unlockChunk(state.chunk);
         progressTracker.incrementUnlockedChunks(player.getUniqueId());
 
         int total = progressTracker.getUnlockedChunkCount(player.getUniqueId());
-        player.sendMessage(Component.text("Chunk unlocked! Total unlocked chunks: " + total).color(NamedTextColor.GREEN));
+        
+        // Play unlock effects!
+        UnlockEffectsManager.playUnlockEffects(player, state.chunk, total);
+        
         player.closeInventory();
     }
 
