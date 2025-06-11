@@ -82,7 +82,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 Location randomSpawn = new Location(world, randomX + 0.5, y + 1, randomZ + 0.5);
                 target.teleport(randomSpawn);
                 target.getInventory().clear(); // Clear inventory as part of reset
-                target.setBedSpawnLocation(randomSpawn, true);
+                target.setRespawnLocation(randomSpawn, true);
 
                 sender.sendMessage(Component.text("Reset chunk progress and spawn for " + target.getName()).color(NamedTextColor.GREEN));
                 target.sendMessage(Component.text("Your chunk progress and spawn were reset by an admin.").color(NamedTextColor.RED));
