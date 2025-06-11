@@ -67,10 +67,16 @@ public class ChunkEvaluator {
 
     private int scanSurfaceBlocks(Chunk chunk) {
         int score = 0;
+        var world = chunk.getWorld();
+        int minY = world.getMinHeight();
         for (int x = 0; x < 16; x += SCAN_STEP) {
             for (int z = 0; z < 16; z += SCAN_STEP) {
-                int y = chunk.getWorld().getHighestBlockYAt(chunk.getBlock(x, 0, z).getLocation());
-                Block block = chunk.getBlock(x, y - 1, z);
+                int y = world.getHighestBlockYAt(chunk.getBlock(x, 0, z).getLocation());
+                if (y <= minY) {
+                    continue;
+                }
+                int sampleY = Math.max(minY, y - 1);
+                Block block = chunk.getBlock(x, sampleY, z);
                 Material mat = block.getType();
                 score += chunkValueRegistry.getBlockWeight(mat);
             }
