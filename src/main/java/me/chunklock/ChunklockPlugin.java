@@ -85,4 +85,3 @@ public class ChunklockPlugin extends JavaPlugin {
     public TeamManager getTeamManager() {
         return teamManager;
     }
-}
