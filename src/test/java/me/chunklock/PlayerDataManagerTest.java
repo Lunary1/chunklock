@@ -1,3 +1,6 @@
+package me.chunklock;
+
+import java.io.File;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.File;
