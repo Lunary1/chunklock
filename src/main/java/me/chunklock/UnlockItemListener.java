@@ -53,14 +53,18 @@ public class UnlockItemListener implements Listener {
         }
 
         Biome biome = targetBlock.getBiome();
-        if (!biomeUnlockRegistry.hasRequiredItems(player, biome)) {
+        var eval = chunkLockManager.evaluateChunk(player.getUniqueId(), chunk);
+        var requirement = biomeUnlockRegistry.calculateRequirement(player, biome, eval.score);
+
+        ItemStack requiredStack = new ItemStack(requirement.material(), requirement.amount());
+        if (!player.getInventory().containsAtLeast(requiredStack, requirement.amount())) {
             player.sendMessage(Component.text("You do not have the required items to unlock this biome: " + biome.name()).color(NamedTextColor.RED));
-            player.sendMessage(Component.text("Required items: " + biomeUnlockRegistry.getRequiredItems(biome)).color(NamedTextColor.YELLOW));
+            player.sendMessage(Component.text("Required: " + requirement.amount() + " " + requirement.material().name()).color(NamedTextColor.YELLOW));
             return;
         }
 
         // Consume the required item(s)
-        biomeUnlockRegistry.consumeRequiredItem(player, biome);
+        player.getInventory().removeItem(requiredStack);
 
         // Unlock the chunk and track progress
         chunkLockManager.unlockChunk(chunk);

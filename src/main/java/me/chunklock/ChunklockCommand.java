@@ -13,22 +13,27 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import org.bukkit.entity.Player;
+import org.bukkit.Chunk;
+
+import me.chunklock.UnlockGui;
 
 public class ChunklockCommand implements CommandExecutor, TabCompleter {
 
     private final PlayerProgressTracker progressTracker;
     private final ChunkLockManager chunkLockManager;
+    private final UnlockGui unlockGui;
 
-    public ChunklockCommand(PlayerProgressTracker progressTracker, ChunkLockManager chunkLockManager) {
+    public ChunklockCommand(PlayerProgressTracker progressTracker, ChunkLockManager chunkLockManager, UnlockGui unlockGui) {
         this.progressTracker = progressTracker;
         this.chunkLockManager = chunkLockManager;
+        this.unlockGui = unlockGui;
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
 
         if (args.length == 0) {
-            sender.sendMessage(Component.text("Usage: /chunklock <status|reset|bypass|help>").color(NamedTextColor.YELLOW));
+            sender.sendMessage(Component.text("Usage: /chunklock <status|reset|bypass|unlock|help>").color(NamedTextColor.YELLOW));
             return true;
         }
 
@@ -109,11 +114,21 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 }
             }
 
+            case "unlock" -> {
+                if (!(sender instanceof Player player)) {
+                    sender.sendMessage(Component.text("Only players can unlock chunks.").color(NamedTextColor.RED));
+                    return true;
+                }
+                Chunk chunk = player.getLocation().getChunk();
+                unlockGui.open(player, chunk);
+            }
+
             case "help" -> {
                 sender.sendMessage(Component.text("Chunklock Commands:").color(NamedTextColor.AQUA));
                 sender.sendMessage(Component.text("/chunklock status - View your unlocked chunks").color(NamedTextColor.GRAY));
                 sender.sendMessage(Component.text("/chunklock reset <player> - Admin: Reset a player's chunks and spawn").color(NamedTextColor.GRAY));
                 sender.sendMessage(Component.text("/chunklock bypass [player] - Admin: Toggle bypass mode").color(NamedTextColor.GRAY));
+                sender.sendMessage(Component.text("/chunklock unlock - Attempt to unlock your current chunk").color(NamedTextColor.GRAY));
             }
 
             default -> {
@@ -130,7 +145,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 1) {
             String prefix = args[0].toLowerCase();
-            for (String sub : List.of("status", "reset", "bypass", "help")) {
+            for (String sub : List.of("status", "reset", "bypass", "unlock", "help")) {
                 if (sub.startsWith(prefix)) {
                     completions.add(sub);
                 }
