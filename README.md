@@ -1,5 +1,6 @@
 # chunklock
-Chunklock is a Minecraft plugin that restricts players to specific chunks until they unlock them. Chunks can be unlocked by providing biome specific items. The plugin also tracks how many chunks each player has unlocked.
+
+Chunklock is a Minecraft plugin that restricts players to specific chunks until they unlock them. Chunks can be unlocked by providing biome specific items. The amount and rarity of those items scale with the chunk's difficulty score and how many chunks the player has already opened. The plugin also tracks how many chunks each player has unlocked.
 
 ## Commands
 

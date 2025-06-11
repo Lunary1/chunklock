@@ -16,7 +16,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,7 +24,19 @@ public class UnlockGui implements Listener {
     private final BiomeUnlockRegistry biomeUnlockRegistry;
     private final PlayerProgressTracker progressTracker;
 
-    private final Map<UUID, Chunk> pending = new HashMap<>();
+    private static class PendingUnlock {
+        final Chunk chunk;
+        final Biome biome;
+        final BiomeUnlockRegistry.UnlockRequirement requirement;
+
+        PendingUnlock(Chunk chunk, Biome biome, BiomeUnlockRegistry.UnlockRequirement requirement) {
+            this.chunk = chunk;
+            this.biome = biome;
+            this.requirement = requirement;
+        }
+    }
+
+    private final Map<UUID, PendingUnlock> pending = new HashMap<>();
 
     private static final String GUI_TITLE = "Unlock Chunk";
 
@@ -38,27 +49,25 @@ public class UnlockGui implements Listener {
     }
 
     public void open(Player player, Chunk chunk) {
-        Biome biome = chunk.getBlock(8, player.getLocation().getBlockY(), 8).getBiome();
-        List<Material> items = biomeUnlockRegistry.getRequiredItems(biome);
+        var eval = chunkLockManager.evaluateChunk(player.getUniqueId(), chunk);
+        Biome biome = eval.biome;
+        var requirement = biomeUnlockRegistry.calculateRequirement(player, biome, eval.score);
 
         Inventory inv = Bukkit.createInventory(null, 9, Component.text(GUI_TITLE));
 
-        int slot = 0;
-        for (Material mat : items) {
-            ItemStack stack = new ItemStack(mat);
-            ItemMeta meta = stack.getItemMeta();
-            meta.displayName(Component.text(mat.name()).color(NamedTextColor.YELLOW));
-            stack.setItemMeta(meta);
-            inv.setItem(slot++, stack);
-        }
+        ItemStack stack = new ItemStack(requirement.material(), requirement.amount());
+        ItemMeta meta = stack.getItemMeta();
+        meta.displayName(Component.text(requirement.material().name()).color(NamedTextColor.YELLOW));
+        stack.setItemMeta(meta);
+        inv.setItem(4, stack);
 
         ItemStack unlock = new ItemStack(Material.EMERALD_BLOCK);
-        ItemMeta meta = unlock.getItemMeta();
+        meta = unlock.getItemMeta();
         meta.displayName(Component.text("Click to Unlock").color(NamedTextColor.GREEN));
         unlock.setItemMeta(meta);
         inv.setItem(8, unlock);
 
-        pending.put(player.getUniqueId(), chunk);
+        pending.put(player.getUniqueId(), new PendingUnlock(chunk, biome, requirement));
         player.openInventory(inv);
     }
 
@@ -70,21 +79,21 @@ public class UnlockGui implements Listener {
         event.setCancelled(true);
         if (event.getRawSlot() != 8) return;
 
-        Chunk chunk = pending.get(player.getUniqueId());
-        if (chunk == null) return;
-        if (!chunkLockManager.isLocked(chunk)) {
+        PendingUnlock state = pending.get(player.getUniqueId());
+        if (state == null) return;
+        if (!chunkLockManager.isLocked(state.chunk)) {
             player.sendMessage(Component.text("Chunk already unlocked.").color(NamedTextColor.GRAY));
             return;
         }
 
-        Biome biome = chunk.getBlock(8, player.getLocation().getBlockY(), 8).getBiome();
-        if (!biomeUnlockRegistry.hasRequiredItems(player, biome)) {
-            player.sendMessage(Component.text("Missing required items: " + biomeUnlockRegistry.getRequiredItems(biome)).color(NamedTextColor.RED));
+        ItemStack requiredStack = new ItemStack(state.requirement.material(), state.requirement.amount());
+        if (!player.getInventory().containsAtLeast(requiredStack, state.requirement.amount())) {
+            player.sendMessage(Component.text("Missing required items: " + state.requirement.amount() + " " + state.requirement.material().name()).color(NamedTextColor.RED));
             return;
         }
 
-        biomeUnlockRegistry.consumeRequiredItem(player, biome);
-        chunkLockManager.unlockChunk(chunk);
+        player.getInventory().removeItem(requiredStack);
+        chunkLockManager.unlockChunk(state.chunk);
         progressTracker.incrementUnlockedChunks(player.getUniqueId());
 
         int total = progressTracker.getUnlockedChunkCount(player.getUniqueId());

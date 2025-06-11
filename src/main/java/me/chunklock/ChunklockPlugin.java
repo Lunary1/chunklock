@@ -22,8 +22,8 @@ public class ChunklockPlugin extends JavaPlugin {
         
         // Initialize registries first
         this.chunkValueRegistry = new ChunkValueRegistry(this);
-        this.biomeUnlockRegistry = new BiomeUnlockRegistry(this);
         this.progressTracker = new PlayerProgressTracker(this);
+        this.biomeUnlockRegistry = new BiomeUnlockRegistry(this, progressTracker);
         this.playerDataManager = new PlayerDataManager(this);
         
         // Initialize evaluator and manager
