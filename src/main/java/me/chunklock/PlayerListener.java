@@ -9,20 +9,24 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 
+import me.chunklock.UnlockGui;
+
 import java.util.*;
 
 public class PlayerListener implements Listener {
 
     private final ChunkLockManager chunkLockManager;
     private final PlayerDataManager playerDataManager;
+    private final UnlockGui unlockGui;
     private final Map<UUID, Long> lastWarned = new HashMap<>();
     private final Random random = new Random();
     private static final long COOLDOWN_MS = 2000L;
     private static final int MAX_SPAWN_ATTEMPTS = 50;
 
-    public PlayerListener(ChunkLockManager chunkLockManager, PlayerProgressTracker progressTracker, PlayerDataManager playerDataManager) {
+    public PlayerListener(ChunkLockManager chunkLockManager, PlayerProgressTracker progressTracker, PlayerDataManager playerDataManager, UnlockGui unlockGui) {
         this.chunkLockManager = chunkLockManager;
         this.playerDataManager = playerDataManager;
+        this.unlockGui = unlockGui;
     }
 
     @EventHandler
@@ -142,6 +146,7 @@ public class PlayerListener implements Listener {
                     player.sendMessage("§cThis chunk is locked!");
                     player.sendMessage("§7Difficulty: " + evaluation.difficulty + " | Score: " + evaluation.score + " | Biome: " + evaluation.biome.name());
                     lastWarned.put(player.getUniqueId(), now);
+                    unlockGui.open(player, to);
                 }
 
                 event.setCancelled(true);
