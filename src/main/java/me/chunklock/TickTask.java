@@ -47,9 +47,10 @@ public class TickTask extends BukkitRunnable {
     private void maybeDrawBorder(Player player, Chunk chunk) {
         if (!chunkLockManager.isLocked(chunk)) return;
 
-        // Check if player is eligible to unlock this chunk based on biome
-        Biome biome = chunk.getBlock(8, player.getLocation().getBlockY(), 8).getBiome(); // sample center of chunk
-        if (!biomeUnlockRegistry.hasRequiredItems(player, biome)) return;
+        // Check if player is eligible to unlock this chunk based on biome and score
+        var eval = chunkLockManager.evaluateChunk(player.getUniqueId(), chunk);
+        Biome biome = eval.biome; // use evaluated biome
+        if (!biomeUnlockRegistry.hasRequiredItems(player, biome, eval.score)) return;
 
         drawChunkBorder(player, chunk);
     }

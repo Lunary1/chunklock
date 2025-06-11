@@ -8,7 +8,7 @@ description: Locks Minecraft chunks based on biome-specific item requirements.
 commands:
   chunklock:
     description: View your chunklock status or run admin commands
-    usage: /chunklock [status|reset <player>|bypass [player]|help]
+    usage: /chunklock [status|reset <player>|bypass [player]|unlock|spawn|team <player>|help]
     permission: chunklock.admin
     aliases: [cl]
 
