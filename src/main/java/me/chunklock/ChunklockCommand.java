@@ -182,8 +182,6 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
             String prefix = args[0].toLowerCase();
 
             for (String sub : List.of("status", "reset", "bypass", "unlock", "spawn", "team", "help")) {
-            for (String sub : List.of("status", "reset", "bypass", "unlock", "help")) {
-
                 if (sub.startsWith(prefix)) {
                     completions.add(sub);
                 }
