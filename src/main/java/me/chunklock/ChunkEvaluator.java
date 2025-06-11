@@ -7,7 +7,13 @@ import org.bukkit.block.Block;
 
 import java.util.UUID;
 
+/**
+ * Calculates a chunk's score and difficulty based on biome, blocks and player distance.
+ */
 public class ChunkEvaluator {
+
+    private static final int DISTANCE_WEIGHT = 5;
+    private static final int SCAN_STEP = 4;
 
     private final PlayerDataManager playerDataManager;
     private final ChunkValueRegistry chunkValueRegistry;
@@ -31,7 +37,7 @@ public class ChunkEvaluator {
         int dx = originChunk.getX() - chunk.getX();
         int dz = originChunk.getZ() - chunk.getZ();
         int distance = Math.abs(dx) + Math.abs(dz);
-        score += distance * 5; // distance weight
+        score += distance * DISTANCE_WEIGHT;
 
         // 2. Biome factor
         Biome biome = chunk.getBlock(8, chunk.getWorld().getHighestBlockYAt(chunk.getBlock(8, 0, 8).getLocation()), 8).getBiome();
@@ -61,8 +67,8 @@ public class ChunkEvaluator {
 
     private int scanSurfaceBlocks(Chunk chunk) {
         int score = 0;
-        for (int x = 0; x < 16; x += 4) {
-            for (int z = 0; z < 16; z += 4) {
+        for (int x = 0; x < 16; x += SCAN_STEP) {
+            for (int z = 0; z < 16; z += SCAN_STEP) {
                 int y = chunk.getWorld().getHighestBlockYAt(chunk.getBlock(x, 0, z).getLocation());
                 Block block = chunk.getBlock(x, y - 1, z);
                 Material mat = block.getType();

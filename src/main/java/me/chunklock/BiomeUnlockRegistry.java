@@ -12,7 +12,15 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.io.File;
 import java.util.*;
 
+/**
+ * Loads biome unlock requirements from {@code biome_costs.yml} and provides
+ * calculations for how many items a player must gather to unlock a chunk.
+ */
 public class BiomeUnlockRegistry {
+
+    private static final int OPTION_SCORE_DIVISOR = 40;
+    private static final double SCORE_MULTIPLIER_DIVISOR = 50.0;
+    private static final double UNLOCKED_CHUNK_DIVISOR = 10.0;
 
     public record UnlockRequirement(Material material, int amount) {}
 
@@ -69,24 +77,38 @@ public class BiomeUnlockRegistry {
         }
     }
 
+    /**
+     * Calculate how many items a player must provide to unlock a chunk.
+     *
+     * @param player the player attempting the unlock
+     * @param biome  biome of the chunk
+     * @param score  evaluation score of the chunk
+     * @return requirement describing the needed material and amount
+     */
     public UnlockRequirement calculateRequirement(Player player, Biome biome, int score) {
         List<UnlockOption> options = unlockOptions.getOrDefault(biome, List.of(new UnlockOption(Material.DIRT, 1)));
 
-        int index = Math.min(score / 40, options.size() - 1);
+        int index = Math.min(score / OPTION_SCORE_DIVISOR, options.size() - 1);
         UnlockOption option = options.get(index);
 
         int unlocked = progressTracker.getUnlockedChunkCount(player.getUniqueId());
-        double multiplier = 1.0 + unlocked / 10.0 + score / 50.0;
+        double multiplier = 1.0 + unlocked / UNLOCKED_CHUNK_DIVISOR + score / SCORE_MULTIPLIER_DIVISOR;
         int amount = (int) Math.ceil(option.baseAmount * multiplier);
 
         return new UnlockRequirement(option.material, amount);
     }
 
+    /**
+     * Check if the player currently holds the items required to unlock the given chunk.
+     */
     public boolean hasRequiredItems(Player player, Biome biome, int score) {
         UnlockRequirement req = calculateRequirement(player, biome, score);
         return player.getInventory().containsAtLeast(new ItemStack(req.material(), 1), req.amount());
     }
 
+    /**
+     * Remove the required items from the player's inventory after a successful unlock.
+     */
     public void consumeRequiredItem(Player player, Biome biome, int score) {
         UnlockRequirement req = calculateRequirement(player, biome, score);
         player.getInventory().removeItem(new ItemStack(req.material(), req.amount()));

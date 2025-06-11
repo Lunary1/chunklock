@@ -13,6 +13,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Handles persistence of each player's starting chunk location.
+ */
 public class PlayerDataManager {
 
     private final JavaPlugin plugin;

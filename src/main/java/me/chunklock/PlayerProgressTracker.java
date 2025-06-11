@@ -12,6 +12,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Manages tracking of how many chunks each team has unlocked.
+ */
 public class PlayerProgressTracker {
     /** Counts unlocked chunks per team leader UUID. */
     private final Map<UUID, Integer> unlockedChunkCount = new HashMap<>();
