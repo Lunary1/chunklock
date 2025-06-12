@@ -6,10 +6,10 @@
 
   <groupId>me.chunklock</groupId>
   <artifactId>chunklock</artifactId>
-  <version>1.1.0</version>
+  <version>1.2.0</version>
   <packaging>jar</packaging>
 
-  <name>Chunklock-1.1.0</name>
+  <name>Chunklock-1.2.0</name>
 
   <properties>
     <!-- Use consistent Java version throughout -->

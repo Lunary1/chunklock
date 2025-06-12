@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 
 public class HologramManager {
 
@@ -26,7 +27,7 @@ public class HologramManager {
     
     private static final double HOLOGRAM_HEIGHT_OFFSET = 3.0;
     private static final int HOLOGRAM_UPDATE_INTERVAL = 20; // 1 second
-    private static final int HOLOGRAM_VIEW_DISTANCE = 32; // blocks
+    private static final int HOLOGRAM_VIEW_DISTANCE = 48; // blocks (3 chunks)
 
     public HologramManager(ChunkLockManager chunkLockManager, BiomeUnlockRegistry biomeUnlockRegistry) {
         this.chunkLockManager = chunkLockManager;
@@ -37,6 +38,10 @@ public class HologramManager {
      * Starts hologram display task for a player
      */
     public void startHologramDisplay(Player player) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        
         stopHologramDisplay(player); // Clean up any existing task
         
         BukkitTask task = new BukkitRunnable() {
@@ -46,17 +51,27 @@ public class HologramManager {
                     cancel();
                     return;
                 }
-                updateHologramsForPlayer(player);
+                
+                try {
+                    updateHologramsForPlayer(player);
+                } catch (Exception e) {
+                    ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                        "Error updating holograms for " + player.getName(), e);
+                }
             }
         }.runTaskTimer(ChunklockPlugin.getInstance(), 0L, HOLOGRAM_UPDATE_INTERVAL);
         
         playerHologramTasks.put(player.getUniqueId(), task);
+        
+        ChunklockPlugin.getInstance().getLogger().fine("Started hologram display for " + player.getName());
     }
 
     /**
      * Stops hologram display for a player
      */
     public void stopHologramDisplay(Player player) {
+        if (player == null) return;
+        
         BukkitTask task = playerHologramTasks.remove(player.getUniqueId());
         if (task != null) {
             task.cancel();
@@ -64,47 +79,95 @@ public class HologramManager {
         
         // Remove holograms visible to this player
         removeHologramsForPlayer(player);
+        
+        ChunklockPlugin.getInstance().getLogger().fine("Stopped hologram display for " + player.getName());
     }
 
     /**
-     * Updates holograms around a player
+     * Updates holograms around a player - shows holograms for ALL locked adjacent chunks
      */
     private void updateHologramsForPlayer(Player player) {
         try {
             if (chunkLockManager.isBypassing(player)) {
-                return; // Don't show holograms for bypassing players
+                // Remove all holograms for bypassing players
+                removeHologramsForPlayer(player);
+                return;
             }
 
             Location playerLoc = player.getLocation();
             Chunk playerChunk = playerLoc.getChunk();
             
-            // Check adjacent chunks for locked status
+            // Check all chunks in a 3x3 grid around the player
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
-                    if (dx == 0 && dz == 0) continue; // Skip current chunk
-                    
-                    Chunk adjacentChunk = player.getWorld().getChunkAt(
-                        playerChunk.getX() + dx, 
-                        playerChunk.getZ() + dz
-                    );
-                    
-                    chunkLockManager.initializeChunk(adjacentChunk, player.getUniqueId());
-                    
-                    if (chunkLockManager.isLocked(adjacentChunk)) {
-                        // Check if player has required items
-                        var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), adjacentChunk);
-                        if (biomeUnlockRegistry.hasRequiredItems(player, evaluation.biome, evaluation.score)) {
-                            showHologramForChunk(player, adjacentChunk, evaluation);
+                    try {
+                        Chunk checkChunk = player.getWorld().getChunkAt(
+                            playerChunk.getX() + dx, 
+                            playerChunk.getZ() + dz
+                        );
+                        
+                        // Initialize chunk if needed
+                        chunkLockManager.initializeChunk(checkChunk, player.getUniqueId());
+                        
+                        // If this chunk is locked, show hologram
+                        if (chunkLockManager.isLocked(checkChunk)) {
+                            // Check if this locked chunk is adjacent to any unlocked chunk
+                            if (isAdjacentToUnlockedChunk(player, checkChunk)) {
+                                var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), checkChunk);
+                                showHologramForChunk(player, checkChunk, evaluation);
+                            } else {
+                                removeHologramForChunk(player, checkChunk);
+                            }
                         } else {
-                            removeHologramForChunk(player, adjacentChunk);
+                            // Chunk is unlocked, remove any hologram
+                            removeHologramForChunk(player, checkChunk);
                         }
-                    } else {
-                        removeHologramForChunk(player, adjacentChunk);
+                    } catch (Exception e) {
+                        ChunklockPlugin.getInstance().getLogger().log(Level.FINE, 
+                            "Error checking chunk at offset " + dx + "," + dz + " for player " + player.getName(), e);
                     }
                 }
             }
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().warning("Error updating holograms for " + player.getName() + ": " + e.getMessage());
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                "Error updating holograms for " + player.getName(), e);
+        }
+    }
+
+    /**
+     * Checks if a locked chunk is adjacent to any unlocked chunk
+     */
+    private boolean isAdjacentToUnlockedChunk(Player player, Chunk lockedChunk) {
+        try {
+            // Check all 8 adjacent chunks (N, S, E, W, NE, NW, SE, SW)
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (dx == 0 && dz == 0) continue; // Skip the center chunk itself
+                    
+                    try {
+                        Chunk adjacentChunk = player.getWorld().getChunkAt(
+                            lockedChunk.getX() + dx,
+                            lockedChunk.getZ() + dz
+                        );
+                        
+                        // Initialize adjacent chunk if needed
+                        chunkLockManager.initializeChunk(adjacentChunk, player.getUniqueId());
+                        
+                        // If any adjacent chunk is unlocked, this locked chunk should show hologram
+                        if (!chunkLockManager.isLocked(adjacentChunk)) {
+                            return true;
+                        }
+                    } catch (Exception e) {
+                        // Skip chunks that can't be checked
+                        continue;
+                    }
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.FINE, 
+                "Error checking adjacent chunks for " + lockedChunk.getX() + "," + lockedChunk.getZ(), e);
+            return false;
         }
     }
 
@@ -137,28 +200,65 @@ public class HologramManager {
             hologram.setMarker(true);
             hologram.setSmall(true);
             
-            // Set hologram text
+            // Set hologram text based on whether player has required items
             var requirement = biomeUnlockRegistry.calculateRequirement(player, evaluation.biome, evaluation.score);
             String biomeName = BiomeUnlockRegistry.getBiomeDisplayName(evaluation.biome);
+            boolean hasItems = biomeUnlockRegistry.hasRequiredItems(player, evaluation.biome, evaluation.score);
             
-            Component hologramText = Component.text()
-                .append(Component.text("🔓 UNLOCKABLE", NamedTextColor.GREEN, TextDecoration.BOLD))
-                .append(Component.newline())
-                .append(Component.text(biomeName, NamedTextColor.YELLOW))
-                .append(Component.newline())
-                .append(Component.text("Required: " + requirement.amount() + "x", NamedTextColor.WHITE))
-                .append(Component.newline())
-                .append(Component.text(requirement.material().name().replace("_", " "), NamedTextColor.AQUA))
-                .build();
+            Component hologramText;
+            if (hasItems) {
+                // Player has items - show as unlockable
+                hologramText = Component.text()
+                    .append(Component.text("🔓 UNLOCKABLE", NamedTextColor.GREEN, TextDecoration.BOLD))
+                    .append(Component.newline())
+                    .append(Component.text(biomeName, NamedTextColor.YELLOW))
+                    .append(Component.newline())
+                    .append(Component.text("Required: " + requirement.amount() + "x", NamedTextColor.WHITE))
+                    .append(Component.newline())
+                    .append(Component.text(requirement.material().name().replace("_", " "), NamedTextColor.AQUA))
+                    .append(Component.newline())
+                    .append(Component.text("✓ Items available!", NamedTextColor.GREEN))
+                    .build();
+            } else {
+                // Player doesn't have items - show as locked with requirements
+                hologramText = Component.text()
+                    .append(Component.text("🔒 LOCKED", NamedTextColor.RED, TextDecoration.BOLD))
+                    .append(Component.newline())
+                    .append(Component.text(biomeName, NamedTextColor.YELLOW))
+                    .append(Component.newline())
+                    .append(Component.text("Difficulty: " + evaluation.difficulty, getDifficultyColor(evaluation.difficulty)))
+                    .append(Component.newline())
+                    .append(Component.text("Need: " + requirement.amount() + "x", NamedTextColor.GRAY))
+                    .append(Component.newline())
+                    .append(Component.text(requirement.material().name().replace("_", " "), NamedTextColor.GRAY))
+                    .build();
+            }
             
             hologram.customName(hologramText);
             hologram.setCustomNameVisible(true);
             
             activeHolograms.put(hologramKey, hologram);
             
+            ChunklockPlugin.getInstance().getLogger().fine("Created hologram for chunk " + 
+                chunk.getX() + "," + chunk.getZ() + " for player " + player.getName());
+            
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().warning("Error creating hologram: " + e.getMessage());
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                "Error creating hologram for chunk " + chunk.getX() + "," + chunk.getZ() + 
+                " for player " + player.getName(), e);
         }
+    }
+
+    /**
+     * Gets color for difficulty level
+     */
+    private NamedTextColor getDifficultyColor(Difficulty difficulty) {
+        return switch (difficulty) {
+            case EASY -> NamedTextColor.GREEN;
+            case NORMAL -> NamedTextColor.YELLOW;
+            case HARD -> NamedTextColor.RED;
+            case IMPOSSIBLE -> NamedTextColor.DARK_PURPLE;
+        };
     }
 
     /**
@@ -170,6 +270,8 @@ public class HologramManager {
         
         if (hologram != null && hologram.isValid()) {
             hologram.remove();
+            ChunklockPlugin.getInstance().getLogger().fine("Removed hologram for chunk " + 
+                chunk.getX() + "," + chunk.getZ() + " for player " + player.getName());
         }
     }
 
@@ -177,8 +279,10 @@ public class HologramManager {
      * Removes all holograms for a player
      */
     private void removeHologramsForPlayer(Player player) {
+        String playerPrefix = player.getUniqueId().toString() + "_";
+        
         activeHolograms.entrySet().removeIf(entry -> {
-            if (entry.getKey().startsWith(player.getUniqueId().toString())) {
+            if (entry.getKey().startsWith(playerPrefix)) {
                 ArmorStand hologram = entry.getValue();
                 if (hologram != null && hologram.isValid()) {
                     hologram.remove();
@@ -187,18 +291,35 @@ public class HologramManager {
             }
             return false;
         });
+        
+        ChunklockPlugin.getInstance().getLogger().fine("Removed all holograms for player " + player.getName());
     }
 
     /**
      * Gets hologram location (center of chunk, elevated)
      */
     private Location getHologramLocation(Chunk chunk) {
-        World world = chunk.getWorld();
-        int centerX = chunk.getX() * 16 + 8;
-        int centerZ = chunk.getZ() * 16 + 8;
-        int centerY = world.getHighestBlockYAt(centerX, centerZ) + (int)HOLOGRAM_HEIGHT_OFFSET;
-        
-        return new Location(world, centerX + 0.5, centerY, centerZ + 0.5);
+        try {
+            World world = chunk.getWorld();
+            int centerX = chunk.getX() * 16 + 8;
+            int centerZ = chunk.getZ() * 16 + 8;
+            
+            // Get surface height at center
+            int centerY = world.getHighestBlockYAt(centerX, centerZ) + (int)HOLOGRAM_HEIGHT_OFFSET;
+            
+            // Ensure Y is within world bounds
+            centerY = Math.max(world.getMinHeight() + 5, 
+                      Math.min(centerY, world.getMaxHeight() - 5));
+            
+            return new Location(world, centerX + 0.5, centerY, centerZ + 0.5);
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                "Error getting hologram location for chunk " + chunk.getX() + "," + chunk.getZ(), e);
+            
+            // Fallback location
+            World world = chunk.getWorld();
+            return new Location(world, chunk.getX() * 16 + 8.5, 70, chunk.getZ() * 16 + 8.5);
+        }
     }
 
     /**
@@ -209,23 +330,63 @@ public class HologramManager {
     }
 
     /**
-     * Cleanup all holograms
+     * Cleanup all holograms and tasks
      */
     public void cleanup() {
-        // Cancel all tasks
-        for (BukkitTask task : playerHologramTasks.values()) {
-            if (task != null) {
-                task.cancel();
+        try {
+            ChunklockPlugin.getInstance().getLogger().info("Cleaning up HologramManager...");
+            
+            // Cancel all tasks
+            for (BukkitTask task : playerHologramTasks.values()) {
+                if (task != null && !task.isCancelled()) {
+                    task.cancel();
+                }
             }
+            playerHologramTasks.clear();
+            
+            // Remove all holograms
+            for (ArmorStand hologram : activeHolograms.values()) {
+                if (hologram != null && hologram.isValid()) {
+                    hologram.remove();
+                }
+            }
+            activeHolograms.clear();
+            
+            ChunklockPlugin.getInstance().getLogger().info("HologramManager cleanup completed");
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error during hologram cleanup", e);
         }
-        playerHologramTasks.clear();
+    }
+
+    /**
+     * Get hologram statistics for debugging
+     */
+    public Map<String, Object> getHologramStats() {
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("activeHolograms", activeHolograms.size());
+        stats.put("activeTasks", playerHologramTasks.size());
+        stats.put("onlinePlayers", playerHologramTasks.keySet().size());
+        return stats;
+    }
+
+    /**
+     * Force refresh holograms for a specific player
+     */
+    public void refreshHologramsForPlayer(Player player) {
+        if (player == null || !player.isOnline()) return;
         
-        // Remove all holograms
-        for (ArmorStand hologram : activeHolograms.values()) {
-            if (hologram != null && hologram.isValid()) {
-                hologram.remove();
-            }
+        try {
+            // Remove existing holograms
+            removeHologramsForPlayer(player);
+            
+            // Update holograms immediately
+            updateHologramsForPlayer(player);
+            
+            ChunklockPlugin.getInstance().getLogger().fine("Refreshed holograms for " + player.getName());
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                "Error refreshing holograms for " + player.getName(), e);
         }
-        activeHolograms.clear();
     }
 }

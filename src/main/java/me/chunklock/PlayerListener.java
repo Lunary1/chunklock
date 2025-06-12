@@ -9,8 +9,10 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 public class PlayerListener implements Listener {
@@ -18,11 +20,16 @@ public class PlayerListener implements Listener {
     private final ChunkLockManager chunkLockManager;
     private final PlayerDataManager playerDataManager;
     private final UnlockGui unlockGui;
-    private final Map<UUID, Long> lastWarned = new HashMap<>();
+    
+    // Thread-safe collections for better performance
+    private final Map<UUID, Long> lastWarned = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> lastUnlockAttempt = new ConcurrentHashMap<>();
+    
     private final Random random = new Random();
     private static final long COOLDOWN_MS = 2000L;
-    private static final int MAX_SPAWN_ATTEMPTS = 100; // Increased for better chunk finding
-    private static final int MAX_SCORE_THRESHOLD = 25; // Maximum score for starting chunks
+    private static final long UNLOCK_COOLDOWN_MS = 1000L; // Rate limiting for unlock attempts
+    private static final int MAX_SPAWN_ATTEMPTS = 100;
+    private static final int MAX_SCORE_THRESHOLD = 25;
 
     public PlayerListener(ChunkLockManager chunkLockManager, PlayerProgressTracker progressTracker, 
                          PlayerDataManager playerDataManager, UnlockGui unlockGui) {
@@ -42,6 +49,10 @@ public class PlayerListener implements Listener {
             }
 
             UUID playerId = player.getUniqueId();
+            
+            // Clear any stale data
+            lastWarned.remove(playerId);
+            lastUnlockAttempt.remove(playerId);
             
             if (!playerDataManager.hasChunk(playerId)) {
                 assignStartingChunk(player);
@@ -68,18 +79,66 @@ public class PlayerListener implements Listener {
         }
     }
 
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        if (player == null) return;
+        
+        UUID playerId = player.getUniqueId();
+        
+        try {
+            // Clean up player-specific data to prevent memory leaks
+            lastWarned.remove(playerId);
+            lastUnlockAttempt.remove(playerId);
+            
+            // Notify TickTask to cleanup player data
+            TickTask tickTask = ChunklockPlugin.getInstance().getTickTask();
+            if (tickTask != null) {
+                tickTask.removePlayer(playerId);
+            }
+            
+            // Notify HologramManager to cleanup
+            HologramManager hologramManager = ChunklockPlugin.getInstance().getHologramManager();
+            if (hologramManager != null) {
+                hologramManager.stopHologramDisplay(player);
+            }
+            
+            ChunklockPlugin.getInstance().getLogger().fine("Cleaned up data for leaving player: " + player.getName());
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                "Error cleaning up data for leaving player " + player.getName(), e);
+        }
+    }
+
     /**
-     * Calculates the exact center location of a chunk
-     * X = chunkX * 16 + 8
-     * Z = chunkZ * 16 + 8  
-     * Y = highest solid block at that position
+     * Rate limiting for unlock attempts
+     */
+    public boolean canAttemptUnlock(Player player) {
+        long now = System.currentTimeMillis();
+        Long last = lastUnlockAttempt.get(player.getUniqueId());
+        
+        if (last != null && (now - last) < UNLOCK_COOLDOWN_MS) {
+            return false;
+        }
+        
+        lastUnlockAttempt.put(player.getUniqueId(), now);
+        return true;
+    }
+
+    /**
+     * Calculates the exact center location of a chunk with improved error handling
      */
     private Location getCenterLocationOfChunk(Chunk chunk) {
-        if (chunk == null || chunk.getWorld() == null) {
-            throw new IllegalArgumentException("Invalid chunk provided");
+        if (chunk == null) {
+            throw new IllegalArgumentException("Chunk cannot be null");
+        }
+        
+        World world = chunk.getWorld();
+        if (world == null) {
+            throw new IllegalStateException("Chunk world is null");
         }
 
-        World world = chunk.getWorld();
         int chunkX = chunk.getX();
         int chunkZ = chunk.getZ();
         
@@ -87,7 +146,7 @@ public class PlayerListener implements Listener {
         int centerX = chunkX * 16 + 8;
         int centerZ = chunkZ * 16 + 8;
         
-        // Get the highest solid block at center
+        // Get the highest solid block at center with better error handling
         int centerY;
         try {
             centerY = world.getHighestBlockAt(centerX, centerZ).getY();
@@ -99,8 +158,8 @@ public class PlayerListener implements Listener {
                       Math.min(centerY, world.getMaxHeight() - 2));
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
-                "Error getting highest block at chunk center, using fallback Y", e);
-            centerY = world.getSpawnLocation().getBlockY();
+                "Error getting highest block at chunk center (" + centerX + "," + centerZ + "), using fallback Y", e);
+            centerY = Math.max(world.getMinHeight() + 10, world.getSpawnLocation().getBlockY());
         }
         
         // Return center location with 0.5 offset for perfect centering
@@ -109,12 +168,17 @@ public class PlayerListener implements Listener {
 
     private void assignStartingChunk(Player player) {
         try {
-            if (player == null || player.getWorld() == null) {
-                ChunklockPlugin.getInstance().getLogger().severe("Cannot assign starting chunk: null player or world");
+            if (player == null) {
+                ChunklockPlugin.getInstance().getLogger().severe("Cannot assign starting chunk: null player");
+                return;
+            }
+            
+            World world = player.getWorld();
+            if (world == null) {
+                ChunklockPlugin.getInstance().getLogger().severe("Cannot assign starting chunk: player world is null");
                 return;
             }
 
-            World world = player.getWorld();
             Chunk bestChunk = findBestStartingChunk(player, world);
 
             if (bestChunk == null) {
@@ -124,8 +188,18 @@ public class PlayerListener implements Listener {
 
             try {
                 setupPlayerSpawn(player, bestChunk);
+            } catch (IllegalArgumentException e) {
+                ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Invalid arguments for player spawn setup: " + player.getName(), e);
+                // Try fallback to world spawn chunk
+                try {
+                    setupPlayerSpawn(player, world.getSpawnLocation().getChunk());
+                } catch (Exception e2) {
+                    ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Critical error: Could not set up any spawn for " + player.getName(), e2);
+                }
+            } catch (IllegalStateException e) {
+                ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Invalid state during player spawn setup: " + player.getName(), e);
             } catch (Exception e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Error setting up player spawn for " + player.getName(), e);
+                ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Unexpected error setting up player spawn for " + player.getName(), e);
                 // Try fallback to world spawn chunk
                 try {
                     setupPlayerSpawn(player, world.getSpawnLocation().getChunk());
@@ -187,6 +261,12 @@ public class PlayerListener implements Listener {
                         }
                     }
                 }
+            } catch (IllegalArgumentException e) {
+                ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid chunk coordinates in attempt " + attempt, e);
+                continue;
+            } catch (IllegalStateException e) {
+                ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Chunk state error in attempt " + attempt, e);
+                continue;
             } catch (Exception e) {
                 ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Error in chunk evaluation attempt " + attempt, e);
                 continue;
@@ -200,9 +280,13 @@ public class PlayerListener implements Listener {
         return bestChunk;
     }
 
-    private void setupPlayerSpawn(Player player, Chunk startChunk) throws Exception {
-        if (startChunk == null || startChunk.getWorld() == null) {
-            throw new IllegalArgumentException("Invalid chunk provided");
+    private void setupPlayerSpawn(Player player, Chunk startChunk) throws IllegalArgumentException, IllegalStateException {
+        if (startChunk == null) {
+            throw new IllegalArgumentException("Starting chunk cannot be null");
+        }
+        
+        if (startChunk.getWorld() == null) {
+            throw new IllegalStateException("Starting chunk world is null");
         }
 
         // Get the exact center location of the chunk
@@ -231,9 +315,11 @@ public class PlayerListener implements Listener {
 
     private boolean isSafeSpawnLocation(Location location) {
         try {
-            if (location == null || location.getWorld() == null) return false;
+            if (location == null) return false;
             
             World world = location.getWorld();
+            if (world == null) return false;
+            
             int x = location.getBlockX();
             int y = location.getBlockY();
             int z = location.getBlockZ();
@@ -278,9 +364,9 @@ public class PlayerListener implements Listener {
 
             if (chunkLockManager.isLocked(toChunk)) {
                 long now = System.currentTimeMillis();
-                long last = lastWarned.getOrDefault(player.getUniqueId(), 0L);
+                Long last = lastWarned.get(player.getUniqueId());
 
-                if (now - last >= COOLDOWN_MS) {
+                if (last == null || (now - last) >= COOLDOWN_MS) {
                     try {
                         ChunkEvaluator.ChunkValueData evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), toChunk);
                         player.sendMessage("§cThis chunk is locked!");
@@ -289,7 +375,10 @@ public class PlayerListener implements Listener {
                         player.sendMessage("§7Difficulty: " + evaluation.difficulty + " | Score: " + evaluation.score + " | Biome: " + biomeName);
                         lastWarned.put(player.getUniqueId(), now);
                         
-                        unlockGui.open(player, toChunk);
+                        // Rate limit unlock GUI opening
+                        if (canAttemptUnlock(player)) {
+                            unlockGui.open(player, toChunk);
+                        }
                     } catch (Exception e) {
                         ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error showing chunk info to player", e);
                         player.sendMessage("§cThis chunk is locked!");
@@ -316,6 +405,12 @@ public class PlayerListener implements Listener {
             
             if (from == null || to == null) return;
 
+            // Optimization: only check if player moved to a different block
+            if (from.getBlockX() == to.getBlockX() && 
+                from.getBlockZ() == to.getBlockZ()) {
+                return;
+            }
+
             Chunk fromChunk = from.getChunk();
             Chunk toChunk = to.getChunk();
 
@@ -327,5 +422,15 @@ public class PlayerListener implements Listener {
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error in player move event", e);
         }
+    }
+
+    /**
+     * Get current statistics for debugging
+     */
+    public Map<String, Object> getPlayerListenerStats() {
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("playersWithWarningCooldown", lastWarned.size());
+        stats.put("playersWithUnlockCooldown", lastUnlockAttempt.size());
+        return stats;
     }
 }
