@@ -1,5 +1,6 @@
 package me.chunklock;
 
+import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -33,6 +34,14 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
+        try {
+            int pluginId = 19876; // Get this from bStats
+            Metrics metrics = new Metrics(this, pluginId);
+            getLogger().info("Analytics initialized successfully");
+        } catch (Exception e) {
+            getLogger().info("Analytics disabled or failed to initialize");
+        }
+
         try {
             instance = this;
             
