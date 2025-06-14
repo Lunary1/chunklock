@@ -13,6 +13,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
+import java.io.File;
 import java.util.logging.Level;
 
 public class ChunklockPlugin extends JavaPlugin implements Listener {
@@ -28,6 +29,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private UnlockGui unlockGui;
     private HologramManager hologramManager;
     private PlayerListener playerListener;
+    private ChunkOwnershipManager ownershipManager; // NEW: Overclaim system
     
     // Keep track of active tasks for cleanup
     private TickTask activeTickTask;
@@ -53,6 +55,13 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                 return;
             }
             
+            // Initialize configuration files (including new overclaim config)
+            if (!initializeConfigFiles()) {
+                getLogger().severe("Failed to initialize configuration files - disabling plugin");
+                Bukkit.getPluginManager().disablePlugin(this);
+                return;
+            }
+            
             if (!initializeComponents()) {
                 getLogger().severe("Failed to initialize core components - disabling plugin");
                 Bukkit.getPluginManager().disablePlugin(this);
@@ -73,11 +82,47 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                 getLogger().warning("Failed to register some commands - some functionality may be unavailable");
             }
             
-            getLogger().info("Chunklock plugin enabled successfully with visual effects!");
+            getLogger().info("Chunklock plugin enabled successfully with overclaiming system and visual effects!");
+            
+            // Log overclaim status
+            if (ownershipManager.isOverclaimEnabled()) {
+                getLogger().info("Overclaiming system is ENABLED - players can take chunks from each other");
+            } else {
+                getLogger().info("Overclaiming system is DISABLED - traditional chunk locking only");
+            }
             
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "Critical error during plugin enable", e);
             Bukkit.getPluginManager().disablePlugin(this);
+        }
+    }
+
+    /**
+     * Initialize configuration files including the new overclaim config
+     */
+    private boolean initializeConfigFiles() {
+        try {            
+            // Save default overclaim_config.yml if it doesn't exist
+            File overclaimConfigFile = new File(getDataFolder(), "overclaim_config.yml");
+            if (!overclaimConfigFile.exists()) {
+                saveResource("overclaim_config.yml", false);
+                getLogger().info("Created default overclaim_config.yml");
+            }
+            
+            // Ensure other config files exist
+            String[] configFiles = {"chunk_values.yml", "biome_costs.yml"};
+            for (String fileName : configFiles) {
+                File file = new File(getDataFolder(), fileName);
+                if (!file.exists()) {
+                    saveResource(fileName, false);
+                    getLogger().info("Created default " + fileName);
+                }
+            }
+            
+            return true;
+        } catch (Exception e) {
+            getLogger().log(Level.SEVERE, "Error initializing configuration files", e);
+            return false;
         }
     }
 
@@ -120,7 +165,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
      */
     public boolean performReload(CommandSender sender) {
         try {
-            sender.sendMessage(Component.text("Step 1/6: Cleaning up existing systems...").color(NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("Step 1/7: Cleaning up existing systems...").color(NamedTextColor.GRAY));
             
             // 1. Stop and cleanup existing systems
             if (hologramManager != null) {
@@ -132,29 +177,33 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             }
 
             // 2. Save all current data before reload
-            sender.sendMessage(Component.text("Step 2/6: Saving current data...").color(NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("Step 2/7: Saving current data...").color(NamedTextColor.GRAY));
             saveAllData();
 
-            // 3. Reinitialize core components
-            sender.sendMessage(Component.text("Step 3/6: Reinitializing components...").color(NamedTextColor.GRAY));
+            // 3. Reload configuration files
+            sender.sendMessage(Component.text("Step 3/7: Reloading configuration...").color(NamedTextColor.GRAY));
+            reloadConfig();
+
+            // 4. Reinitialize core components
+            sender.sendMessage(Component.text("Step 4/7: Reinitializing components...").color(NamedTextColor.GRAY));
             boolean componentsOk = initializeComponents();
             if (!componentsOk) {
                 sender.sendMessage(Component.text("Warning: Some components failed to reinitialize").color(NamedTextColor.YELLOW));
             }
 
-            // 4. Restart background tasks
-            sender.sendMessage(Component.text("Step 4/6: Restarting background tasks...").color(NamedTextColor.GRAY));
+            // 5. Restart background tasks
+            sender.sendMessage(Component.text("Step 5/7: Restarting background tasks...").color(NamedTextColor.GRAY));
             boolean tasksOk = startTasks();
             if (!tasksOk) {
                 sender.sendMessage(Component.text("Warning: Some tasks failed to restart").color(NamedTextColor.YELLOW));
             }
 
-            // 5. Restart visual effects for online players
-            sender.sendMessage(Component.text("Step 5/6: Restarting visual effects...").color(NamedTextColor.GRAY));
+            // 6. Restart visual effects for online players
+            sender.sendMessage(Component.text("Step 6/7: Restarting visual effects...").color(NamedTextColor.GRAY));
             restartVisualEffects();
 
-            // 6. Validate reload success
-            sender.sendMessage(Component.text("Step 6/6: Validating reload...").color(NamedTextColor.GRAY));
+            // 7. Validate reload success
+            sender.sendMessage(Component.text("Step 7/7: Validating reload...").color(NamedTextColor.GRAY));
             
             boolean success = validateReload();
             
@@ -197,7 +246,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                            chunkEvaluator != null &&
                            unlockGui != null &&
                            hologramManager != null &&
-                           playerListener != null;
+                           playerListener != null &&
+                           ownershipManager != null; // NEW: Check ownership manager
             
             if (!valid) {
                 getLogger().warning("Reload validation failed: Some components are null");
@@ -206,7 +256,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             
             // Test a basic operation
             int totalChunks = chunkLockManager.getTotalUnlockedChunks();
-            getLogger().info("Reload validation passed. Total unlocked chunks: " + totalChunks);
+            var ownershipStats = ownershipManager.getOwnershipStats();
+            getLogger().info("Reload validation passed. Total unlocked chunks: " + totalChunks + 
+                ", Owned chunks: " + ownershipStats.get("totalOwnedChunks"));
             
             return true;
         } catch (Exception e) {
@@ -225,11 +277,16 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.playerDataManager = new PlayerDataManager(this);
             this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry);
             this.chunkLockManager = new ChunkLockManager(chunkEvaluator, this);
-            this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker);
+            
+            // NEW: Initialize ownership manager (depends on team manager)
+            this.ownershipManager = new ChunkOwnershipManager(this, teamManager);
+            
+            // Initialize GUI with ownership manager
+            this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker, ownershipManager);
             this.hologramManager = new HologramManager(chunkLockManager, biomeUnlockRegistry);
             this.playerListener = new PlayerListener(chunkLockManager, progressTracker, playerDataManager, unlockGui);
             
-            getLogger().info("All core components initialized successfully");
+            getLogger().info("All core components initialized successfully (including overclaim system)");
             return true;
             
         } catch (Exception e) {
@@ -280,7 +337,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
 
     private boolean registerCommands() {
         try {
-            var chunklockCmd = new ChunklockCommand(progressTracker, chunkLockManager, unlockGui, teamManager);
+            // NEW: Pass ownership manager to command handler
+            var chunklockCmd = new ChunklockCommand(progressTracker, chunkLockManager, unlockGui, teamManager, ownershipManager);
             
             if (getCommand("chunklock") != null) {
                 getCommand("chunklock").setExecutor(chunklockCmd);
@@ -396,6 +454,17 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             }
         }
         
+        // NEW: Save ownership data
+        if (ownershipManager != null) {
+            try {
+                ownershipManager.saveOwnershipData();
+                getLogger().info("Ownership data saved successfully");
+            } catch (Exception e) {
+                getLogger().log(Level.SEVERE, "Error saving ownership data", e);
+                saveErrors++;
+            }
+        }
+        
         if (saveErrors > 0) {
             getLogger().warning("Encountered " + saveErrors + " errors while saving data");
         }
@@ -469,8 +538,26 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         return playerListener;
     }
 
+    // NEW: Getter for ownership manager
+    public ChunkOwnershipManager getOwnershipManager() {
+        if (ownershipManager == null) {
+            getLogger().warning("ChunkOwnershipManager accessed before initialization");
+            throw new IllegalStateException("ChunkOwnershipManager not initialized");
+        }
+        return ownershipManager;
+    }
+
+    // NEW: Getter for biome unlock registry (needed by enhanced command)
+    public BiomeUnlockRegistry getBiomeUnlockRegistry() {
+        if (biomeUnlockRegistry == null) {
+            getLogger().warning("BiomeUnlockRegistry accessed before initialization");
+            throw new IllegalStateException("BiomeUnlockRegistry not initialized");
+        }
+        return biomeUnlockRegistry;
+    }
+
     /**
-     * Get comprehensive plugin statistics for debugging
+     * Get comprehensive plugin statistics for debugging (enhanced with overclaim data)
      */
     public String getPluginStats() {
         try {
@@ -479,6 +566,14 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             
             if (chunkLockManager != null) {
                 stats.append("Total unlocked chunks: ").append(chunkLockManager.getTotalUnlockedChunks()).append("\n");
+            }
+            
+            // NEW: Ownership statistics
+            if (ownershipManager != null) {
+                var ownershipStats = ownershipManager.getOwnershipStats();
+                stats.append("Total owned chunks: ").append(ownershipStats.get("totalOwnedChunks")).append("\n");
+                stats.append("Overclaimed chunks: ").append(ownershipStats.get("overclaimedChunks")).append("\n");
+                stats.append("Overclaiming enabled: ").append(ownershipStats.get("overclaimEnabled")).append("\n");
             }
             
             if (activeTickTask != null) {

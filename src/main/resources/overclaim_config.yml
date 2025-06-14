@@ -1,0 +1,102 @@
+# ==============================================
+# CHUNKLOCK OVERCLAIMING CONFIGURATION
+# ==============================================
+# This file controls the chunk overclaiming system that allows players
+# to take chunks from other players at increased resource cost.
+
+# ==============================================
+# CORE OVERCLAIM SETTINGS
+# ==============================================
+
+overclaim:
+  # Enable or disable the entire overclaiming system
+  # Set to false to disable overclaiming completely
+  enabled: true
+
+  # Base multiplier for overclaim costs
+  # Example: If base cost is 100 iron, overclaim cost = 100 * 3.0 = 300 iron
+  base_multiplier: 3.0
+
+  # Protection time for newly unlocked chunks (in hours)
+  # Chunks cannot be overclaimed for this duration after initial unlock
+  # This prevents instant griefing of newly unlocked chunks
+  owner_protection_hours: 24
+
+  # Additional multiplier when overclaiming from team members
+  # This makes team griefing extremely expensive
+  # Final cost = base_cost * base_multiplier * team_protection_multiplier
+  team_protection_multiplier: 5.0
+
+  # Maximum number of overclaims a player can perform per day
+  # Resets at midnight server time
+  # Set to -1 for unlimited (not recommended)
+  max_overclaims_per_day: 3
+
+  # Cooldown period after a chunk is overclaimed (in hours)
+  # Prevents the same chunk from being repeatedly overclaimed
+  overclaim_cooldown_hours: 6
+
+# ==============================================
+# BIOME-SPECIFIC OVERCLAIM MULTIPLIERS
+# ==============================================
+# Optional: Override base multiplier for specific biomes
+# Format: BIOME_NAME: multiplier
+# If not specified, uses base_multiplier above
+
+biome_multipliers:
+  # Rare/valuable biomes cost more to overclaim
+  MUSHROOM_FIELDS: 5.0
+  DEEP_DARK: 4.5
+  END_HIGHLANDS: 6.0
+  CHERRY_GROVE: 4.0
+
+  # Ocean biomes might be cheaper to overclaim
+  OCEAN: 2.5
+  DEEP_OCEAN: 2.5
+
+  # Nether biomes are more expensive
+  NETHER_WASTES: 4.0
+  CRIMSON_FOREST: 4.5
+  WARPED_FOREST: 4.5
+  SOUL_SAND_VALLEY: 5.0
+  BASALT_DELTAS: 4.5
+
+# ==============================================
+# DIFFICULTY-SPECIFIC OVERCLAIM MULTIPLIERS
+# ==============================================
+# Optional: Override base multiplier based on chunk difficulty
+# Higher difficulty chunks cost more to overclaim
+
+difficulty_multipliers:
+  EASY: 2.5 # Easier to overclaim easy chunks
+  NORMAL: 3.0 # Default multiplier
+  HARD: 4.0 # Harder chunks cost more
+  IMPOSSIBLE: 5.0 # Very expensive to overclaim
+
+# ==============================================
+# ADVANCED PROTECTION SETTINGS
+# ==============================================
+
+protection:
+  # Enable owner notifications when their chunks are being viewed for overclaim
+  # Sends a message when someone opens the overclaim GUI for their chunk
+  notify_on_overclaim_attempt: true
+
+  # Grace period for new players (in hours)
+  # New players' chunks cannot be overclaimed for this duration
+  # Set to 0 to disable new player protection
+  new_player_grace_period_hours: 72
+
+  # Minimum chunks a player must own before they can overclaim others
+  # Prevents new players from immediately griefing
+  min_chunks_to_overclaim: 5
+
+  # Enable chunk buyback system
+  # Allows original owners to buy back their overclaimed chunks at reduced cost
+  enable_buyback: true
+
+  # Buyback cost multiplier (applied to original unlock cost, not overclaim cost)
+  # Example: If original cost was 64 iron, buyback cost = 64 * 1.5 = 96 iron
+  buyback_multiplier: 1.5
+
+  #
