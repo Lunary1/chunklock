@@ -196,18 +196,25 @@ public class TickTask extends BukkitRunnable {
             int y = baseY + (yLevel * 2); // Space layers by 2 blocks
             if (y > topY) break;
             
-            // Draw all four sides of the chunk border
+            // FIX: Draw sides without overlapping corners
+            // North side (exclude corners to avoid overlap)
             drawBorderSide(player, particleType, color, canUnlock, animationOffset,
-                          chunkX, chunkX + 15, y, chunkZ, true); // North side
+                          chunkX + 1, chunkX + 14, y, chunkZ, true); // Start at +1, end at +14
+            
+            // South side (exclude corners to avoid overlap)
             drawBorderSide(player, particleType, color, canUnlock, animationOffset,
-                          chunkX, chunkX + 15, y, chunkZ + 15, true); // South side
+                          chunkX + 1, chunkX + 14, y, chunkZ + 15, true); // Start at +1, end at +14
+            
+            // West side (include full length since we excluded corners from north/south)
             drawBorderSide(player, particleType, color, canUnlock, animationOffset,
-                          chunkX, chunkZ, chunkZ + 15, y, false); // West side
+                          chunkX, chunkZ, chunkZ + 15, y, false);
+            
+            // East side (include full length since we excluded corners from north/south)
             drawBorderSide(player, particleType, color, canUnlock, animationOffset,
-                          chunkX + 15, chunkZ, chunkZ + 15, y, false); // East side
+                          chunkX + 15, chunkZ, chunkZ + 15, y, false);
         }
         
-        // Add enhanced corner markers for better visibility
+        // Add enhanced corner markers for better visibility (drawn separately to avoid conflicts)
         if (USE_ENHANCED_CORNERS) {
             drawEnhancedCorners(player, particleType, color, canUnlock, chunkX, chunkZ, baseY, topY);
         }
@@ -262,25 +269,23 @@ public class TickTask extends BukkitRunnable {
         };
         
         for (int[] corner : corners) {
-            for (int y = baseY; y <= topY; y += 1) {
+            // FIX: Only draw corner particles every few Y levels to reduce density
+            for (int y = baseY; y <= topY; y += 2) { // Every 2 blocks instead of every block
                 double x = corner[0] + 0.5;
                 double z = corner[1] + 0.5;
                 
                 if (canUnlock) {
                     // Bright unlockable corners with multiple effects
-                    player.spawnParticle(Particle.HAPPY_VILLAGER, x, y, z, 2, 0.2, 0.2, 0.2, 0);
-                    player.spawnParticle(Particle.ENCHANT, x, y, z, 3, 0.3, 0.3, 0.3, 1);
-                    particlesSpawned.addAndGet(5);
-                } else {
-                    // Enhanced locked corners - always red
-                    spawnBorderParticleWithThickness(player, particleType, color, x, y, z, false);
-                    
-                    // Add extra red visibility for corners
-                    if (particleType == Particle.DUST && color != null) {
-                        player.spawnParticle(Particle.DUST, x, y, z, 1, 0.1, 0.1, 0.1, 0, 
-                            new Particle.DustOptions(color, 2.8f));
+                    player.spawnParticle(Particle.HAPPY_VILLAGER, x, y, z, 1, 0.1, 0.1, 0.1, 0); // Reduced count
+                    if (y % 4 == 0) { // Only every 4th Y level for enchant particles
+                        player.spawnParticle(Particle.ENCHANT, x, y, z, 2, 0.2, 0.2, 0.2, 1);
+                        particlesSpawned.addAndGet(3);
+                    } else {
                         particlesSpawned.incrementAndGet();
                     }
+                } else {
+                    // Enhanced locked corners - always red but reduced density
+                    spawnBorderParticleWithThickness(player, particleType, color, x, y, z, false);
                 }
             }
         }

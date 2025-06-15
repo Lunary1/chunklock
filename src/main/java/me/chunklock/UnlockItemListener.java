@@ -1,5 +1,6 @@
 package me.chunklock;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -69,5 +70,18 @@ public class UnlockItemListener implements Listener {
 
         int totalUnlocked = progressTracker.getUnlockedChunkCount(player.getUniqueId());
         player.sendMessage(Component.text("Chunk unlocked! Total unlocked chunks: " + totalUnlocked).color(NamedTextColor.GREEN));
+        
+        // FIX: Refresh holograms after unlocking with nether star
+        try {
+            HologramManager hologramManager = ChunklockPlugin.getInstance().getHologramManager();
+            if (hologramManager != null) {
+                // Delay the refresh slightly to ensure the chunk unlock is processed
+                Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
+                    hologramManager.refreshHologramsForPlayer(player);
+                }, 2L);
+            }
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().warning("Error refreshing holograms after nether star unlock: " + e.getMessage());
+        }
     }
 }

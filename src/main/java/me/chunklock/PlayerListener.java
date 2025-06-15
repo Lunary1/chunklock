@@ -25,6 +25,9 @@ public class PlayerListener implements Listener {
     private final Map<UUID, Long> lastWarned = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastUnlockAttempt = new ConcurrentHashMap<>();
     
+    // FIX: Track if player is truly new (first time joining)
+    private final Set<UUID> newPlayers = new HashSet<>();
+    
     private final Random random = new Random();
     private static final long COOLDOWN_MS = 2000L;
     private static final long UNLOCK_COOLDOWN_MS = 1000L; // Rate limiting for unlock attempts
@@ -55,22 +58,44 @@ public class PlayerListener implements Listener {
             lastUnlockAttempt.remove(playerId);
             
             if (!playerDataManager.hasChunk(playerId)) {
+                // FIX: Mark as new player and assign starting chunk
+                newPlayers.add(playerId);
                 assignStartingChunk(player);
             } else {
                 try {
                     Location savedSpawn = playerDataManager.getChunkSpawn(playerId);
                     if (savedSpawn != null && isValidLocation(savedSpawn)) {
-                        // Ensure they spawn at the center of their assigned chunk
-                        Location centerSpawn = getCenterLocationOfChunk(savedSpawn.getChunk());
-                        player.teleport(centerSpawn);
-                        player.setRespawnLocation(centerSpawn, true);
-                        player.sendMessage("§aWelcome back! You've been returned to your starting chunk.");
+                        // FIX: Only teleport to center if this is a new player or if they're outside their assigned chunk
+                        Chunk savedChunk = savedSpawn.getChunk();
+                        Chunk currentChunk = player.getLocation().getChunk();
+                        
+                        // Check if player is in an unlocked chunk
+                        chunkLockManager.initializeChunk(currentChunk, playerId);
+                        boolean currentChunkUnlocked = !chunkLockManager.isLocked(currentChunk);
+                        
+                        if (newPlayers.contains(playerId) || !currentChunkUnlocked) {
+                            // Only teleport to center if it's a new player or they're in a locked chunk
+                            Location centerSpawn = getCenterLocationOfChunk(savedChunk);
+                            player.teleport(centerSpawn);
+                            player.setRespawnLocation(centerSpawn, true);
+                            player.sendMessage("§aWelcome back! You've been returned to your starting chunk.");
+                        } else {
+                            // Player is in an unlocked chunk, just set respawn location but don't teleport
+                            Location centerSpawn = getCenterLocationOfChunk(savedChunk);
+                            player.setRespawnLocation(centerSpawn, true);
+                            player.sendMessage("§aWelcome back! Your respawn point has been set to your starting chunk.");
+                        }
+                        
+                        // Remove from new players set after first join handling
+                        newPlayers.remove(playerId);
                     } else {
                         ChunklockPlugin.getInstance().getLogger().warning("Invalid saved spawn for player " + player.getName() + ", reassigning");
+                        newPlayers.add(playerId);
                         assignStartingChunk(player);
                     }
                 } catch (Exception e) {
-                    ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error teleporting player " + player.getName() + " to saved spawn", e);
+                    ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error handling returning player " + player.getName(), e);
+                    newPlayers.add(playerId);
                     assignStartingChunk(player);
                 }
             }
@@ -90,6 +115,7 @@ public class PlayerListener implements Listener {
             // Clean up player-specific data to prevent memory leaks
             lastWarned.remove(playerId);
             lastUnlockAttempt.remove(playerId);
+            // FIX: Don't remove from newPlayers here - let it be handled on next join
             
             // Notify TickTask to cleanup player data
             TickTask tickTask = ChunklockPlugin.getInstance().getTickTask();
@@ -431,6 +457,7 @@ public class PlayerListener implements Listener {
         Map<String, Object> stats = new HashMap<>();
         stats.put("playersWithWarningCooldown", lastWarned.size());
         stats.put("playersWithUnlockCooldown", lastUnlockAttempt.size());
+        stats.put("newPlayersTracked", newPlayers.size());
         return stats;
     }
 }
