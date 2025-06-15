@@ -31,6 +31,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     
     // Keep track of active tasks for cleanup
     private TickTask activeTickTask;
+    
+    // New: Block protection listener
+    private BlockProtectionListener blockProtectionListener;
 
     @Override
     public void onEnable() {
@@ -73,7 +76,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                 getLogger().warning("Failed to register some commands - some functionality may be unavailable");
             }
             
-            getLogger().info("Chunklock plugin enabled successfully with visual effects!");
+            getLogger().info("Chunklock plugin enabled successfully with enhanced protection and visual effects!");
             
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "Critical error during plugin enable", e);
@@ -197,7 +200,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                            chunkEvaluator != null &&
                            unlockGui != null &&
                            hologramManager != null &&
-                           playerListener != null;
+                           playerListener != null &&
+                           blockProtectionListener != null; // New component check
             
             if (!valid) {
                 getLogger().warning("Reload validation failed: Some components are null");
@@ -229,6 +233,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.hologramManager = new HologramManager(chunkLockManager, biomeUnlockRegistry);
             this.playerListener = new PlayerListener(chunkLockManager, progressTracker, playerDataManager, unlockGui);
             
+            // New: Initialize block protection listener
+            this.blockProtectionListener = new BlockProtectionListener(chunkLockManager, unlockGui);
+            
             getLogger().info("All core components initialized successfully");
             return true;
             
@@ -240,16 +247,19 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
 
     private boolean registerEventListeners() {
         try {
-            // Only register during initial startup, not during reload
-            if (Bukkit.getPluginManager().getPlugin("Chunklock").isEnabled()) {
-                Bukkit.getPluginManager().registerEvents(playerListener, this);
-                Bukkit.getPluginManager().registerEvents(
-                    new UnlockItemListener(chunkLockManager, biomeUnlockRegistry, progressTracker), this);
-                Bukkit.getPluginManager().registerEvents(unlockGui, this);
-                Bukkit.getPluginManager().registerEvents(this, this);
-            }
+            // Register all event listeners
+            Bukkit.getPluginManager().registerEvents(playerListener, this);
+            Bukkit.getPluginManager().registerEvents(
+                new UnlockItemListener(chunkLockManager, biomeUnlockRegistry, progressTracker), this);
+            Bukkit.getPluginManager().registerEvents(unlockGui, this);
             
-            getLogger().info("Event listeners registered successfully");
+            // Register the new block protection listener
+            Bukkit.getPluginManager().registerEvents(blockProtectionListener, this);
+            
+            // Register main plugin events (join/quit handlers)
+            Bukkit.getPluginManager().registerEvents(this, this);
+            
+            getLogger().info("Event listeners registered successfully (including block protection)");
             return true;
             
         } catch (Exception e) {
@@ -320,8 +330,13 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             if (hologramManager != null) {
                 hologramManager.stopHologramDisplay(event.getPlayer());
             }
+            
+            // Clean up block protection listener data
+            if (blockProtectionListener != null) {
+                blockProtectionListener.cleanupPlayer(event.getPlayer().getUniqueId());
+            }
         } catch (Exception e) {
-            getLogger().log(Level.WARNING, "Error cleaning up holograms for leaving player " + event.getPlayer().getName(), e);
+            getLogger().log(Level.WARNING, "Error cleaning up for leaving player " + event.getPlayer().getName(), e);
         }
     }
 
@@ -469,6 +484,15 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         return playerListener;
     }
 
+    // New getter for block protection listener
+    public BlockProtectionListener getBlockProtectionListener() {
+        if (blockProtectionListener == null) {
+            getLogger().warning("BlockProtectionListener accessed before initialization");
+            throw new IllegalStateException("BlockProtectionListener not initialized");
+        }
+        return blockProtectionListener;
+    }
+
     /**
      * Get comprehensive plugin statistics for debugging
      */
@@ -492,6 +516,11 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                 var listenerStats = playerListener.getPlayerListenerStats();
                 stats.append("Players with warning cooldown: ").append(listenerStats.get("playersWithWarningCooldown")).append("\n");
                 stats.append("Players with unlock cooldown: ").append(listenerStats.get("playersWithUnlockCooldown")).append("\n");
+            }
+            
+            if (blockProtectionListener != null) {
+                var protectionStats = blockProtectionListener.getProtectionStats();
+                stats.append("Players with protection warning cooldown: ").append(protectionStats.get("playersWithWarningCooldown")).append("\n");
             }
             
             // Memory usage
