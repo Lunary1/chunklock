@@ -24,21 +24,28 @@ public class TickTask extends BukkitRunnable {
     private final BiomeUnlockRegistry biomeUnlockRegistry;
     private int tickCounter = 0;
     
-    // Performance optimizations - reduced frequencies
-    private static final int PARTICLE_UPDATE_INTERVAL = 20; // Every 1 second (was 10)
+    // Performance optimizations with full border visibility
+    private static final int PARTICLE_UPDATE_INTERVAL = 25; // Slightly slower for more particles
     private static final int CHUNK_SCAN_INTERVAL = 40; // Every 2 seconds for chunk updates
-    private static final int CACHE_CLEANUP_INTERVAL = 600; // Every 30 seconds (was 200)
+    private static final int CACHE_CLEANUP_INTERVAL = 600; // Every 30 seconds
     
-    private static final int PARTICLES_PER_SIDE = 3; // Reduced from 4
-    private static final double PARTICLE_HEIGHT_RANGE = 2.0; // Reduced from 3.0
-    private static final int MAX_BORDER_DISTANCE = 40; // Reduced from 48
-    private static final int CHUNK_CACHE_SIZE = 150; // Reduced from 100
-    private static final double FOV_DOT_THRESHOLD = -0.5; // 120-degree FOV
+    // Full border configuration
+    private static final double PARTICLE_SPACING = 1.8; // Space between border particles
+    private static final int VERTICAL_LAYERS = 1; // Number of vertical layers
+    private static final double BORDER_THICKNESS = 0.25; // Slight thickness for visibility
+    private static final int MAX_BORDER_DISTANCE = 48; // Max distance to show borders
+    private static final int CHUNK_CACHE_SIZE = 120; // Reduced cache size
+    private static final double FOV_DOT_THRESHOLD = -0.6; // 130-degree FOV
+    
+    // Enhanced visibility settings
+    private static final boolean USE_ENHANCED_CORNERS = true;
+    private static final boolean USE_GROUND_MARKERS = true;
+    private static final boolean USE_ANIMATION_EFFECTS = true;
     
     // Thread-safe collections
     private final Map<String, ChunkEvaluator.ChunkValueData> chunkEvaluationCache = new ConcurrentHashMap<>();
     private final Map<String, Long> cacheTimestamps = new ConcurrentHashMap<>();
-    private static final long CACHE_DURATION = 45000; // 45 seconds (was 30)
+    private static final long CACHE_DURATION = 45000; // 45 seconds
     
     // Thread-safe player tracking
     private final Map<String, Set<String>> playerBorderChunks = new ConcurrentHashMap<>();
@@ -59,7 +66,7 @@ public class TickTask extends BukkitRunnable {
         tickCounter++;
         
         try {
-            // Update particles less frequently
+            // Update particles at configured interval
             if (tickCounter % PARTICLE_UPDATE_INTERVAL != 0) {
                 return;
             }
@@ -93,7 +100,7 @@ public class TickTask extends BukkitRunnable {
     }
 
     /**
-     * Optimized version that only shows borders for chunks adjacent to unlocked chunks
+     * Optimized version that shows full borders for chunks adjacent to unlocked chunks
      */
     private void updatePlayerEffectsOptimized(Player player) {
         String playerKey = player.getUniqueId().toString();
@@ -114,7 +121,7 @@ public class TickTask extends BukkitRunnable {
             return;
         }
         
-        // Only draw borders for identified chunks with view culling
+        // Draw full borders for identified chunks with view culling
         for (String chunkKey : borderChunks) {
             String[] parts = chunkKey.split(":");
             if (parts.length == 3) {
@@ -127,7 +134,7 @@ public class TickTask extends BukkitRunnable {
                     if (shouldShowParticles(player, chunk)) {
                         var eval = getCachedEvaluation(chunk);
                         boolean canUnlock = biomeUnlockRegistry.hasRequiredItems(player, eval.biome, eval.score);
-                        drawOptimizedChunkBorder(player, chunk, eval.difficulty, canUnlock);
+                        drawFullChunkBorder(player, chunk, eval.difficulty, canUnlock);
                     }
                 } catch (NumberFormatException e) {
                     // Skip invalid chunk coordinates
@@ -162,6 +169,234 @@ public class TickTask extends BukkitRunnable {
         // Normalize and check dot product for FOV
         toChunk.normalize();
         return toChunk.dot(playerDirection) > FOV_DOT_THRESHOLD;
+    }
+
+    /**
+     * Draws complete, visible chunk borders with full perimeter coverage
+     */
+    private void drawFullChunkBorder(Player player, Chunk chunk, Difficulty difficulty, boolean canUnlock) {
+        // Determine particle type and color - red for locked, green for unlockable
+        Particle particleType = getParticleType(canUnlock);
+        Color color = getParticleColor(canUnlock);
+
+        // Calculate Y levels around player for vertical coverage
+        Location playerLoc = player.getLocation();
+        int playerY = playerLoc.getBlockY();
+        int baseY = Math.max(chunk.getWorld().getMinHeight(), playerY - 2);
+        int topY = Math.min(chunk.getWorld().getMaxHeight() - 1, playerY + 3);
+
+        // Animation offset for dynamic effects
+        double animationOffset = USE_ANIMATION_EFFECTS ? (tickCounter * 0.15) % (Math.PI * 2) : 0;
+        
+        int chunkX = chunk.getX() << 4;
+        int chunkZ = chunk.getZ() << 4;
+        
+        // Draw full border on multiple Y levels
+        for (int yLevel = 0; yLevel < VERTICAL_LAYERS; yLevel++) {
+            int y = baseY + (yLevel * 2); // Space layers by 2 blocks
+            if (y > topY) break;
+            
+            // Draw all four sides of the chunk border
+            drawBorderSide(player, particleType, color, canUnlock, animationOffset,
+                          chunkX, chunkX + 15, y, chunkZ, true); // North side
+            drawBorderSide(player, particleType, color, canUnlock, animationOffset,
+                          chunkX, chunkX + 15, y, chunkZ + 15, true); // South side
+            drawBorderSide(player, particleType, color, canUnlock, animationOffset,
+                          chunkX, chunkZ, chunkZ + 15, y, false); // West side
+            drawBorderSide(player, particleType, color, canUnlock, animationOffset,
+                          chunkX + 15, chunkZ, chunkZ + 15, y, false); // East side
+        }
+        
+        // Add enhanced corner markers for better visibility
+        if (USE_ENHANCED_CORNERS) {
+            drawEnhancedCorners(player, particleType, color, canUnlock, chunkX, chunkZ, baseY, topY);
+        }
+        
+        // Add ground markers every few ticks for performance
+        if (USE_GROUND_MARKERS && tickCounter % 15 == 0) {
+            drawGroundMarkers(player, particleType, color, canUnlock, chunkX, chunkZ);
+        }
+    }
+
+    /**
+     * Draws one side of the chunk border with proper spacing
+     */
+    private void drawBorderSide(Player player, Particle particleType, Color color, boolean canUnlock, 
+                               double animationOffset, int fixedCoord, int startCoord, int endCoord, 
+                               int y, boolean isHorizontal) {
+        double totalLength = Math.abs(endCoord - startCoord);
+        int particleCount = (int) Math.ceil(totalLength / PARTICLE_SPACING);
+        
+        for (int i = 0; i <= particleCount; i++) {
+            double progress = (double) i / particleCount;
+            double position = startCoord + (progress * (endCoord - startCoord));
+            
+            // Add slight animation wave effect
+            double waveOffset = USE_ANIMATION_EFFECTS ? 
+                Math.sin(animationOffset + progress * Math.PI * 2) * 0.15 : 0;
+            
+            double x, z;
+            if (isHorizontal) {
+                x = position + waveOffset;
+                z = fixedCoord;
+            } else {
+                x = fixedCoord;
+                z = position + waveOffset;
+            }
+            
+            // Spawn particles with slight thickness for better visibility
+            spawnBorderParticleWithThickness(player, particleType, color, x, y, z, canUnlock);
+        }
+    }
+
+    /**
+     * Enhanced corner markers for maximum visibility
+     */
+    private void drawEnhancedCorners(Player player, Particle particleType, Color color, boolean canUnlock,
+                                    int chunkX, int chunkZ, int baseY, int topY) {
+        int[][] corners = {
+            {chunkX, chunkZ},           // Northwest
+            {chunkX + 15, chunkZ},      // Northeast  
+            {chunkX, chunkZ + 15},      // Southwest
+            {chunkX + 15, chunkZ + 15}  // Southeast
+        };
+        
+        for (int[] corner : corners) {
+            for (int y = baseY; y <= topY; y += 1) {
+                double x = corner[0] + 0.5;
+                double z = corner[1] + 0.5;
+                
+                if (canUnlock) {
+                    // Bright unlockable corners with multiple effects
+                    player.spawnParticle(Particle.HAPPY_VILLAGER, x, y, z, 2, 0.2, 0.2, 0.2, 0);
+                    player.spawnParticle(Particle.ENCHANT, x, y, z, 3, 0.3, 0.3, 0.3, 1);
+                    particlesSpawned.addAndGet(5);
+                } else {
+                    // Enhanced locked corners - always red
+                    spawnBorderParticleWithThickness(player, particleType, color, x, y, z, false);
+                    
+                    // Add extra red visibility for corners
+                    if (particleType == Particle.DUST && color != null) {
+                        player.spawnParticle(Particle.DUST, x, y, z, 1, 0.1, 0.1, 0.1, 0, 
+                            new Particle.DustOptions(color, 2.8f));
+                        particlesSpawned.incrementAndGet();
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Ground markers for better chunk identification
+     */
+    private void drawGroundMarkers(Player player, Particle particleType, Color color, boolean canUnlock,
+                                  int chunkX, int chunkZ) {
+        World world = player.getWorld();
+        
+        // Corner ground markers
+        int[] cornerX = {chunkX, chunkX + 15};
+        int[] cornerZ = {chunkZ, chunkZ + 15};
+        
+        for (int x : cornerX) {
+            for (int z : cornerZ) {
+                try {
+                    int groundY = world.getHighestBlockYAt(x, z) + 1;
+                    
+                    if (canUnlock) {
+                        // Bright green ground markers for unlockable chunks
+                        player.spawnParticle(Particle.DUST, x + 0.5, groundY, z + 0.5, 2, 0.2, 0.2, 0.2, 0,
+                            new Particle.DustOptions(Color.LIME, 3.0f));
+                        player.spawnParticle(Particle.HAPPY_VILLAGER, x + 0.5, groundY, z + 0.5, 1, 0.1, 0.1, 0.1, 0);
+                        particlesSpawned.addAndGet(3);
+                    } else {
+                        // Red ground markers for locked chunks
+                        player.spawnParticle(Particle.DUST, x + 0.5, groundY, z + 0.5, 1, 0.1, 0.1, 0.1, 0,
+                            new Particle.DustOptions(Color.RED, 2.5f));
+                        particlesSpawned.incrementAndGet();
+                    }
+                } catch (Exception e) {
+                    // Skip if can't get ground level
+                }
+            }
+        }
+    }
+
+    /**
+     * Enhanced particle spawning with thickness for better visibility
+     */
+    private void spawnBorderParticleWithThickness(Player player, Particle particleType, Color color, 
+                                                double x, double y, double z, boolean canUnlock) {
+        try {
+            if (particleType == Particle.DUST && color != null) {
+                // Enhanced dust particles with larger size
+                float particleSize = canUnlock ? 2.8f : 2.2f;
+                Particle.DustOptions dustOptions = new Particle.DustOptions(color, particleSize);
+                
+                // Main particle
+                player.spawnParticle(particleType, x, y, z, 1, 0, 0, 0, 0, dustOptions);
+                
+                // Add thickness by spawning nearby particles for better visibility
+                if (BORDER_THICKNESS > 0) {
+                    player.spawnParticle(particleType, x + BORDER_THICKNESS, y, z, 1, 0, 0, 0, 0, dustOptions);
+                    player.spawnParticle(particleType, x, y, z + BORDER_THICKNESS, 1, 0, 0, 0, 0, dustOptions);
+                    particlesSpawned.addAndGet(3);
+                } else {
+                    particlesSpawned.incrementAndGet();
+                }
+                
+            } else if (particleType == Particle.HAPPY_VILLAGER) {
+                // Enhanced unlockable particles
+                int count = canUnlock ? 3 : 2;
+                player.spawnParticle(particleType, x, y, z, count, 0.2, 0.2, 0.2, 0);
+                
+                // Add sparkle effect for unlockable chunks
+                if (canUnlock && Math.random() < 0.4) {
+                    player.spawnParticle(Particle.DUST, x, y, z, 1, 0.1, 0.1, 0.1, 0,
+                        new Particle.DustOptions(Color.YELLOW, 2.2f));
+                    particlesSpawned.addAndGet(count + 1);
+                } else {
+                    particlesSpawned.addAndGet(count);
+                }
+                
+            } else {
+                // Other particle types (FLAME, LAVA, WITCH)
+                int particleCount = canUnlock ? 2 : 1;
+                double spread = canUnlock ? 0.2 : 0.1;
+                player.spawnParticle(particleType, x, y, z, particleCount, spread, spread, spread, 0);
+                
+                // Add thickness for non-dust particles
+                if (BORDER_THICKNESS > 0) {
+                    player.spawnParticle(particleType, x + BORDER_THICKNESS, y, z, 1, 0.1, 0.1, 0.1, 0);
+                    particlesSpawned.addAndGet(particleCount + 1);
+                } else {
+                    particlesSpawned.addAndGet(particleCount);
+                }
+            }
+        } catch (Exception e) {
+            // Silently ignore particle errors
+        }
+    }
+
+    /**
+     * Helper method to get particle type based on unlock status only
+     */
+    private Particle getParticleType(boolean canUnlock) {
+        if (canUnlock) {
+            return Particle.HAPPY_VILLAGER;
+        } else {
+            return Particle.DUST; // Always use DUST for locked chunks
+        }
+    }
+
+    /**
+     * Helper method to get particle color - red for locked, green for unlockable
+     */
+    private Color getParticleColor(boolean canUnlock) {
+        if (canUnlock) {
+            return Color.LIME; // Bright green for unlockable
+        } else {
+            return Color.RED; // Always red for locked chunks
+        }
     }
 
     /**
@@ -233,7 +468,7 @@ public class TickTask extends BukkitRunnable {
     }
 
     /**
-     * Improved cached chunk evaluation - no longer player-specific
+     * Improved cached chunk evaluation
      */
     private ChunkEvaluator.ChunkValueData getCachedEvaluation(Chunk chunk) {
         String key = getChunkKey(chunk);
@@ -248,82 +483,13 @@ public class TickTask extends BukkitRunnable {
             }
         }
         
-        // Calculate and cache new result (use null for player ID since we removed player-specific caching)
+        // Calculate and cache new result
         var evaluation = chunkLockManager.evaluateChunk(null, chunk);
         chunkEvaluationCache.put(key, evaluation);
         cacheTimestamps.put(key, now);
         chunksEvaluated.incrementAndGet();
         
         return evaluation;
-    }
-
-    /**
-     * Optimized border drawing with fewer particles and smarter placement
-     */
-    private void drawOptimizedChunkBorder(Player player, Chunk chunk, Difficulty difficulty, boolean canUnlock) {
-        // Determine particle type and color
-        Particle particleType;
-        Color color = null;
-        
-        if (canUnlock) {
-            particleType = Particle.HAPPY_VILLAGER;
-        } else {
-            particleType = Particle.DUST;
-            color = switch (difficulty) {
-                case EASY -> Color.GREEN;
-                case NORMAL -> Color.YELLOW;
-                case HARD -> Color.RED;
-                case IMPOSSIBLE -> Color.PURPLE;
-            };
-        }
-
-        // Calculate Y range around player (smaller range)
-        Location playerLoc = player.getLocation();
-        int playerY = playerLoc.getBlockY();
-        int minY = Math.max(chunk.getWorld().getMinHeight(), playerY - (int)PARTICLE_HEIGHT_RANGE);
-        int maxY = Math.min(chunk.getWorld().getMaxHeight() - 1, playerY + (int)PARTICLE_HEIGHT_RANGE);
-
-        // Smart animation offset
-        double animationOffset = (tickCounter * 0.15) % 16; // Slower animation
-        
-        int chunkX = chunk.getX() << 4;
-        int chunkZ = chunk.getZ() << 4;
-        
-        // Draw fewer particles with better spacing
-        for (int y = minY; y <= maxY; y += 4) { // Larger Y spacing
-            // Corner particles (most visible)
-            spawnBorderParticle(player, particleType, color, chunkX, y, chunkZ, canUnlock);
-            spawnBorderParticle(player, particleType, color, chunkX + 15, y, chunkZ, canUnlock);
-            spawnBorderParticle(player, particleType, color, chunkX, y, chunkZ + 15, canUnlock);
-            spawnBorderParticle(player, particleType, color, chunkX + 15, y, chunkZ + 15, canUnlock);
-            
-            // Fewer animated midpoint particles
-            if (y % 8 == 0) { // Only every other Y level gets midpoints
-                spawnBorderParticle(player, particleType, color, 
-                    chunkX + 8 + Math.sin(animationOffset) * 1.5, y, chunkZ, canUnlock);
-                spawnBorderParticle(player, particleType, color, 
-                    chunkX + 8 + Math.sin(animationOffset) * 1.5, y, chunkZ + 15, canUnlock);
-                spawnBorderParticle(player, particleType, color, 
-                    chunkX, y, chunkZ + 8 + Math.cos(animationOffset) * 1.5, canUnlock);
-                spawnBorderParticle(player, particleType, color, 
-                    chunkX + 15, y, chunkZ + 8 + Math.cos(animationOffset) * 1.5, canUnlock);
-            }
-        }
-    }
-
-    private void spawnBorderParticle(Player player, Particle particleType, Color color, 
-                                   double x, double y, double z, boolean canUnlock) {
-        try {
-            if (particleType == Particle.DUST && color != null) {
-                Particle.DustOptions dustOptions = new Particle.DustOptions(color, canUnlock ? 1.3f : 0.8f);
-                player.spawnParticle(particleType, x, y, z, 1, 0, 0, 0, 0, dustOptions);
-            } else {
-                player.spawnParticle(particleType, x, y, z, canUnlock ? 2 : 1, 0.1, 0.1, 0.1, 0);
-            }
-            particlesSpawned.incrementAndGet();
-        } catch (Exception e) {
-            // Silently ignore particle errors to prevent spam
-        }
     }
 
     /**
@@ -353,7 +519,7 @@ public class TickTask extends BukkitRunnable {
         cacheTimestamps.entrySet().removeIf(entry -> 
             (now - entry.getValue()) > CACHE_DURATION);
         
-        // Limit cache size more aggressively if needed
+        // Limit cache size if needed
         if (chunkEvaluationCache.size() > CHUNK_CACHE_SIZE) {
             // Remove oldest entries first
             chunkEvaluationCache.entrySet().stream()
@@ -364,7 +530,7 @@ public class TickTask extends BukkitRunnable {
                     if (t2 == null) return 1;
                     return t1.compareTo(t2);
                 })
-                .limit(chunkEvaluationCache.size() - CHUNK_CACHE_SIZE + 20) // Remove extra
+                .limit(chunkEvaluationCache.size() - CHUNK_CACHE_SIZE + 20)
                 .forEach(entry -> {
                     chunkEvaluationCache.remove(entry.getKey());
                     cacheTimestamps.remove(entry.getKey());
