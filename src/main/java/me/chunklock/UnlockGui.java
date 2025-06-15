@@ -104,14 +104,16 @@ public class UnlockGui implements Listener {
         // Play unlock effects!
         UnlockEffectsManager.playUnlockEffects(player, state.chunk, total);
         
-        // FIX: Refresh holograms after unlocking
+        // FIX: Refresh holograms after unlocking - do it immediately and with a small delay
         try {
             HologramManager hologramManager = ChunklockPlugin.getInstance().getHologramManager();
             if (hologramManager != null) {
-                // Delay the refresh slightly to ensure the chunk unlock is processed
+                // Immediate refresh
+                hologramManager.refreshHologramsForPlayer(player);
+                // Also refresh with a small delay to ensure chunk state is fully updated
                 Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
                     hologramManager.refreshHologramsForPlayer(player);
-                }, 2L);
+                }, 5L);
             }
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().warning("Error refreshing holograms after unlock: " + e.getMessage());

@@ -13,7 +13,9 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
@@ -86,7 +88,7 @@ public class HologramManager {
     /**
      * Updates holograms around a player - shows holograms for ALL locked adjacent chunks
      */
-    private void updateHologramsForPlayer(Player player) {
+private void updateHologramsForPlayer(Player player) {
         try {
             if (chunkLockManager.isBypassing(player)) {
                 // Remove all holograms for bypassing players
@@ -96,6 +98,9 @@ public class HologramManager {
 
             Location playerLoc = player.getLocation();
             Chunk playerChunk = playerLoc.getChunk();
+            
+            // Track which chunks should have holograms
+            Set<String> chunksWithHolograms = new HashSet<>();
             
             // Check all chunks in a 3x3 grid around the player
             for (int dx = -1; dx <= 1; dx++) {
@@ -109,18 +114,25 @@ public class HologramManager {
                         // Initialize chunk if needed
                         chunkLockManager.initializeChunk(checkChunk, player.getUniqueId());
                         
-                        // If this chunk is locked, show hologram
+                        String chunkKey = getChunkKey(checkChunk);
+                        String hologramKey = getHologramKey(player, checkChunk);
+                        
+                        // If this chunk is locked, check if it should show hologram
                         if (chunkLockManager.isLocked(checkChunk)) {
                             // Check if this locked chunk is adjacent to any unlocked chunk
                             if (isAdjacentToUnlockedChunk(player, checkChunk)) {
                                 var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), checkChunk);
                                 showHologramForChunk(player, checkChunk, evaluation);
+                                chunksWithHolograms.add(chunkKey);
                             } else {
+                                // Locked but not adjacent to unlocked - remove hologram if exists
                                 removeHologramForChunk(player, checkChunk);
                             }
                         } else {
-                            // Chunk is unlocked, remove any hologram
+                            // Chunk is unlocked - definitely remove any hologram
                             removeHologramForChunk(player, checkChunk);
+                            ChunklockPlugin.getInstance().getLogger().fine(
+                                "Removed hologram for unlocked chunk " + checkChunk.getX() + "," + checkChunk.getZ() + " for player " + player.getName());
                         }
                     } catch (Exception e) {
                         ChunklockPlugin.getInstance().getLogger().log(Level.FINE, 
@@ -128,10 +140,54 @@ public class HologramManager {
                     }
                 }
             }
+            
+            // FIX: Additional cleanup - remove any remaining holograms that shouldn't exist
+            String playerPrefix = player.getUniqueId().toString() + "_";
+            activeHolograms.entrySet().removeIf(entry -> {
+                if (entry.getKey().startsWith(playerPrefix)) {
+                    // Extract chunk coordinates from hologram key (format: playerUUID_world_x_z)
+                    String[] parts = entry.getKey().split("_");
+                    if (parts.length >= 4) {
+                        try {
+                            String worldName = parts[1];
+                            int chunkX = Integer.parseInt(parts[2]);
+                            int chunkZ = Integer.parseInt(parts[3]);
+                            String chunkKey = worldName + ":" + chunkX + ":" + chunkZ;
+                            
+                            // If this chunk should not have a hologram, remove it
+                            if (!chunksWithHolograms.contains(chunkKey)) {
+                                ArmorStand hologram = entry.getValue();
+                                if (hologram != null && hologram.isValid()) {
+                                    hologram.remove();
+                                    ChunklockPlugin.getInstance().getLogger().info(
+                                        "Cleaned up stale hologram for chunk " + chunkX + "," + chunkZ + " for player " + player.getName());
+                                }
+                                return true;
+                            }
+                        } catch (NumberFormatException e) {
+                            // Invalid hologram key format, remove it
+                            ArmorStand hologram = entry.getValue();
+                            if (hologram != null && hologram.isValid()) {
+                                hologram.remove();
+                            }
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            });
+            
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
                 "Error updating holograms for " + player.getName(), e);
         }
+    }
+
+    /**
+     * Helper method to get chunk key from chunk
+     */
+    private String getChunkKey(Chunk chunk) {
+        return chunk.getWorld().getName() + ":" + chunk.getX() + ":" + chunk.getZ();
     }
 
     /**

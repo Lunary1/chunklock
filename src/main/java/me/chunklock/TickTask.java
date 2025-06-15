@@ -30,7 +30,7 @@ public class TickTask extends BukkitRunnable {
     private static final int CACHE_CLEANUP_INTERVAL = 600; // Every 30 seconds
     
     // Full border configuration
-    private static final double PARTICLE_SPACING = 1.8; // Space between border particles
+    private static final double PARTICLE_SPACING = 1; // Space between border particles
     private static final int VERTICAL_LAYERS = 1; // Number of vertical layers
     private static final double BORDER_THICKNESS = 0.25; // Slight thickness for visibility
     private static final int MAX_BORDER_DISTANCE = 48; // Max distance to show borders
@@ -174,7 +174,7 @@ public class TickTask extends BukkitRunnable {
     /**
      * Draws complete, visible chunk borders with full perimeter coverage
      */
-    private void drawFullChunkBorder(Player player, Chunk chunk, Difficulty difficulty, boolean canUnlock) {
+private void drawFullChunkBorder(Player player, Chunk chunk, Difficulty difficulty, boolean canUnlock) {
         // Determine particle type and color - red for locked, green for unlockable
         Particle particleType = getParticleType(canUnlock);
         Color color = getParticleColor(canUnlock);
@@ -196,25 +196,37 @@ public class TickTask extends BukkitRunnable {
             int y = baseY + (yLevel * 2); // Space layers by 2 blocks
             if (y > topY) break;
             
-            // FIX: Draw sides without overlapping corners
-            // North side (exclude corners to avoid overlap)
-            drawBorderSide(player, particleType, color, canUnlock, animationOffset,
-                          chunkX + 1, chunkX + 14, y, chunkZ, true); // Start at +1, end at +14
+            // FIX: Draw each side with proper coordinate ranges to avoid overlaps
+            // North side (Z = chunkZ, X from chunkX to chunkX+15, but exclude corners)
+            for (double x = chunkX + PARTICLE_SPACING; x < chunkX + 16 - PARTICLE_SPACING; x += PARTICLE_SPACING) {
+                double waveOffset = USE_ANIMATION_EFFECTS ? 
+                    Math.sin(animationOffset + (x - chunkX) / 16.0 * Math.PI * 2) * 0.15 : 0;
+                spawnBorderParticleWithThickness(player, particleType, color, x + waveOffset, y, chunkZ, canUnlock);
+            }
             
-            // South side (exclude corners to avoid overlap)
-            drawBorderSide(player, particleType, color, canUnlock, animationOffset,
-                          chunkX + 1, chunkX + 14, y, chunkZ + 15, true); // Start at +1, end at +14
+            // South side (Z = chunkZ+15, X from chunkX to chunkX+15, but exclude corners)
+            for (double x = chunkX + PARTICLE_SPACING; x < chunkX + 16 - PARTICLE_SPACING; x += PARTICLE_SPACING) {
+                double waveOffset = USE_ANIMATION_EFFECTS ? 
+                    Math.sin(animationOffset + (x - chunkX) / 16.0 * Math.PI * 2) * 0.15 : 0;
+                spawnBorderParticleWithThickness(player, particleType, color, x + waveOffset, y, chunkZ + 15, canUnlock);
+            }
             
-            // West side (include full length since we excluded corners from north/south)
-            drawBorderSide(player, particleType, color, canUnlock, animationOffset,
-                          chunkX, chunkZ, chunkZ + 15, y, false);
+            // West side (X = chunkX, Z from chunkZ to chunkZ+15, include full range since we excluded corners from north/south)
+            for (double z = chunkZ; z <= chunkZ + 15; z += PARTICLE_SPACING) {
+                double waveOffset = USE_ANIMATION_EFFECTS ? 
+                    Math.sin(animationOffset + (z - chunkZ) / 16.0 * Math.PI * 2) * 0.15 : 0;
+                spawnBorderParticleWithThickness(player, particleType, color, chunkX, y, z + waveOffset, canUnlock);
+            }
             
-            // East side (include full length since we excluded corners from north/south)
-            drawBorderSide(player, particleType, color, canUnlock, animationOffset,
-                          chunkX + 15, chunkZ, chunkZ + 15, y, false);
+            // East side (X = chunkX+15, Z from chunkZ to chunkZ+15, include full range since we excluded corners from north/south)
+            for (double z = chunkZ; z <= chunkZ + 15; z += PARTICLE_SPACING) {
+                double waveOffset = USE_ANIMATION_EFFECTS ? 
+                    Math.sin(animationOffset + (z - chunkZ) / 16.0 * Math.PI * 2) * 0.15 : 0;
+                spawnBorderParticleWithThickness(player, particleType, color, chunkX + 15, y, z + waveOffset, canUnlock);
+            }
         }
         
-        // Add enhanced corner markers for better visibility (drawn separately to avoid conflicts)
+        // Add enhanced corner markers for better visibility (drawn separately with reduced frequency)
         if (USE_ENHANCED_CORNERS) {
             drawEnhancedCorners(player, particleType, color, canUnlock, chunkX, chunkZ, baseY, topY);
         }
@@ -226,41 +238,13 @@ public class TickTask extends BukkitRunnable {
     }
 
     /**
-     * Draws one side of the chunk border with proper spacing
-     */
-    private void drawBorderSide(Player player, Particle particleType, Color color, boolean canUnlock, 
-                               double animationOffset, int fixedCoord, int startCoord, int endCoord, 
-                               int y, boolean isHorizontal) {
-        double totalLength = Math.abs(endCoord - startCoord);
-        int particleCount = (int) Math.ceil(totalLength / PARTICLE_SPACING);
-        
-        for (int i = 0; i <= particleCount; i++) {
-            double progress = (double) i / particleCount;
-            double position = startCoord + (progress * (endCoord - startCoord));
-            
-            // Add slight animation wave effect
-            double waveOffset = USE_ANIMATION_EFFECTS ? 
-                Math.sin(animationOffset + progress * Math.PI * 2) * 0.15 : 0;
-            
-            double x, z;
-            if (isHorizontal) {
-                x = position + waveOffset;
-                z = fixedCoord;
-            } else {
-                x = fixedCoord;
-                z = position + waveOffset;
-            }
-            
-            // Spawn particles with slight thickness for better visibility
-            spawnBorderParticleWithThickness(player, particleType, color, x, y, z, canUnlock);
-        }
-    }
-
-    /**
      * Enhanced corner markers for maximum visibility
      */
     private void drawEnhancedCorners(Player player, Particle particleType, Color color, boolean canUnlock,
                                     int chunkX, int chunkZ, int baseY, int topY) {
+        // Only draw corners every few ticks to reduce particle density
+        if (tickCounter % 3 != 0) return;
+        
         int[][] corners = {
             {chunkX, chunkZ},           // Northwest
             {chunkX + 15, chunkZ},      // Northeast  
@@ -269,23 +253,22 @@ public class TickTask extends BukkitRunnable {
         };
         
         for (int[] corner : corners) {
-            // FIX: Only draw corner particles every few Y levels to reduce density
-            for (int y = baseY; y <= topY; y += 2) { // Every 2 blocks instead of every block
+            // FIX: Only draw corner particles every 3 Y levels to reduce density
+            for (int y = baseY; y <= topY; y += 3) {
                 double x = corner[0] + 0.5;
                 double z = corner[1] + 0.5;
                 
                 if (canUnlock) {
-                    // Bright unlockable corners with multiple effects
-                    player.spawnParticle(Particle.HAPPY_VILLAGER, x, y, z, 1, 0.1, 0.1, 0.1, 0); // Reduced count
-                    if (y % 4 == 0) { // Only every 4th Y level for enchant particles
-                        player.spawnParticle(Particle.ENCHANT, x, y, z, 2, 0.2, 0.2, 0.2, 1);
-                        particlesSpawned.addAndGet(3);
-                    } else {
+                    // Bright unlockable corners - single particle per corner
+                    player.spawnParticle(Particle.HAPPY_VILLAGER, x, y, z, 1, 0.1, 0.1, 0.1, 0);
+                    particlesSpawned.incrementAndGet();
+                } else {
+                    // Enhanced locked corners - single red particle
+                    if (particleType == Particle.DUST && color != null) {
+                        player.spawnParticle(Particle.DUST, x, y, z, 1, 0, 0, 0, 0, 
+                            new Particle.DustOptions(color, 2.0f));
                         particlesSpawned.incrementAndGet();
                     }
-                } else {
-                    // Enhanced locked corners - always red but reduced density
-                    spawnBorderParticleWithThickness(player, particleType, color, x, y, z, false);
                 }
             }
         }
