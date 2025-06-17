@@ -3,6 +3,7 @@ package me.chunklock;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -22,13 +23,13 @@ public class PlayerDataManager {
 
     public PlayerDataManager(JavaPlugin plugin) {
         this.plugin = plugin;
-        this.file = new File(plugin.getDataFolder(), "player_chunks.yml");
+        this.file = new File(plugin.getDataFolder(), "data.yml");
         if (!file.exists()) {
             file.getParentFile().mkdirs();
             try {
                 file.createNewFile();
             } catch (IOException e) {
-                plugin.getLogger().severe("Could not create player_chunks.yml");
+                plugin.getLogger().severe("Could not create data.yml");
             }
         }
         this.config = YamlConfiguration.loadConfiguration(file);
@@ -36,13 +37,15 @@ public class PlayerDataManager {
     }
 
     private void loadAll() {
-        for (String uuidString : config.getKeys(false)) {
+        ConfigurationSection players = config.getConfigurationSection("players");
+        if (players == null) return;
+        for (String uuidString : players.getKeys(false)) {
             try {
                 UUID uuid = UUID.fromString(uuidString);
-                int x = config.getInt(uuidString + ".x");
-                int y = config.getInt(uuidString + ".y");
-                int z = config.getInt(uuidString + ".z");
-                String worldName = config.getString(uuidString + ".world");
+                int x = players.getInt(uuidString + ".spawn.x");
+                int y = players.getInt(uuidString + ".spawn.y");
+                int z = players.getInt(uuidString + ".spawn.z");
+                String worldName = players.getString(uuidString + ".spawn.world");
                 World world = Bukkit.getWorld(worldName);
                 if (world != null) {
                     playerSpawns.put(uuid, new Location(world, x, y, z));
@@ -55,17 +58,17 @@ public class PlayerDataManager {
 
     public void saveAll() {
         for (Map.Entry<UUID, Location> entry : playerSpawns.entrySet()) {
-            String key = entry.getKey().toString();
+            String key = "players." + entry.getKey();
             Location loc = entry.getValue();
-            config.set(key + ".x", loc.getBlockX());
-            config.set(key + ".y", loc.getBlockY());
-            config.set(key + ".z", loc.getBlockZ());
-            config.set(key + ".world", loc.getWorld().getName());
+            config.set(key + ".spawn.x", loc.getBlockX());
+            config.set(key + ".spawn.y", loc.getBlockY());
+            config.set(key + ".spawn.z", loc.getBlockZ());
+            config.set(key + ".spawn.world", loc.getWorld().getName());
         }
         try {
             config.save(file);
         } catch (IOException e) {
-            plugin.getLogger().severe("Could not save player_chunks.yml");
+            plugin.getLogger().severe("Could not save data.yml");
         }
     }
 

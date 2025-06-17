@@ -2,6 +2,7 @@ package me.chunklock;
 
 import org.bukkit.Chunk;
 import org.bukkit.entity.Player;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -25,7 +26,7 @@ public class ChunkLockManager {
     public ChunkLockManager(ChunkEvaluator chunkEvaluator, JavaPlugin plugin) {
         this.chunkEvaluator = chunkEvaluator;
         this.plugin = plugin;
-        this.file = new File(plugin.getDataFolder(), "chunk_data.yml");
+        this.file = new File(plugin.getDataFolder(), "data.yml");
         loadAll();
     }
 
@@ -127,20 +128,24 @@ public class ChunkLockManager {
                 file.getParentFile().mkdirs();
                 file.createNewFile();
             } catch (IOException e) {
-                plugin.getLogger().severe("Could not create chunk_data.yml");
+                plugin.getLogger().severe("Could not create data.yml");
                 return;
             }
         }
 
         config = YamlConfiguration.loadConfiguration(file);
+        ConfigurationSection section = config.getConfigurationSection("chunks");
+        if (section == null) {
+            section = config.createSection("chunks");
+        }
 
-        for (String key : config.getKeys(false)) {
+        for (String key : section.getKeys(false)) {
             try {
-                String world = config.getString(key + ".world");
-                int x = config.getInt(key + ".x");
-                int z = config.getInt(key + ".z");
-                boolean locked = config.getBoolean(key + ".locked", true);
-                String diffStr = config.getString(key + ".difficulty", "NORMAL");
+                String world = section.getString(key + ".world");
+                int x = section.getInt(key + ".x");
+                int z = section.getInt(key + ".z");
+                boolean locked = section.getBoolean(key + ".locked", true);
+                String diffStr = section.getString(key + ".difficulty", "NORMAL");
                 Difficulty diff = Difficulty.valueOf(diffStr.toUpperCase());
 
                 String mapKey = world + ":" + x + ":" + z;
@@ -150,7 +155,7 @@ public class ChunkLockManager {
             }
         }
 
-        plugin.getLogger().info("Loaded " + chunkDataMap.size() + " chunks from chunk_data.yml");
+        plugin.getLogger().info("Loaded " + chunkDataMap.size() + " chunks from data.yml");
     }
 
     public void saveAll() {
@@ -158,8 +163,12 @@ public class ChunkLockManager {
             config = new YamlConfiguration();
         }
 
-        for (String key : config.getKeys(false)) {
-            config.set(key, null); // Clear existing entries
+        ConfigurationSection section = config.getConfigurationSection("chunks");
+        if (section == null) {
+            section = config.createSection("chunks");
+        }
+        for (String key : section.getKeys(false)) {
+            section.set(key, null); // Clear existing entries
         }
 
         for (Map.Entry<String, ChunkData> entry : chunkDataMap.entrySet()) {
@@ -171,18 +180,18 @@ public class ChunkLockManager {
             int z = Integer.parseInt(parts[2]);
             String base = entry.getKey();
 
-            config.set(base + ".world", world);
-            config.set(base + ".x", x);
-            config.set(base + ".z", z);
-            config.set(base + ".locked", entry.getValue().isLocked());
-            config.set(base + ".difficulty", entry.getValue().getDifficulty().name());
+            section.set(base + ".world", world);
+            section.set(base + ".x", x);
+            section.set(base + ".z", z);
+            section.set(base + ".locked", entry.getValue().isLocked());
+            section.set(base + ".difficulty", entry.getValue().getDifficulty().name());
         }
 
         try {
             config.save(file);
-            plugin.getLogger().info("Saved chunk data to chunk_data.yml");
+            plugin.getLogger().info("Saved chunk data to data.yml");
         } catch (IOException e) {
-            plugin.getLogger().severe("Could not save chunk_data.yml");
+            plugin.getLogger().severe("Could not save data.yml");
         }
     }
 

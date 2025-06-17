@@ -3,6 +3,7 @@ package me.chunklock;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Biome;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -25,24 +26,24 @@ public class ChunkValueRegistry {
     }
 
     private void loadConfiguration() {
-        plugin.getLogger().info("[ChunkValueRegistry] Loading chunk_values.yml...");
-        File file = new File(plugin.getDataFolder(), "chunk_values.yml");
-        
+        plugin.getLogger().info("[ChunkValueRegistry] Loading config.yml (chunk-values section)...");
+        File file = new File(plugin.getDataFolder(), "config.yml");
+
         if (!file.exists()) {
-            plugin.getLogger().info("[ChunkValueRegistry] chunk_values.yml not found, generating default...");
+            plugin.getLogger().info("[ChunkValueRegistry] config.yml not found, generating default...");
             try {
-                plugin.saveResource("chunk_values.yml", false);
+                plugin.saveResource("config.yml", false);
             } catch (Exception e) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to save default chunk_values.yml", e);
+                plugin.getLogger().log(Level.SEVERE, "Failed to save default config.yml", e);
                 loadDefaults();
                 return;
             }
         }
 
-        FileConfiguration config = YamlConfiguration.loadConfiguration(file);
-        
-        if (!validateConfiguration(config)) {
-            plugin.getLogger().severe("Invalid configuration detected in chunk_values.yml, using defaults");
+        FileConfiguration root = YamlConfiguration.loadConfiguration(file);
+        ConfigurationSection config = root.getConfigurationSection("chunk-values");
+        if (config == null) {
+            plugin.getLogger().severe("Missing chunk-values section in config.yml, using defaults");
             loadDefaults();
             return;
         }
@@ -55,7 +56,7 @@ public class ChunkValueRegistry {
             biomeWeights.size() + " biomes, " + blockWeights.size() + " blocks, " + thresholds.size() + " thresholds");
     }
 
-    private boolean validateConfiguration(FileConfiguration config) {
+    private boolean validateConfiguration(ConfigurationSection config) {
         try {
             // Validate thresholds section
             if (!config.isConfigurationSection("thresholds")) {
@@ -96,7 +97,7 @@ public class ChunkValueRegistry {
         }
     }
 
-    private void loadThresholds(FileConfiguration config) {
+    private void loadThresholds(ConfigurationSection config) {
         try {
             if (config.isConfigurationSection("thresholds")) {
                 plugin.getLogger().info("[ChunkValueRegistry] Loading difficulty thresholds...");
@@ -119,7 +120,7 @@ public class ChunkValueRegistry {
         }
     }
 
-    private void loadBiomeWeights(FileConfiguration config) {
+    private void loadBiomeWeights(ConfigurationSection config) {
         try {
             if (config.isConfigurationSection("biomes")) {
                 plugin.getLogger().info("[ChunkValueRegistry] Loading biome weights...");
@@ -158,7 +159,7 @@ public class ChunkValueRegistry {
         }
     }
 
-    private void loadBlockWeights(FileConfiguration config) {
+    private void loadBlockWeights(ConfigurationSection config) {
         try {
             if (config.isConfigurationSection("blocks")) {
                 plugin.getLogger().info("[ChunkValueRegistry] Loading block weights...");

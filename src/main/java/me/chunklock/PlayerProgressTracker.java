@@ -1,5 +1,6 @@
 package me.chunklock;
 
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -21,7 +22,7 @@ public class PlayerProgressTracker {
     public PlayerProgressTracker(JavaPlugin plugin, TeamManager teamManager) {
         this.plugin = plugin;
         this.teamManager = teamManager;
-        this.file = new File(plugin.getDataFolder(), "player_progress.yml");
+        this.file = new File(plugin.getDataFolder(), "data.yml");
         loadAll();
     }
 
@@ -31,17 +32,18 @@ public class PlayerProgressTracker {
             try {
                 file.createNewFile();
             } catch (IOException e) {
-                plugin.getLogger().severe("Could not create player_progress.yml");
+                plugin.getLogger().severe("Could not create data.yml");
                 return;
             }
         }
-        
+
         config = YamlConfiguration.loadConfiguration(file);
-        
-        for (String uuidString : config.getKeys(false)) {
+        ConfigurationSection players = config.getConfigurationSection("players");
+        if (players == null) return;
+        for (String uuidString : players.getKeys(false)) {
             try {
                 UUID teamId = UUID.fromString(uuidString);
-                int count = config.getInt(uuidString + ".unlocked_chunks", 0);
+                int count = players.getInt(uuidString + ".progress.unlocked_chunks", 0);
                 unlockedChunkCount.put(teamId, count);
             } catch (Exception e) {
                 plugin.getLogger().warning("Failed to load progress for UUID: " + uuidString);
@@ -51,14 +53,14 @@ public class PlayerProgressTracker {
 
     public void saveAll() {
         for (Map.Entry<UUID, Integer> entry : unlockedChunkCount.entrySet()) {
-            String key = entry.getKey().toString();
-            config.set(key + ".unlocked_chunks", entry.getValue());
+            String key = "players." + entry.getKey();
+            config.set(key + ".progress.unlocked_chunks", entry.getValue());
         }
         
         try {
             config.save(file);
         } catch (IOException e) {
-            plugin.getLogger().severe("Could not save player_progress.yml");
+            plugin.getLogger().severe("Could not save data.yml");
         }
     }
 
@@ -77,18 +79,18 @@ public class PlayerProgressTracker {
         UUID teamId = teamManager.getTeamLeader(playerId);
         unlockedChunkCount.remove(teamId);
         if (config != null) {
-            config.set(teamId.toString(), null);
+            config.set("players." + teamId, null);
             try {
                 config.save(file);
             } catch (IOException e) {
-                plugin.getLogger().severe("Could not save player_progress.yml during reset");
+                plugin.getLogger().severe("Could not save data.yml during reset");
             }
         }
     }
 
     private void saveProgress(UUID teamId) {
         if (config != null) {
-            config.set(teamId.toString() + ".unlocked_chunks", unlockedChunkCount.getOrDefault(teamId, 0));
+            config.set("players." + teamId + ".progress.unlocked_chunks", unlockedChunkCount.getOrDefault(teamId, 0));
             try {
                 config.save(file);
             } catch (IOException e) {

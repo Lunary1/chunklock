@@ -17,21 +17,18 @@ Chunklock transforms Minecraft into a strategic progression-based survival game.
 - **Resource-based unlocks**
 - **Biome and distance scoring system**
 - **Difficulty tiers (Easy → Impossible)**
-- **Fully configurable scoring system via `chunk_values.yml`**
+- **Fully configurable scoring system via `config.yml`**
 - **Supports both solo and team play**
 
 ---
 
 ## 🛠 Configuration
 
-### 1️⃣ `chunk_values.yml`
+### 1️⃣ `config.yml`
 
-- Customize block and biome weights
-- Set score thresholds for difficulty
-
-### 2️⃣ `biome_costs.yml`
-
-- Define which items are required to unlock chunks for each biome
+- Combine chunk values, biome unlock costs and team settings
+- Customize block/biome weights and difficulty thresholds
+- Define items required to unlock biomes
 
 ---
 
