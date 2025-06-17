@@ -32,6 +32,16 @@ Chunklock transforms Minecraft into a strategic progression-based survival game.
 
 ---
 
+### Upgrading from older versions
+
+When updating from v1.1 or earlier, the plugin will automatically migrate
+legacy YAML files (`chunk_values.yml`, `biome_costs.yml`, `team_config.yml`,
+`player_chunks.yml`, `player_progress.yml`, `chunk_data.yml`, and
+`teams_enhanced.yml`) into the new `config.yml`, `data.yml` and `teams.yml`
+on first startup. Original files are preserved with a `.old` extension.
+
+---
+
 ## 🚀 Development Status
 
 - ✅ Core functionality complete

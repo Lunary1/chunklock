@@ -60,7 +60,7 @@ public class ChunkValueRegistry {
         try {
             // Validate thresholds section
             if (!config.isConfigurationSection("thresholds")) {
-                plugin.getLogger().severe("Missing 'thresholds' section in chunk_values.yml");
+                plugin.getLogger().severe("Missing 'thresholds' section in config.yml (chunk-values)");
                 return false;
             }
             
@@ -81,12 +81,12 @@ public class ChunkValueRegistry {
             
             // Validate biomes section exists
             if (!config.isConfigurationSection("biomes")) {
-                plugin.getLogger().warning("Missing 'biomes' section in chunk_values.yml");
+                plugin.getLogger().warning("Missing 'biomes' section in config.yml (chunk-values)");
             }
             
             // Validate blocks section exists
             if (!config.isConfigurationSection("blocks")) {
-                plugin.getLogger().warning("Missing 'blocks' section in chunk_values.yml");
+                plugin.getLogger().warning("Missing 'blocks' section in config.yml (chunk-values)");
             }
             
             return true;
@@ -139,7 +139,7 @@ public class ChunkValueRegistry {
                             biomeWeights.put(biome, weight);
                             loadedBiomes++;
                         } else {
-                            plugin.getLogger().warning("Invalid biome in chunk_values.yml: " + key);
+                            plugin.getLogger().warning("Invalid biome in config.yml (chunk-values): " + key);
                             errorBiomes++;
                         }
                     } catch (Exception e) {
@@ -177,7 +177,7 @@ public class ChunkValueRegistry {
                         blockWeights.put(material, weight);
                         loadedBlocks++;
                     } catch (IllegalArgumentException e) {
-                        plugin.getLogger().warning("Invalid block in chunk_values.yml: " + key);
+                        plugin.getLogger().warning("Invalid block in config.yml (chunk-values): " + key);
                         errorBlocks++;
                     } catch (Exception e) {
                         plugin.getLogger().warning("Error loading block weight for: " + key + " - " + e.getMessage());
