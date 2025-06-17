@@ -351,6 +351,7 @@ public class UnlockGui implements Listener {
         // Remove items and unlock chunk
         player.getInventory().removeItem(requiredStack);
         chunkLockManager.unlockChunk(state.chunk);
+        ChunklockPlugin.getInstance().getEnhancedTeamManager().recordChunkUnlock(player.getUniqueId(), BiomeUnlockRegistry.getBiomeDisplayName(state.biome));
         progressTracker.incrementUnlockedChunks(player.getUniqueId());
 
         int total = progressTracker.getUnlockedChunkCount(player.getUniqueId());

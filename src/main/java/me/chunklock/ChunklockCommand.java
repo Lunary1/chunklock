@@ -11,6 +11,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import me.chunklock.teams.BasicTeamCommandHandler;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,24 +26,31 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
     private final ChunkLockManager chunkLockManager;
     private final UnlockGui unlockGui;
     private final TeamManager teamManager;
+    
+    // NEW: Enhanced team command handler
+    private final BasicTeamCommandHandler teamCommandHandler;
+    
     private final Random random = new Random();
 
     private static final int MAX_RESET_ATTEMPTS = 100;
     private static final int MAX_RESET_SCORE = 25;
 
+    // MODIFIED: Constructor now accepts team command handler
     public ChunklockCommand(PlayerProgressTracker progressTracker, ChunkLockManager chunkLockManager,
-                           UnlockGui unlockGui, TeamManager teamManager) {
+                           UnlockGui unlockGui, TeamManager teamManager, 
+                           BasicTeamCommandHandler teamCommandHandler) {
         this.progressTracker = progressTracker;
         this.chunkLockManager = chunkLockManager;
         this.unlockGui = unlockGui;
         this.teamManager = teamManager;
+        this.teamCommandHandler = teamCommandHandler; // NEW: Team command handler
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
 
         if (args.length == 0) {
-            sender.sendMessage(Component.text("Usage: /chunklock <status|reset|bypass|unlock|reload|help>").color(NamedTextColor.YELLOW));
+            sender.sendMessage(Component.text("Usage: /chunklock <status|reset|bypass|unlock|reload|team|help>").color(NamedTextColor.YELLOW));
             return true;
         }
 
@@ -64,6 +72,25 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 player.sendMessage(Component.text("Current chunk (" + currentChunk.getX() + ", " + currentChunk.getZ() + "): " +
                         (isLocked ? "§cLocked" : "§aUnlocked")).color(NamedTextColor.GRAY));
                 player.sendMessage(Component.text("Score: " + eval.score + " | Difficulty: " + eval.difficulty).color(NamedTextColor.GRAY));
+                
+                // NEW: Show team info if player is in a team
+                if (teamCommandHandler != null) {
+                    try {
+                        var teamManager = ChunklockPlugin.getInstance().getEnhancedTeamManager();
+                        var team = teamManager.getPlayerTeam(player.getUniqueId());
+                        if (team != null) {
+                            player.sendMessage(Component.text("Team: " + team.getTeamName() + " (" + team.getTotalMembers() + " members)")
+                                .color(NamedTextColor.AQUA));
+                            double teamMultiplier = teamManager.getChunkCostMultiplier(player.getUniqueId());
+                            if (teamMultiplier > 1.0) {
+                                player.sendMessage(Component.text("Team cost multiplier: " + String.format("%.1fx", teamMultiplier))
+                                    .color(NamedTextColor.YELLOW));
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Team info not available - that's okay
+                    }
+                }
             }
 
             case "reload" -> {
@@ -169,6 +196,22 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(Component.text("=== Chunk Debug Info ===").color(NamedTextColor.AQUA));
                 sender.sendMessage(Component.text("Total unlocked chunks in world: " + totalUnlocked).color(NamedTextColor.YELLOW));
 
+                // NEW: Show team system debug info
+                if (teamCommandHandler != null) {
+                    try {
+                        var enhancedTeamManager = ChunklockPlugin.getInstance().getEnhancedTeamManager();
+                        var allTeams = enhancedTeamManager.getAllTeams();
+                        sender.sendMessage(Component.text("Total teams: " + allTeams.size()).color(NamedTextColor.YELLOW));
+                        
+                        int totalTeamMembers = allTeams.stream().mapToInt(team -> team.getTotalMembers()).sum();
+                        int totalTeamChunks = allTeams.stream().mapToInt(team -> team.getTotalChunksUnlocked()).sum();
+                        sender.sendMessage(Component.text("Total team members: " + totalTeamMembers).color(NamedTextColor.YELLOW));
+                        sender.sendMessage(Component.text("Total team chunks unlocked: " + totalTeamChunks).color(NamedTextColor.YELLOW));
+                    } catch (Exception e) {
+                        sender.sendMessage(Component.text("Team debug info not available").color(NamedTextColor.GRAY));
+                    }
+                }
+
                 if (args.length > 1 && args[1].equalsIgnoreCase("list")) {
                     sender.sendMessage(Component.text("Unlocked chunks:").color(NamedTextColor.GRAY));
                     for (String chunkKey : unlockedChunks) {
@@ -259,27 +302,35 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 }
             }
 
+            // LEGACY: Keep old team command for compatibility
             case "team" -> {
-                if (!(sender instanceof Player player)) {
-                    sender.sendMessage(Component.text("Only players can join teams.").color(NamedTextColor.RED));
-                    return true;
+                // NEW: Use enhanced team command handler if available, fallback to legacy
+                if (teamCommandHandler != null) {
+                    return teamCommandHandler.handleTeamCommand(sender, args);
+                } else {
+                    // Legacy team handling
+                    if (!(sender instanceof Player player)) {
+                        sender.sendMessage(Component.text("Only players can join teams.").color(NamedTextColor.RED));
+                        return true;
+                    }
+                    if (args.length < 2) {
+                        player.sendMessage(Component.text("Usage: /chunklock team <player>").color(NamedTextColor.YELLOW));
+                        return true;
+                    }
+                    Player target = Bukkit.getPlayer(args[1]);
+                    if (target == null) {
+                        player.sendMessage(Component.text("Player not found.").color(NamedTextColor.RED));
+                        return true;
+                    }
+                    teamManager.setTeamLeader(player.getUniqueId(), teamManager.getTeamLeader(target.getUniqueId()));
+                    player.sendMessage(Component.text("Joined " + target.getName() + "'s team!").color(NamedTextColor.GREEN));
                 }
-                if (args.length < 2) {
-                    player.sendMessage(Component.text("Usage: /chunklock team <player>").color(NamedTextColor.YELLOW));
-                    return true;
-                }
-                Player target = Bukkit.getPlayer(args[1]);
-                if (target == null) {
-                    player.sendMessage(Component.text("Player not found.").color(NamedTextColor.RED));
-                    return true;
-                }
-                teamManager.setTeamLeader(player.getUniqueId(), teamManager.getTeamLeader(target.getUniqueId()));
-                player.sendMessage(Component.text("Joined " + target.getName() + "'s team!").color(NamedTextColor.GREEN));
             }
 
             case "help" -> {
                 sender.sendMessage(Component.text("Chunklock Commands:").color(NamedTextColor.AQUA));
                 sender.sendMessage(Component.text("/chunklock status - View your unlocked chunks").color(NamedTextColor.GRAY));
+                sender.sendMessage(Component.text("/chunklock team - Team management commands").color(NamedTextColor.GRAY)); // UPDATED
                 sender.sendMessage(Component.text("/chunklock reset <player> - Admin: Complete reset (progress + chunks)").color(NamedTextColor.GRAY));
                 sender.sendMessage(Component.text("/chunklock bypass [player] - Admin: Toggle bypass mode").color(NamedTextColor.GRAY));
                 sender.sendMessage(Component.text("/chunklock unlock - Attempt to unlock your current chunk").color(NamedTextColor.GRAY));
@@ -299,7 +350,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
-    // ... (keep all the existing helper methods: findSuitableResetChunk, getCenterLocationOfChunk, etc.)
+    // ... (keep all existing helper methods: findSuitableResetChunk, getCenterLocationOfChunk, etc.)
     private Chunk findSuitableResetChunk(Player player, World world) {
         Chunk bestChunk = null;
         int bestScore = Integer.MAX_VALUE;
@@ -401,7 +452,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 1) {
             String prefix = args[0].toLowerCase();
-            List<String> commands = new ArrayList<>(List.of("status", "reset", "bypass", "unlock", "spawn", "team", "help"));
+            List<String> commands = new ArrayList<>(List.of("status", "reset", "bypass", "unlock", "spawn", "team", "help")); // UPDATED: Added "team"
 
             if (sender.hasPermission("chunklock.admin")) {
                 commands.addAll(List.of("reload", "debug", "resetall"));
@@ -415,8 +466,25 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
             return completions;
         }
 
+        // NEW: Handle enhanced team command tab completion
+        if (args.length >= 2 && args[0].equalsIgnoreCase("team")) {
+            if (teamCommandHandler != null) {
+                return teamCommandHandler.getTabCompletions(sender, args);
+            } else {
+                // Legacy team tab completion
+                if (args.length == 2) {
+                    String prefix = args[1].toLowerCase();
+                    for (Player p : Bukkit.getOnlinePlayers()) {
+                        if (p.getName().toLowerCase().startsWith(prefix)) {
+                            completions.add(p.getName());
+                        }
+                    }
+                }
+            }
+        }
+
         if (args.length == 2) {
-            if (args[0].equalsIgnoreCase("reset") || args[0].equalsIgnoreCase("bypass") || args[0].equalsIgnoreCase("team")) {
+            if (args[0].equalsIgnoreCase("reset") || args[0].equalsIgnoreCase("bypass")) {
                 String prefix = args[1].toLowerCase();
                 for (Player p : Bukkit.getOnlinePlayers()) {
                     if (p.getName().toLowerCase().startsWith(prefix)) {
