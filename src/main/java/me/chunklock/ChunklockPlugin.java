@@ -245,28 +245,26 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    private boolean registerEventListeners() {
-        try {
-            // Register all event listeners
-            Bukkit.getPluginManager().registerEvents(playerListener, this);
-            Bukkit.getPluginManager().registerEvents(
-                new UnlockItemListener(chunkLockManager, biomeUnlockRegistry, progressTracker), this);
-            Bukkit.getPluginManager().registerEvents(unlockGui, this);
-            
-            // Register the new block protection listener
-            Bukkit.getPluginManager().registerEvents(blockProtectionListener, this);
-            
-            // Register main plugin events (join/quit handlers)
-            Bukkit.getPluginManager().registerEvents(this, this);
-            
-            getLogger().info("Event listeners registered successfully (including block protection)");
-            return true;
-            
-        } catch (Exception e) {
-            getLogger().log(Level.SEVERE, "Error registering event listeners", e);
-            return false;
-        }
+private boolean registerEventListeners() {
+    try {
+        // Register all event listeners
+        Bukkit.getPluginManager().registerEvents(playerListener, this);
+        Bukkit.getPluginManager().registerEvents(unlockGui, this);
+        
+        // Register the new block protection listener
+        Bukkit.getPluginManager().registerEvents(blockProtectionListener, this);
+        
+        // Register main plugin events (join/quit handlers)
+        Bukkit.getPluginManager().registerEvents(this, this);
+        
+        getLogger().info("Event listeners registered successfully (including block protection)");
+        return true;
+        
+    } catch (Exception e) {
+        getLogger().log(Level.SEVERE, "Error registering event listeners", e);
+        return false;
     }
+}
 
     private boolean startTasks() {
         try {
