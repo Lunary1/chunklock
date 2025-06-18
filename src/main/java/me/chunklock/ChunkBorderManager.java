@@ -208,20 +208,21 @@ public class ChunkBorderManager {
         
         for (int y = startY; y <= endY; y++) {
             Block block = world.getBlockAt(x, y, z);
-            
+
             // Skip if block is already a border or if it's bedrock
             if (block.getType() == borderMaterial || block.getType() == Material.BEDROCK) {
                 continue;
             }
-            
-            // Skip liquids to avoid weird behavior
-            if (block.isLiquid()) {
-                continue;
-            }
-            
-            // Skip air blocks below ground level to avoid floating glass
-            if (y < world.getHighestBlockYAt(x, z) - 1 && block.getType().isAir()) {
-                continue;
+
+            // In ground-relative mode, avoid replacing liquids or floating air blocks
+            if (!fullHeightBorders) {
+                if (block.isLiquid()) {
+                    continue;
+                }
+
+                if (y < world.getHighestBlockYAt(x, z) - 1 && block.getType().isAir()) {
+                    continue;
+                }
             }
             
             // Store original block data
@@ -266,23 +267,31 @@ public class ChunkBorderManager {
      * Removes borders around a specific chunk after it's unlocked
      */
     public void removeBordersAroundChunk(Chunk unlockedChunk, Player player) {
-        // Remove borders on all sides of the unlocked chunk
+        UUID playerId = player.getUniqueId();
+
+        // Check all four sides of the unlocked chunk
         for (Direction direction : Direction.values()) {
-            removeBorderOnSide(unlockedChunk, direction, player.getUniqueId());
-        }
-        
-        // Update borders for adjacent chunks (they might need new borders on other sides)
-        for (Direction direction : Direction.values()) {
+            // Always remove the border on the side of the chunk that was unlocked
+            removeBorderOnSide(unlockedChunk, direction, playerId);
+
+            // Evaluate the neighbouring chunk on this side
             Chunk adjacentChunk = getAdjacentChunk(unlockedChunk, direction);
-            if (adjacentChunk != null) {
-                chunkLockManager.initializeChunk(adjacentChunk, player.getUniqueId());
-                if (chunkLockManager.isLocked(adjacentChunk)) {
-                    // This chunk might need borders on its other sides
-                    createBordersForChunk(adjacentChunk, player);
-                }
+            if (adjacentChunk == null) {
+                continue;
+            }
+
+            chunkLockManager.initializeChunk(adjacentChunk, playerId);
+            boolean adjacentLocked = chunkLockManager.isLocked(adjacentChunk);
+
+            if (!adjacentLocked) {
+                // Neighbour is also unlocked - ensure shared border is removed from both sides
+                removeBorderOnSide(adjacentChunk, opposite(direction), playerId);
+            } else {
+                // Neighbour is locked - rebuild its border facing this unlocked chunk
+                createBorderOnSide(adjacentChunk, player, opposite(direction));
             }
         }
-        
+
         if (persistBorders) {
             saveBorderData();
         }
@@ -380,9 +389,16 @@ public class ChunkBorderManager {
             return null;
         }
         
-        // Check all adjacent chunks to find which one is locked
+        // Determine which chunk this border belongs to
         Chunk blockChunk = borderBlock.getChunk();
-        
+
+        // Borders are placed inside the locked chunk, so check that first
+        chunkLockManager.initializeChunk(blockChunk, player.getUniqueId());
+        if (chunkLockManager.isLocked(blockChunk)) {
+            return blockChunk;
+        }
+
+        // Fallback: check adjacent chunks in case data became inconsistent
         for (Direction direction : Direction.values()) {
             Chunk adjacentChunk = getAdjacentChunk(blockChunk, direction);
             if (adjacentChunk != null) {
@@ -392,7 +408,7 @@ public class ChunkBorderManager {
                 }
             }
         }
-        
+
         // If no locked chunk found, return the chunk the block is in
         return blockChunk;
     }
@@ -615,6 +631,15 @@ public class ChunkBorderManager {
     
     private enum Direction {
         NORTH, SOUTH, EAST, WEST
+    }
+
+    private Direction opposite(Direction dir) {
+        return switch (dir) {
+            case NORTH -> Direction.SOUTH;
+            case SOUTH -> Direction.NORTH;
+            case EAST -> Direction.WEST;
+            case WEST -> Direction.EAST;
+        };
     }
     
     // Public configuration methods
