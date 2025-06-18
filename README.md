@@ -19,6 +19,7 @@ Chunklock transforms Minecraft into a strategic progression-based survival game.
 - **Difficulty tiers (Easy → Impossible)**
 - **Fully configurable scoring system via `config.yml`**
 - **Supports both solo and team play**
+- **Chunk borders rise from bedrock to build limit**
 
 ---
 
