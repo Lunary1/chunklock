@@ -19,7 +19,10 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import java.util.logging.Level;
 
 public class ChunklockPlugin extends JavaPlugin implements Listener {
-
+    /**
+     * Main plugin class for Chunklock
+     * Handles initialization, configuration, and core functionality
+     */
     private static ChunklockPlugin instance;
     private ChunkLockManager chunkLockManager;
     private BiomeUnlockRegistry biomeUnlockRegistry;
@@ -31,6 +34,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private UnlockGui unlockGui;
     private HologramManager hologramManager;
     private PlayerListener playerListener;
+    private ChunkBorderManager borderManager;
+    private ChunkBorderInteractListener borderInteractListener;
     
     // Keep track of active tasks for cleanup
     private TickTask activeTickTask;
@@ -268,6 +273,11 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             
             // Initialize block protection listener
             this.blockProtectionListener = new BlockProtectionListener(chunkLockManager, unlockGui);
+
+            // Initialize border system
+            this.borderManager = new ChunkBorderManager(this, chunkLockManager, progressTracker);
+            this.borderInteractListener = new ChunkBorderInteractListener(borderManager, unlockGui, chunkLockManager);
+            getLogger().info("Border system initialized successfully");
             
             // NEW: Set up team integration in BiomeUnlockRegistry
             try {
@@ -297,6 +307,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             
             // Register main plugin events (join/quit handlers)
             Bukkit.getPluginManager().registerEvents(this, this);
+
+            // Register border interaction listener
+            Bukkit.getPluginManager().registerEvents(borderInteractListener, this);
             
             getLogger().info("Event listeners registered successfully (including enhanced team and block protection)");
             return true;
@@ -394,13 +407,22 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             if (activeTickTask != null && !activeTickTask.isCancelled()) {
                 activeTickTask.cancel();
             }
+
+            // Clean up border system
+            if (borderInteractListener != null) {
+                borderInteractListener.cleanup();
+            }
+
+            if (borderManager != null) {
+                borderManager.cleanup();
+            }
             
             // Save all data
             saveAllData();
             
             // Clear static references
             instance = null;
-            
+
             getLogger().info("Chunklock plugin disabled successfully");
             
         } catch (Exception e) {
@@ -558,6 +580,14 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             throw new IllegalStateException("BasicTeamCommandHandler not initialized");
         }
         return teamCommandHandler;
+    }
+
+    public ChunkBorderManager getBorderManager() {
+        if (borderManager == null) {
+            getLogger().warning("ChunkBorderManager accessed before initialization");
+            throw new IllegalStateException("ChunkBorderManager not initialized");
+        }
+        return borderManager;
     }
 
     /**

@@ -373,6 +373,22 @@ public class UnlockGui implements Listener {
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().warning("Error refreshing holograms after unlock: " + e.getMessage());
         }
+
+        // Update chunk borders
+        try {
+            ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getBorderManager();
+            if (borderManager != null) {
+                // Remove borders around the newly unlocked chunk
+                borderManager.removeBordersAroundChunk(state.chunk, player);
+                
+                // Schedule a full border update after a short delay
+                Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
+                    borderManager.updateBordersForPlayer(player);
+                }, 10L); // 0.5 second delay
+            }
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().warning("Error updating borders after unlock: " + e.getMessage());
+        }
         
         player.closeInventory();
     }
