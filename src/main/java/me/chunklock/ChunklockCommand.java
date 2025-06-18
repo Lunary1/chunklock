@@ -55,6 +55,53 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
         }
 
         switch (args[0].toLowerCase()) {
+            case "init" -> {
+                Player target;
+                boolean force = false;
+                if (args.length >= 2 && !(sender instanceof Player)) {
+                    target = Bukkit.getPlayer(args[1]);
+                    if (target == null) {
+                        sender.sendMessage(Component.text("Player not found.").color(NamedTextColor.RED));
+                        return true;
+                    }
+                    if (args.length >= 3 && args[2].equalsIgnoreCase("force")) {
+                        force = true;
+                    }
+                } else {
+                    if (args.length >= 2 && !(args[1].equalsIgnoreCase("force"))) {
+                        if (!sender.hasPermission("chunklock.admin")) {
+                            sender.sendMessage(Component.text("You don't have permission to init others.").color(NamedTextColor.RED));
+                            return true;
+                        }
+                        target = Bukkit.getPlayer(args[1]);
+                        if (target == null) {
+                            sender.sendMessage(Component.text("Player not found.").color(NamedTextColor.RED));
+                            return true;
+                        }
+                        if (args.length >= 3 && args[2].equalsIgnoreCase("force")) {
+                            force = true;
+                        }
+                    } else {
+                        if (!(sender instanceof Player p)) {
+                            sender.sendMessage(Component.text("Specify a player").color(NamedTextColor.RED));
+                            return true;
+                        }
+                        target = p;
+                        if (args.length >= 2 && args[1].equalsIgnoreCase("force")) {
+                            force = true;
+                        }
+                    }
+                }
+
+                if (!force && progressTracker.isInitialized(target.getUniqueId())) {
+                    sender.sendMessage(Component.text(target.getName() + " is already initialized.").color(NamedTextColor.YELLOW));
+                    return true;
+                }
+
+                new ChunkSearchTask(target, chunkLockManager, 10).start();
+                progressTracker.setInitialized(target.getUniqueId(), true);
+                target.sendMessage(Component.text("Chunklock initialized!").color(NamedTextColor.GREEN));
+            }
             case "status" -> {
                 if (!(sender instanceof Player player)) {
                     sender.sendMessage(Component.text("Only players can use /chunklock status.").color(NamedTextColor.RED));
@@ -329,6 +376,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
 
             case "help" -> {
                 sender.sendMessage(Component.text("Chunklock Commands:").color(NamedTextColor.AQUA));
+                sender.sendMessage(Component.text("/chunklock init - Initialize Chunklock mode").color(NamedTextColor.GRAY));
                 sender.sendMessage(Component.text("/chunklock status - View your unlocked chunks").color(NamedTextColor.GRAY));
                 sender.sendMessage(Component.text("/chunklock team - Team management commands").color(NamedTextColor.GRAY)); // UPDATED
                 sender.sendMessage(Component.text("/chunklock reset <player> - Admin: Complete reset (progress + chunks)").color(NamedTextColor.GRAY));
@@ -452,7 +500,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 1) {
             String prefix = args[0].toLowerCase();
-            List<String> commands = new ArrayList<>(List.of("status", "reset", "bypass", "unlock", "spawn", "team", "help")); // UPDATED: Added "team"
+            List<String> commands = new ArrayList<>(List.of("init", "status", "reset", "bypass", "unlock", "spawn", "team", "help"));
 
             if (sender.hasPermission("chunklock.admin")) {
                 commands.addAll(List.of("reload", "debug", "resetall"));
@@ -484,7 +532,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 2) {
-            if (args[0].equalsIgnoreCase("reset") || args[0].equalsIgnoreCase("bypass")) {
+            if (args[0].equalsIgnoreCase("reset") || args[0].equalsIgnoreCase("bypass") || args[0].equalsIgnoreCase("init")) {
                 String prefix = args[1].toLowerCase();
                 for (Player p : Bukkit.getOnlinePlayers()) {
                     if (p.getName().toLowerCase().startsWith(prefix)) {

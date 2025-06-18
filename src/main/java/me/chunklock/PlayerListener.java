@@ -10,6 +10,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import me.chunklock.HologramManager;
+import me.chunklock.PlayerProgressTracker;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -18,6 +20,7 @@ import java.util.logging.Level;
 public class PlayerListener implements Listener {
 
     private final ChunkLockManager chunkLockManager;
+    private final PlayerProgressTracker progressTracker;
     private final PlayerDataManager playerDataManager;
     private final UnlockGui unlockGui;
     
@@ -34,9 +37,10 @@ public class PlayerListener implements Listener {
     private static final int MAX_SPAWN_ATTEMPTS = 100;
     private static final int MAX_SCORE_THRESHOLD = 25;
 
-    public PlayerListener(ChunkLockManager chunkLockManager, PlayerProgressTracker progressTracker, 
+    public PlayerListener(ChunkLockManager chunkLockManager, PlayerProgressTracker progressTracker,
                          PlayerDataManager playerDataManager, UnlockGui unlockGui) {
         this.chunkLockManager = chunkLockManager;
+        this.progressTracker = progressTracker;
         this.playerDataManager = playerDataManager;
         this.unlockGui = unlockGui;
     }
@@ -98,6 +102,13 @@ public class PlayerListener implements Listener {
                     newPlayers.add(playerId);
                     assignStartingChunk(player);
                 }
+            }
+
+            // Perform asynchronous chunk search on first initialization
+            if (!progressTracker.isInitialized(playerId)) {
+                player.sendMessage("§7Initializing Chunklock..." );
+                new ChunkSearchTask(player, chunkLockManager, 10).start();
+                progressTracker.setInitialized(playerId, true);
             }
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Critical error in player join handling", e);

@@ -507,6 +507,14 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         return playerDataManager;
     }
 
+    public PlayerProgressTracker getProgressTracker() {
+        if (progressTracker == null) {
+            getLogger().warning("PlayerProgressTracker accessed before initialization");
+            throw new IllegalStateException("PlayerProgressTracker not initialized");
+        }
+        return progressTracker;
+    }
+
     public TeamManager getTeamManager() {
         if (teamManager == null) {
             getLogger().warning("TeamManager accessed before initialization");

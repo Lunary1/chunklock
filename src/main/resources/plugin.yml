@@ -8,7 +8,7 @@ description: Advanced chunk-locking system with visual effects and strategic pro
 commands:
   chunklock:
     description: Chunklock main command with full functionality
-    usage: /chunklock [status|reset <player>|bypass [player]|unlock|spawn|team <player>|reload|debug|resetall|help]
+    usage: /chunklock [init|status|reset <player>|bypass [player]|unlock|spawn|team <player>|reload|debug|resetall|help]
     permission: chunklock.use
     aliases: [cl]
 

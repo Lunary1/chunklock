@@ -14,6 +14,8 @@ import java.util.UUID;
 public class PlayerProgressTracker {
     /** Counts unlocked chunks per team leader UUID. */
     private final Map<UUID, Integer> unlockedChunkCount = new HashMap<>();
+    /** Tracks whether a player has initialized the chunklock mode. */
+    private final Map<UUID, Boolean> initialized = new HashMap<>();
     private final JavaPlugin plugin;
     private final File file;
     private FileConfiguration config;
@@ -44,7 +46,9 @@ public class PlayerProgressTracker {
             try {
                 UUID teamId = UUID.fromString(uuidString);
                 int count = players.getInt(uuidString + ".progress.unlocked_chunks", 0);
+                boolean init = players.getBoolean(uuidString + ".progress.initialized", false);
                 unlockedChunkCount.put(teamId, count);
+                initialized.put(teamId, init);
             } catch (Exception e) {
                 plugin.getLogger().warning("Failed to load progress for UUID: " + uuidString);
             }
@@ -55,6 +59,7 @@ public class PlayerProgressTracker {
         for (Map.Entry<UUID, Integer> entry : unlockedChunkCount.entrySet()) {
             String key = "players." + entry.getKey();
             config.set(key + ".progress.unlocked_chunks", entry.getValue());
+            config.set(key + ".progress.initialized", initialized.getOrDefault(entry.getKey(), false));
         }
         
         try {
@@ -91,11 +96,23 @@ public class PlayerProgressTracker {
     private void saveProgress(UUID teamId) {
         if (config != null) {
             config.set("players." + teamId + ".progress.unlocked_chunks", unlockedChunkCount.getOrDefault(teamId, 0));
+            config.set("players." + teamId + ".progress.initialized", initialized.getOrDefault(teamId, false));
             try {
                 config.save(file);
             } catch (IOException e) {
                 plugin.getLogger().warning("Could not save progress for team: " + teamId);
             }
         }
+    }
+
+    public boolean isInitialized(UUID playerId) {
+        UUID teamId = teamManager.getTeamLeader(playerId);
+        return initialized.getOrDefault(teamId, false);
+    }
+
+    public void setInitialized(UUID playerId, boolean value) {
+        UUID teamId = teamManager.getTeamLeader(playerId);
+        initialized.put(teamId, value);
+        saveProgress(teamId);
     }
 }
