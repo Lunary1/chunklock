@@ -266,23 +266,31 @@ public class ChunkBorderManager {
      * Removes borders around a specific chunk after it's unlocked
      */
     public void removeBordersAroundChunk(Chunk unlockedChunk, Player player) {
-        // Remove borders on all sides of the unlocked chunk
+        UUID playerId = player.getUniqueId();
+
+        // Check all four sides of the unlocked chunk
         for (Direction direction : Direction.values()) {
-            removeBorderOnSide(unlockedChunk, direction, player.getUniqueId());
-        }
-        
-        // Update borders for adjacent chunks (they might need new borders on other sides)
-        for (Direction direction : Direction.values()) {
+            // Always remove the border on the side of the chunk that was unlocked
+            removeBorderOnSide(unlockedChunk, direction, playerId);
+
+            // Evaluate the neighbouring chunk on this side
             Chunk adjacentChunk = getAdjacentChunk(unlockedChunk, direction);
-            if (adjacentChunk != null) {
-                chunkLockManager.initializeChunk(adjacentChunk, player.getUniqueId());
-                if (chunkLockManager.isLocked(adjacentChunk)) {
-                    // This chunk might need borders on its other sides
-                    createBordersForChunk(adjacentChunk, player);
-                }
+            if (adjacentChunk == null) {
+                continue;
+            }
+
+            chunkLockManager.initializeChunk(adjacentChunk, playerId);
+            boolean adjacentLocked = chunkLockManager.isLocked(adjacentChunk);
+
+            if (!adjacentLocked) {
+                // Neighbour is also unlocked - ensure shared border is removed from both sides
+                removeBorderOnSide(adjacentChunk, opposite(direction), playerId);
+            } else {
+                // Neighbour is locked - rebuild its border facing this unlocked chunk
+                createBorderOnSide(adjacentChunk, player, opposite(direction));
             }
         }
-        
+
         if (persistBorders) {
             saveBorderData();
         }
@@ -615,6 +623,15 @@ public class ChunkBorderManager {
     
     private enum Direction {
         NORTH, SOUTH, EAST, WEST
+    }
+
+    private Direction opposite(Direction dir) {
+        return switch (dir) {
+            case NORTH -> Direction.SOUTH;
+            case SOUTH -> Direction.NORTH;
+            case EAST -> Direction.WEST;
+            case WEST -> Direction.EAST;
+        };
     }
     
     // Public configuration methods
