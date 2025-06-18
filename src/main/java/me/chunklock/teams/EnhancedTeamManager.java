@@ -1,6 +1,7 @@
 package me.chunklock.teams;
 
 import org.bukkit.Bukkit;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -31,8 +32,8 @@ public class EnhancedTeamManager {
     
     public EnhancedTeamManager(JavaPlugin plugin) {
         this.plugin = plugin;
-        this.teamsFile = new File(plugin.getDataFolder(), "teams_enhanced.yml");
-        this.configFile = new File(plugin.getDataFolder(), "team_config.yml");
+        this.teamsFile = new File(plugin.getDataFolder(), "teams.yml");
+        this.configFile = new File(plugin.getDataFolder(), "config.yml");
         
         loadConfiguration();
         loadTeams();
@@ -326,25 +327,37 @@ public class EnhancedTeamManager {
         if (!configFile.exists()) {
             saveDefaultConfiguration();
         }
-        
-        FileConfiguration config = YamlConfiguration.loadConfiguration(configFile);
-        maxTeamSize = config.getInt("max-team-size", 6);
-        maxTeamsPerServer = config.getInt("max-teams-per-server", 100);
-        allowSoloTeams = config.getBoolean("allow-solo-teams", true);
-        joinRequestTtlHours = config.getInt("join-request-ttl-hours", 72);
-        teamCostMultiplier = config.getDouble("team-cost-multiplier", 0.15);
+
+        FileConfiguration root = YamlConfiguration.loadConfiguration(configFile);
+        ConfigurationSection section = root.getConfigurationSection("team-settings");
+        if (section == null) {
+            section = root.createSection("team-settings");
+            saveDefaultConfiguration();
+        }
+
+        maxTeamSize = section.getInt("max-team-size", 6);
+        maxTeamsPerServer = section.getInt("max-teams-per-server", 100);
+        allowSoloTeams = section.getBoolean("allow-solo-teams", true);
+        joinRequestTtlHours = section.getInt("join-request-ttl-hours", 72);
+        teamCostMultiplier = section.getDouble("team-cost-multiplier", 0.15);
     }
-    
+
     private void saveDefaultConfiguration() {
-        FileConfiguration config = new YamlConfiguration();
-        config.set("max-team-size", 6);
-        config.set("max-teams-per-server", 100);
-        config.set("allow-solo-teams", true);
-        config.set("join-request-ttl-hours", 72);
-        config.set("team-cost-multiplier", 0.15);
-        
+        FileConfiguration root;
+        if (configFile.exists()) {
+            root = YamlConfiguration.loadConfiguration(configFile);
+        } else {
+            root = new YamlConfiguration();
+        }
+        ConfigurationSection section = root.createSection("team-settings");
+        section.set("max-team-size", 6);
+        section.set("max-teams-per-server", 100);
+        section.set("allow-solo-teams", true);
+        section.set("join-request-ttl-hours", 72);
+        section.set("team-cost-multiplier", 0.15);
+
         try {
-            config.save(configFile);
+            root.save(configFile);
         } catch (IOException e) {
             plugin.getLogger().log(Level.SEVERE, "Could not save team configuration", e);
         }
@@ -390,7 +403,7 @@ public class EnhancedTeamManager {
                 teams.put(teamId, team);
             }
             
-            plugin.getLogger().info("Loaded " + teams.size() + " teams from teams_enhanced.yml");
+            plugin.getLogger().info("Loaded " + teams.size() + " teams from teams.yml");
             
         } catch (Exception e) {
             plugin.getLogger().log(Level.SEVERE, "Error loading teams", e);

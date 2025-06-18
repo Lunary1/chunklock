@@ -11,6 +11,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import me.chunklock.teams.EnhancedTeamManager;
 import me.chunklock.teams.BasicTeamCommandHandler;
+import me.chunklock.migration.DataMigrator;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -116,6 +117,14 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             }
 
             getLogger().info("Configuration validation passed");
+
+            // Migrate legacy configuration/data files if necessary
+            try {
+                new DataMigrator(this).migrate();
+            } catch (Exception e) {
+                getLogger().warning("Migration step failed: " + e.getMessage());
+            }
+
             return true;
             
         } catch (Exception e) {

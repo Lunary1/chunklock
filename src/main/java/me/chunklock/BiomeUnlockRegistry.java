@@ -38,13 +38,18 @@ public class BiomeUnlockRegistry {
         this.plugin = plugin;
         this.progressTracker = progressTracker;
         
-        File file = new File(plugin.getDataFolder(), "biome_costs.yml");
+        File file = new File(plugin.getDataFolder(), "config.yml");
         if (!file.exists()) {
             file.getParentFile().mkdirs();
-            plugin.saveResource("biome_costs.yml", false);
+            plugin.saveResource("config.yml", false);
         }
 
-        FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+        FileConfiguration root = YamlConfiguration.loadConfiguration(file);
+        ConfigurationSection config = root.getConfigurationSection("biome-unlocks");
+        if (config == null) {
+            plugin.getLogger().warning("BiomeUnlockRegistry: missing biome-unlocks section in config.yml");
+            return;
+        }
 
         for (String biomeKey : config.getKeys(false)) {
             try {
@@ -73,7 +78,7 @@ public class BiomeUnlockRegistry {
                     unlockOptions.put(biome, list);
                 }
             } catch (Exception ex) {
-                plugin.getLogger().warning("Invalid biome format in biome_costs.yml: " + biomeKey);
+                plugin.getLogger().warning("Invalid biome format in config.yml biome-unlocks: " + biomeKey);
             }
         }
         

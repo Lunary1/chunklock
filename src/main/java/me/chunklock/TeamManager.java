@@ -1,6 +1,6 @@
 package me.chunklock;
 
-import org.bukkit.Bukkit;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -37,11 +37,15 @@ public class TeamManager {
             }
         }
         config = YamlConfiguration.loadConfiguration(file);
+        ConfigurationSection mapping = config.getConfigurationSection("mapping");
+        if (mapping == null) {
+            mapping = config.createSection("mapping");
+        }
 
-        for (String key : config.getKeys(false)) {
+        for (String key : mapping.getKeys(false)) {
             try {
                 UUID player = UUID.fromString(key);
-                UUID leader = UUID.fromString(config.getString(key));
+                UUID leader = UUID.fromString(mapping.getString(key));
                 teamLeaders.put(player, leader);
             } catch (Exception e) {
                 plugin.getLogger().warning("Failed to load team info for " + key);
@@ -50,8 +54,12 @@ public class TeamManager {
     }
 
     public void saveAll() {
+        ConfigurationSection mapping = config.getConfigurationSection("mapping");
+        if (mapping == null) {
+            mapping = config.createSection("mapping");
+        }
         for (Map.Entry<UUID, UUID> entry : teamLeaders.entrySet()) {
-            config.set(entry.getKey().toString(), entry.getValue().toString());
+            mapping.set(entry.getKey().toString(), entry.getValue().toString());
         }
         try {
             config.save(file);
