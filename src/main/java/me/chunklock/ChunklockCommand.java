@@ -194,7 +194,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 // Regenerate borders for the player immediately
                 ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
                 if (borderManager != null) {
-                    borderManager.scheduleBorderUpdate(target);
+                    borderManager.updateBordersForPlayer(target);
                 }
             }
 
