@@ -34,12 +34,14 @@ public class UnlockGui implements Listener {
         final Chunk chunk;
         final Biome biome;
         final BiomeUnlockRegistry.UnlockRequirement requirement;
+        final boolean contested;
         final long timestamp;
 
-        PendingUnlock(Chunk chunk, Biome biome, BiomeUnlockRegistry.UnlockRequirement requirement) {
+        PendingUnlock(Chunk chunk, Biome biome, BiomeUnlockRegistry.UnlockRequirement requirement, boolean contested) {
             this.chunk = chunk;
             this.biome = biome;
             this.requirement = requirement;
+            this.contested = contested;
             this.timestamp = System.currentTimeMillis();
         }
         
@@ -56,12 +58,16 @@ public class UnlockGui implements Listener {
     // 🔧 FIX: Track which inventories belong to our plugin
     private final Map<UUID, Inventory> activeGuis = new HashMap<>();
 
+    private final TeamManager teamManager;
+
     public UnlockGui(ChunkLockManager chunkLockManager,
                      BiomeUnlockRegistry biomeUnlockRegistry,
-                     PlayerProgressTracker progressTracker) {
+                     PlayerProgressTracker progressTracker,
+                     TeamManager teamManager) {
         this.chunkLockManager = chunkLockManager;
         this.biomeUnlockRegistry = biomeUnlockRegistry;
         this.progressTracker = progressTracker;
+        this.teamManager = teamManager;
     }
 
     public void open(Player player, Chunk chunk) {
@@ -72,7 +78,16 @@ public class UnlockGui implements Listener {
         
         var eval = chunkLockManager.evaluateChunk(playerId, chunk);
         Biome biome = eval.biome;
+        UUID teamId = teamManager.getTeamLeader(playerId);
+        boolean contested = chunkLockManager.isContestedChunk(chunk, teamId);
+
         var requirement = biomeUnlockRegistry.calculateRequirement(player, biome, eval.score);
+        if (contested) {
+            double mult = chunkLockManager.getContestedCostMultiplier();
+            int amt = (int) Math.ceil(requirement.amount() * mult);
+            requirement = new BiomeUnlockRegistry.UnlockRequirement(requirement.material(), amt);
+            player.sendMessage("§cContested chunk! Cost x" + mult);
+        }
 
         // Create larger inventory for better display
         Inventory inv = Bukkit.createInventory(null, 27, Component.text(GUI_TITLE));
@@ -87,7 +102,7 @@ public class UnlockGui implements Listener {
         addUnlockButton(inv, player, requirement);
 
         // 🔧 FIX: Store both pending state and inventory reference
-        PendingUnlock pendingUnlock = new PendingUnlock(chunk, biome, requirement);
+        PendingUnlock pendingUnlock = new PendingUnlock(chunk, biome, requirement, contested);
         pending.put(playerId, pendingUnlock);
         activeGuis.put(playerId, inv);
         
@@ -396,7 +411,9 @@ public class UnlockGui implements Listener {
                 ", Pending size: " + pending.size());
             return;
         }
-        
+
+        UUID teamId = teamManager.getTeamLeader(playerId);
+
         // Check if state is expired
         if (state.isExpired()) {
             player.sendMessage(Component.text("❌ Unlock session expired. Please try again.")
@@ -423,6 +440,11 @@ public class UnlockGui implements Listener {
             // 🔧 FIX: Enhanced item validation with detailed feedback
             int playerHas = countPlayerItems(player, state.requirement.material());
             int required = state.requirement.amount();
+
+            if (state.contested && !progressTracker.canClaimContested(teamId, chunkLockManager.getMaxContestedClaimsPerDay())) {
+                player.sendMessage(Component.text("❌ Contested claim limit reached for today.").color(NamedTextColor.RED));
+                return;
+            }
             
             ChunklockPlugin.getInstance().getLogger().info("Item validation: player " + player.getName() + 
                 " has " + playerHas + " " + state.requirement.material() + ", needs " + required);
@@ -464,7 +486,10 @@ public class UnlockGui implements Listener {
             }
 
             // 🔧 FIX: Unlock chunk with proper error handling
-            chunkLockManager.unlockChunk(state.chunk);
+            chunkLockManager.unlockChunk(state.chunk, teamId);
+            if (state.contested) {
+                progressTracker.incrementContestedClaims(teamId);
+            }
             ChunklockPlugin.getInstance().getLogger().info("Unlocked chunk " + state.chunk.getX() + 
                 "," + state.chunk.getZ() + " for player " + player.getName());
 
