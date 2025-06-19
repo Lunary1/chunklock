@@ -574,24 +574,27 @@ public class ChunkBorderManager implements Listener {
 
         UUID id = player.getUniqueId();
         Map<Location, BlockData> playerMap = playerBorders.computeIfAbsent(id, k -> new HashMap<>());
-        Set<Location> locations = new HashSet<>();
+
         for (BorderDirection dir : sides) {
-            locations.addAll(getBorderLocationsForSide(chunk, dir, player));
-        }
+            // Determine which neighboring chunk is locked for this side
+            int lockedX = chunk.getX() + dir.dx;
+            int lockedZ = chunk.getZ() + dir.dz;
+            ChunkCoordinate lockedCoord = new ChunkCoordinate(lockedX, lockedZ, chunk.getWorld().getName());
 
-        for (Location loc : locations) {
-            try {
-                Block block = loc.getBlock();
-                if (shouldSkipBlock(block)) continue;
-                if (block.getType() == borderMaterial) continue;
+            for (Location loc : getBorderLocationsForSide(chunk, dir, player)) {
+                try {
+                    Block block = loc.getBlock();
+                    if (shouldSkipBlock(block)) continue;
+                    if (block.getType() == borderMaterial) continue;
 
-                playerMap.put(loc, block.getBlockData().clone());
-                borderToChunk.put(loc, new ChunkCoordinate(chunk.getX(), chunk.getZ(), chunk.getWorld().getName()));
-                block.setType(borderMaterial);
-            } catch (Exception e) {
-                if (debugLogging) {
-                    plugin.getLogger().log(Level.FINE, "Error placing border block at " + loc, e);
-
+                    playerMap.put(loc, block.getBlockData().clone());
+                    // Map this border block to the locked chunk it protects
+                    borderToChunk.put(loc, lockedCoord);
+                    block.setType(borderMaterial);
+                } catch (Exception e) {
+                    if (debugLogging) {
+                        plugin.getLogger().log(Level.FINE, "Error placing border block at " + loc, e);
+                    }
                 }
             }
         }
@@ -786,40 +789,31 @@ public class ChunkBorderManager implements Listener {
         if (clickedBlock == null || clickedBlock.getType() != borderMaterial) {
             return;
         }
-        
+
         Player player = event.getPlayer();
-        Location location = clickedBlock.getLocation();
-        
-        // Check if this border block is part of a border
-        ChunkCoordinate chunkCoord = borderToChunk.get(location);
-        if (chunkCoord == null) {
-            return;
+
+        // Determine which chunk this border corresponds to
+        Chunk chunk = getBorderChunk(clickedBlock, player);
+        if (chunk == null) {
+            return; // Not a tracked border block
         }
-        
-        // Check if player has borders at this location (only show GUI to the player who owns the border)
-        Map<Location, BlockData> playerBorderBlocks = playerBorders.get(player.getUniqueId());
-        if (playerBorderBlocks == null || !playerBorderBlocks.containsKey(location)) {
-            return;
-        }
-        
+
         // Cancel the event to prevent normal block interaction
         event.setCancelled(true);
-        
+
         try {
-            // Get the chunk and open unlock GUI
-            World world = player.getWorld();
-            Chunk chunk = world.getChunkAt(chunkCoord.x, chunkCoord.z);
+            // Ensure chunk data is initialized
+            chunkLockManager.initializeChunk(chunk, player.getUniqueId());
             
             // Verify the chunk is still locked
-            chunkLockManager.initializeChunk(chunk, player.getUniqueId());
             if (chunkLockManager.isLocked(chunk)) {
                 unlockGui.open(player, chunk);
-                
+
                 // Show chunk info
                 var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), chunk);
                 String biomeName = BiomeUnlockRegistry.getBiomeDisplayName(evaluation.biome);
-                
-                player.sendMessage("§6🔍 Viewing unlock requirements for chunk " + chunkCoord.x + ", " + chunkCoord.z);
+
+                player.sendMessage("§6🔍 Viewing unlock requirements for chunk " + chunk.getX() + ", " + chunk.getZ());
                 player.sendMessage("§7Biome: " + biomeName + " | Difficulty: " + evaluation.difficulty + " | Score: " + evaluation.score);
             } else {
                 // Chunk was unlocked, update borders
@@ -996,6 +990,33 @@ public class ChunkBorderManager implements Listener {
     public void scheduleBorderUpdate(Player player) {
         if (!enabled || player == null) return;
         updateQueue.add(() -> updateBordersForPlayer(player));
+    }
+
+    /**
+     * Gets the chunk associated with a border block for the given player.
+     * Returns null if the block is not a tracked border.
+     */
+    public Chunk getBorderChunk(Block block, Player player) {
+        if (block == null || player == null) return null;
+
+        // Verify this block belongs to this player's border set
+        Map<Location, BlockData> playerMap = playerBorders.get(player.getUniqueId());
+        Location loc = block.getLocation();
+        if (playerMap == null || !playerMap.containsKey(loc)) {
+            return null;
+        }
+
+        ChunkCoordinate coord = borderToChunk.get(loc);
+        if (coord == null) return null;
+
+        World world = Bukkit.getWorld(coord.world);
+        if (world == null) return null;
+
+        try {
+            return world.getChunkAt(coord.x, coord.z);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** Direction for chunk borders */
