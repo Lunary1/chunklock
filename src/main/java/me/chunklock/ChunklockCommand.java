@@ -190,6 +190,12 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 target.sendMessage(Component.text("All previously unlocked chunks have been locked again.").color(NamedTextColor.RED));
                 target.sendMessage(Component.text("New starting chunk: " + newChunk.getX() + ", " + newChunk.getZ()).color(NamedTextColor.GREEN));
                 target.sendMessage(Component.text("Spawning at center: " + (int) centerSpawn.getX() + ", " + (int) centerSpawn.getZ()).color(NamedTextColor.GRAY));
+
+                // Regenerate borders for the player immediately
+                ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
+                if (borderManager != null) {
+                    borderManager.scheduleBorderUpdate(target);
+                }
             }
 
             case "debug" -> {

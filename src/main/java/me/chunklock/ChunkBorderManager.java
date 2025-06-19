@@ -591,6 +591,7 @@ public class ChunkBorderManager implements Listener {
             } catch (Exception e) {
                 if (debugLogging) {
                     plugin.getLogger().log(Level.FINE, "Error placing border block at " + loc, e);
+
                 }
             }
         }
