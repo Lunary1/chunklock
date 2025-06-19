@@ -574,29 +574,24 @@ public class ChunkBorderManager implements Listener {
 
         UUID id = player.getUniqueId();
         Map<Location, BlockData> playerMap = playerBorders.computeIfAbsent(id, k -> new HashMap<>());
-        World world = chunk.getWorld();
-
+        Set<Location> locations = new HashSet<>();
         for (BorderDirection dir : sides) {
-            Chunk neighbor;
+            locations.addAll(getBorderLocationsForSide(chunk, dir, player));
+        }
+
+        for (Location loc : locations) {
             try {
-                neighbor = world.getChunkAt(chunk.getX() + dir.dx, chunk.getZ() + dir.dz);
+                Block block = loc.getBlock();
+                if (shouldSkipBlock(block)) continue;
+                if (block.getType() == borderMaterial) continue;
+
+                playerMap.put(loc, block.getBlockData().clone());
+                borderToChunk.put(loc, new ChunkCoordinate(chunk.getX(), chunk.getZ(), chunk.getWorld().getName()));
+                block.setType(borderMaterial);
             } catch (Exception e) {
-                continue;
-            }
+                if (debugLogging) {
+                    plugin.getLogger().log(Level.FINE, "Error placing border block at " + loc, e);
 
-            for (Location loc : getBorderLocationsForSide(chunk, dir, player)) {
-                try {
-                    Block block = loc.getBlock();
-                    if (shouldSkipBlock(block)) continue;
-                    if (block.getType() == borderMaterial) continue;
-
-                    playerMap.put(loc, block.getBlockData().clone());
-                    borderToChunk.put(loc, new ChunkCoordinate(neighbor.getX(), neighbor.getZ(), world.getName()));
-                    block.setType(borderMaterial);
-                } catch (Exception e) {
-                    if (debugLogging) {
-                        plugin.getLogger().log(Level.FINE, "Error placing border block at " + loc, e);
-                    }
                 }
             }
         }
