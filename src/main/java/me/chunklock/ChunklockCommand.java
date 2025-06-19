@@ -718,7 +718,8 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 
             } else if (args.length > 1 && args[1].equalsIgnoreCase("force")) {
                 // Force unlock without items
-                chunkLockManager.unlockChunk(currentChunk);
+                UUID teamId = chunkLockManager.getTeamManager().getTeamLeader(player.getUniqueId());
+                chunkLockManager.unlockChunk(currentChunk, teamId);
                 progressTracker.incrementUnlockedChunks(player.getUniqueId());
                 
                 player.sendMessage(Component.text("✓ Force unlocked chunk").color(NamedTextColor.GREEN));

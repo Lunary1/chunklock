@@ -384,7 +384,8 @@ public class PlayerListener implements Listener {
         Location centerSpawn = getCenterLocationOfChunk(startChunk);
         
         // Unlock the starting chunk
-        chunkLockManager.unlockChunk(startChunk);
+        UUID teamId = chunkLockManager.getTeamManager().getTeamLeader(player.getUniqueId());
+        chunkLockManager.unlockChunk(startChunk, teamId);
         
         // Set player data and teleport to center
         playerDataManager.setChunk(player.getUniqueId(), centerSpawn);

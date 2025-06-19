@@ -322,6 +322,8 @@ team-settings:
   team-cost-multiplier: 0.15 # Additional cost per extra team member (15%)
   base-team-cost: 1.0 # Base multiplier for teams (1.0 = no change)
   max-cost-multiplier: 3.0 # Cap on total cost multiplier
+  contested-cost-multiplier: 3.0 # Cost multiplier when claiming enemy chunks
+  max-contested-claims-per-day: 5 # Limit on contested claims per team each day
 
   # Team Features
   enable-team-chat: true # Allow team chat functionality

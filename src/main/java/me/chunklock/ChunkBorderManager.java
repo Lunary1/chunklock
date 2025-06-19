@@ -33,6 +33,8 @@ public class ChunkBorderManager implements Listener {
     private final ChunkLockManager chunkLockManager;
     private final UnlockGui unlockGui;
     private final JavaPlugin plugin;
+    private final TeamManager teamManager;
+    private final PlayerProgressTracker progressTracker;
     
     // Store border blocks per player: Player UUID -> Location -> Original BlockData
     private final Map<UUID, Map<Location, BlockData>> playerBorders = new ConcurrentHashMap<>();
@@ -54,6 +56,8 @@ public class ChunkBorderManager implements Listener {
     private boolean restoreOriginalBlocks;
     private boolean debugLogging;
     private Material borderMaterial;
+    private Material ownBorderMaterial = Material.LIME_STAINED_GLASS;
+    private Material enemyBorderMaterial = Material.RED_STAINED_GLASS;
     private boolean skipValuableOres;
     private boolean skipFluids;
     private boolean skipImportantBlocks;
@@ -61,9 +65,11 @@ public class ChunkBorderManager implements Listener {
     private int maxBorderUpdatesPerTick = 10;
     private final Queue<Runnable> updateQueue = new ConcurrentLinkedQueue<>();
 
-    public ChunkBorderManager(ChunkLockManager chunkLockManager, UnlockGui unlockGui) {
+    public ChunkBorderManager(ChunkLockManager chunkLockManager, UnlockGui unlockGui, TeamManager teamManager, PlayerProgressTracker progressTracker) {
         this.chunkLockManager = chunkLockManager;
         this.unlockGui = unlockGui;
+        this.teamManager = teamManager;
+        this.progressTracker = progressTracker;
         this.plugin = ChunklockPlugin.getInstance();
 
         loadConfiguration();
@@ -585,12 +591,21 @@ public class ChunkBorderManager implements Listener {
                 try {
                     Block block = loc.getBlock();
                     if (shouldSkipBlock(block)) continue;
-                    if (block.getType() == borderMaterial) continue;
+                    if (block.getType() == borderMaterial || block.getType() == ownBorderMaterial || block.getType() == enemyBorderMaterial) continue;
 
                     playerMap.put(loc, block.getBlockData().clone());
                     // Map this border block to the locked chunk it protects
                     borderToChunk.put(loc, lockedCoord);
-                    block.setType(borderMaterial);
+
+                    Chunk neighbor = chunk.getWorld().getChunkAt(lockedX, lockedZ);
+                    UUID owner = chunkLockManager.getChunkOwner(neighbor);
+                    UUID teamId = teamManager.getTeamLeader(player.getUniqueId());
+                    Material mat = borderMaterial;
+                    if (owner != null) {
+                        mat = owner.equals(teamId) ? ownBorderMaterial : enemyBorderMaterial;
+                    }
+
+                    block.setType(mat);
                 } catch (Exception e) {
                     if (debugLogging) {
                         plugin.getLogger().log(Level.FINE, "Error placing border block at " + loc, e);
@@ -786,7 +801,11 @@ public class ChunkBorderManager implements Listener {
         }
         
         Block clickedBlock = event.getClickedBlock();
-        if (clickedBlock == null || clickedBlock.getType() != borderMaterial) {
+        if (clickedBlock == null) {
+            return;
+        }
+        Material type = clickedBlock.getType();
+        if (type != borderMaterial && type != ownBorderMaterial && type != enemyBorderMaterial) {
             return;
         }
 
@@ -807,6 +826,17 @@ public class ChunkBorderManager implements Listener {
             
             // Verify the chunk is still locked
             if (chunkLockManager.isLocked(chunk)) {
+                UUID teamId = teamManager.getTeamLeader(player.getUniqueId());
+                boolean contested = chunkLockManager.isContestedChunk(chunk, teamId);
+
+                if (contested) {
+                    int maxClaims = chunkLockManager.getMaxContestedClaimsPerDay();
+                    if (!progressTracker.canClaimContested(teamId, maxClaims)) {
+                        player.sendMessage("§cYour team reached the contested claim limit for today.");
+                        return;
+                    }
+                }
+
                 unlockGui.open(player, chunk);
 
                 // Show chunk info
@@ -1007,6 +1037,39 @@ public class ChunkBorderManager implements Listener {
         }
 
         ChunkCoordinate coord = borderToChunk.get(loc);
+        if (coord == null) return null;
+
+        World world = Bukkit.getWorld(coord.world);
+        if (world == null) return null;
+
+        try {
+            return world.getChunkAt(coord.x, coord.z);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Checks if the given block is part of any glass border.
+     */
+    public boolean isBorderBlock(Block block) {
+        if (!enabled || block == null) return false;
+
+        Material type = block.getType();
+        if (type != borderMaterial && type != ownBorderMaterial && type != enemyBorderMaterial) {
+            return false;
+        }
+
+        return borderToChunk.containsKey(block.getLocation());
+    }
+
+    /**
+     * Gets the chunk this border block protects, regardless of player.
+     */
+    public Chunk getBorderChunk(Block block) {
+        if (block == null) return null;
+
+        ChunkCoordinate coord = borderToChunk.get(block.getLocation());
         if (coord == null) return null;
 
         World world = Bukkit.getWorld(coord.world);

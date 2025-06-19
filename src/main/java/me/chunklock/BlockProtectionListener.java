@@ -20,6 +20,7 @@ import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.event.vehicle.VehicleDestroyEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
+import me.chunklock.ChunkBorderManager;
 
 import java.util.Map;
 import java.util.UUID;
@@ -34,14 +35,16 @@ public class BlockProtectionListener implements Listener {
 
     private final ChunkLockManager chunkLockManager;
     private final UnlockGui unlockGui;
+    private final ChunkBorderManager chunkBorderManager;
     
     // Rate limiting for messages
     private final Map<UUID, Long> lastProtectionWarning = new ConcurrentHashMap<>();
     private static final long WARNING_COOLDOWN_MS = 3000L; // 3 seconds between warnings
     
-    public BlockProtectionListener(ChunkLockManager chunkLockManager, UnlockGui unlockGui) {
+    public BlockProtectionListener(ChunkLockManager chunkLockManager, UnlockGui unlockGui, ChunkBorderManager chunkBorderManager) {
         this.chunkLockManager = chunkLockManager;
         this.unlockGui = unlockGui;
+        this.chunkBorderManager = chunkBorderManager;
     }
 
     /**
@@ -53,7 +56,15 @@ public class BlockProtectionListener implements Listener {
         
         Player player = event.getPlayer();
         Block block = event.getBlock();
-        
+
+        if (chunkBorderManager.isBorderBlock(block)) {
+            event.setCancelled(true);
+            Chunk target = chunkBorderManager.getBorderChunk(block);
+            if (target == null) target = block.getChunk();
+            handleProtectionViolation(player, target, "break border");
+            return;
+        }
+
         if (isBlockProtected(player, block)) {
             event.setCancelled(true);
             handleProtectionViolation(player, block.getChunk(), "break blocks");
@@ -69,7 +80,15 @@ public class BlockProtectionListener implements Listener {
         
         Player player = event.getPlayer();
         Block block = event.getBlock();
-        
+
+        if (chunkBorderManager.isBorderBlock(block)) {
+            event.setCancelled(true);
+            Chunk target = chunkBorderManager.getBorderChunk(block);
+            if (target == null) target = block.getChunk();
+            handleProtectionViolation(player, target, "place blocks");
+            return;
+        }
+
         if (isBlockProtected(player, block)) {
             event.setCancelled(true);
             handleProtectionViolation(player, block.getChunk(), "place blocks");
@@ -249,6 +268,13 @@ public class BlockProtectionListener implements Listener {
                 return false;
             }
             
+            if (chunkBorderManager.isBorderBlock(block)) {
+                Chunk protectedChunk = chunkBorderManager.getBorderChunk(block);
+                if (protectedChunk != null) {
+                    return isChunkProtected(player, protectedChunk);
+                }
+            }
+
             Chunk chunk = block.getChunk();
             return isChunkProtected(player, chunk);
             
