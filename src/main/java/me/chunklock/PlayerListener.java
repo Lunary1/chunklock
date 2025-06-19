@@ -112,7 +112,7 @@ public class PlayerListener implements Listener {
                     try {
                         ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
                         if (borderManager != null) {
-                            borderManager.updateBordersForPlayer(player);
+                            borderManager.scheduleBorderUpdate(player);
                             lastBorderUpdate.put(playerId, System.currentTimeMillis());
                         }
                     } catch (Exception e) {
@@ -206,7 +206,7 @@ public class PlayerListener implements Listener {
                     // Run the border calculation in async, then update blocks on main thread
                     Bukkit.getScheduler().runTask(ChunklockPlugin.getInstance(), () -> {
                         if (player.isOnline()) {
-                            borderManager.updateBordersForPlayer(player);
+                            borderManager.scheduleBorderUpdate(player);
                             lastBorderUpdate.put(playerId, System.currentTimeMillis());
                         }
                     });
