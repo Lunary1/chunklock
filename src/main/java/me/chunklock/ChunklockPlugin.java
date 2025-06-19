@@ -280,8 +280,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.biomeUnlockRegistry = new BiomeUnlockRegistry(this, progressTracker);
             this.playerDataManager = new PlayerDataManager(this);
             this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry);
-            this.chunkLockManager = new ChunkLockManager(chunkEvaluator, this);
-            this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker);
+            this.chunkLockManager = new ChunkLockManager(chunkEvaluator, this, teamManager);
+            this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker, teamManager);
             this.hologramManager = new HologramManager(chunkLockManager, biomeUnlockRegistry);
             this.playerListener = new PlayerListener(chunkLockManager, progressTracker, playerDataManager, unlockGui);
             
@@ -289,7 +289,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.blockProtectionListener = new BlockProtectionListener(chunkLockManager, unlockGui);
             
             // Initialize glass border system
-            this.chunkBorderManager = new ChunkBorderManager(chunkLockManager, unlockGui);
+            this.chunkBorderManager = new ChunkBorderManager(chunkLockManager, unlockGui, teamManager, progressTracker);
             
             // Set up team integration in BiomeUnlockRegistry
             try {
