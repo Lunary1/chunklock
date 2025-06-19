@@ -1049,6 +1049,39 @@ public class ChunkBorderManager implements Listener {
         }
     }
 
+    /**
+     * Checks if the given block is part of any glass border.
+     */
+    public boolean isBorderBlock(Block block) {
+        if (!enabled || block == null) return false;
+
+        Material type = block.getType();
+        if (type != borderMaterial && type != ownBorderMaterial && type != enemyBorderMaterial) {
+            return false;
+        }
+
+        return borderToChunk.containsKey(block.getLocation());
+    }
+
+    /**
+     * Gets the chunk this border block protects, regardless of player.
+     */
+    public Chunk getBorderChunk(Block block) {
+        if (block == null) return null;
+
+        ChunkCoordinate coord = borderToChunk.get(block.getLocation());
+        if (coord == null) return null;
+
+        World world = Bukkit.getWorld(coord.world);
+        if (world == null) return null;
+
+        try {
+            return world.getChunkAt(coord.x, coord.z);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     /** Direction for chunk borders */
     private enum BorderDirection {
         NORTH(0, -1),

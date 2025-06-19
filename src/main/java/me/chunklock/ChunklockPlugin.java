@@ -284,12 +284,12 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker, teamManager);
             this.hologramManager = new HologramManager(chunkLockManager, biomeUnlockRegistry);
             this.playerListener = new PlayerListener(chunkLockManager, progressTracker, playerDataManager, unlockGui);
-            
-            // Initialize block protection listener
-            this.blockProtectionListener = new BlockProtectionListener(chunkLockManager, unlockGui);
-            
+
             // Initialize glass border system
             this.chunkBorderManager = new ChunkBorderManager(chunkLockManager, unlockGui, teamManager, progressTracker);
+
+            // Initialize block protection listener
+            this.blockProtectionListener = new BlockProtectionListener(chunkLockManager, unlockGui, chunkBorderManager);
             
             // Set up team integration in BiomeUnlockRegistry
             try {
