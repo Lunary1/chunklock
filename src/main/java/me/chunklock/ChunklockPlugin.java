@@ -354,7 +354,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
 
     private boolean registerCommands() {
         try {
-            var chunklockCmd = new ChunklockCommand(progressTracker, chunkLockManager, unlockGui, teamManager, teamCommandHandler);
+            // 🔧 FIX: Pass BiomeUnlockRegistry to ChunklockCommand constructor
+            var chunklockCmd = new ChunklockCommand(progressTracker, chunkLockManager, unlockGui, teamManager, teamCommandHandler, biomeUnlockRegistry);
             
             if (getCommand("chunklock") != null) {
                 getCommand("chunklock").setExecutor(chunklockCmd);

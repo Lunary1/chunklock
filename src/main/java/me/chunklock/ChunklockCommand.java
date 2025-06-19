@@ -5,12 +5,15 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import me.chunklock.teams.BasicTeamCommandHandler;
 
 import java.util.ArrayList;
@@ -18,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 import java.util.logging.Level;
 
 public class ChunklockCommand implements CommandExecutor, TabCompleter {
@@ -27,6 +31,9 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
     private final UnlockGui unlockGui;
     private final TeamManager teamManager;
     
+    // 🔧 FIX: Add BiomeUnlockRegistry as a field
+    private final BiomeUnlockRegistry biomeUnlockRegistry;
+    
     // Enhanced team command handler
     private final BasicTeamCommandHandler teamCommandHandler;
     
@@ -35,14 +42,16 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
     private static final int MAX_RESET_ATTEMPTS = 100;
     private static final int MAX_RESET_SCORE = 25;
 
+    // 🔧 FIX: Add BiomeUnlockRegistry to constructor
     public ChunklockCommand(PlayerProgressTracker progressTracker, ChunkLockManager chunkLockManager,
                            UnlockGui unlockGui, TeamManager teamManager, 
-                           BasicTeamCommandHandler teamCommandHandler) {
+                           BasicTeamCommandHandler teamCommandHandler, BiomeUnlockRegistry biomeUnlockRegistry) {
         this.progressTracker = progressTracker;
         this.chunkLockManager = chunkLockManager;
         this.unlockGui = unlockGui;
         this.teamManager = teamManager;
         this.teamCommandHandler = teamCommandHandler;
+        this.biomeUnlockRegistry = biomeUnlockRegistry; // 🔧 FIX: Store the reference
     }
 
     @Override
@@ -342,6 +351,64 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 }
             }
 
+            // 🔧 NEW: Border testing commands
+            case "bordertest" -> {
+                if (!sender.hasPermission("chunklock.admin")) {
+                    sender.sendMessage(Component.text("You don't have permission to use this command.").color(NamedTextColor.RED));
+                    return true;
+                }
+                
+                if (!(sender instanceof Player player)) {
+                    sender.sendMessage(Component.text("Only players can test borders.").color(NamedTextColor.RED));
+                    return true;
+                }
+                
+                handleBorderTest(player, args);
+            }
+
+            case "borderdebug" -> {
+                if (!sender.hasPermission("chunklock.admin")) {
+                    sender.sendMessage(Component.text("You don't have permission to use this command.").color(NamedTextColor.RED));
+                    return true;
+                }
+                
+                if (!(sender instanceof Player player)) {
+                    sender.sendMessage(Component.text("Only players can debug borders.").color(NamedTextColor.RED));
+                    return true;
+                }
+                
+                handleBorderDebug(player);
+            }
+
+            // 🔧 NEW: GUI debugging commands
+            case "guidebug" -> {
+                if (!sender.hasPermission("chunklock.admin")) {
+                    sender.sendMessage(Component.text("You don't have permission to use this command.").color(NamedTextColor.RED));
+                    return true;
+                }
+                
+                if (!(sender instanceof Player player)) {
+                    sender.sendMessage(Component.text("Only players can debug GUI.").color(NamedTextColor.RED));
+                    return true;
+                }
+                
+                handleGuiDebug(player, args);
+            }
+
+            case "testunlock" -> {
+                if (!sender.hasPermission("chunklock.admin")) {
+                    sender.sendMessage(Component.text("You don't have permission to use this command.").color(NamedTextColor.RED));
+                    return true;
+                }
+                
+                if (!(sender instanceof Player player)) {
+                    sender.sendMessage(Component.text("Only players can test unlock.").color(NamedTextColor.RED));
+                    return true;
+                }
+                
+                handleTestUnlock(player, args);
+            }
+
             case "spawn" -> {
                 if (!(sender instanceof Player player)) {
                     sender.sendMessage(Component.text("Only players can use this command.").color(NamedTextColor.RED));
@@ -397,15 +464,21 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(Component.text("Chunklock Commands:").color(NamedTextColor.AQUA));
                 sender.sendMessage(Component.text("/chunklock status - View your unlocked chunks").color(NamedTextColor.GRAY));
                 sender.sendMessage(Component.text("/chunklock team - Team management commands").color(NamedTextColor.GRAY));
-                sender.sendMessage(Component.text("/chunklock reset <player> - Admin: Complete reset (progress + chunks)").color(NamedTextColor.GRAY));
-                sender.sendMessage(Component.text("/chunklock bypass [player] - Admin: Toggle bypass mode").color(NamedTextColor.GRAY));
                 sender.sendMessage(Component.text("/chunklock unlock - Attempt to unlock your current chunk").color(NamedTextColor.GRAY));
                 sender.sendMessage(Component.text("/chunklock spawn - Return to your starting chunk center").color(NamedTextColor.GRAY));
                 if (sender.hasPermission("chunklock.admin")) {
+                    sender.sendMessage(Component.text("=== Admin Commands ===").color(NamedTextColor.YELLOW));
+                    sender.sendMessage(Component.text("/chunklock reset <player> - Admin: Complete reset (progress + chunks)").color(NamedTextColor.GRAY));
+                    sender.sendMessage(Component.text("/chunklock bypass [player] - Admin: Toggle bypass mode").color(NamedTextColor.GRAY));
                     sender.sendMessage(Component.text("/chunklock reload - Admin: Reload plugin configuration").color(NamedTextColor.GRAY));
                     sender.sendMessage(Component.text("/chunklock debug [list] - Admin: Show chunk debug info").color(NamedTextColor.GRAY));
                     sender.sendMessage(Component.text("/chunklock borders <refresh [player]|info|clear> - Admin: Manage glass borders").color(NamedTextColor.GRAY));
                     sender.sendMessage(Component.text("/chunklock resetall confirm - Admin: Lock all chunks").color(NamedTextColor.GRAY));
+                    sender.sendMessage(Component.text("=== Debug Commands ===").color(NamedTextColor.YELLOW));
+                    sender.sendMessage(Component.text("/chunklock bordertest <place|clear|check> - Test border system").color(NamedTextColor.GRAY));
+                    sender.sendMessage(Component.text("/chunklock borderdebug - Debug border state").color(NamedTextColor.GRAY));
+                    sender.sendMessage(Component.text("/chunklock guidebug [open] - Debug unlock GUI").color(NamedTextColor.GRAY));
+                    sender.sendMessage(Component.text("/chunklock testunlock [give|force] - Test unlock system").color(NamedTextColor.GRAY));
                 }
             }
 
@@ -415,6 +488,286 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
         }
 
         return true;
+    }
+
+    // 🔧 NEW: Border testing methods
+    private void handleBorderTest(Player player, String[] args) {
+        try {
+            ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
+            
+            if (args.length < 2) {
+                player.sendMessage(Component.text("Usage: /chunklock bordertest <place|clear|check>").color(NamedTextColor.YELLOW));
+                return;
+            }
+            
+            String action = args[1].toLowerCase();
+            
+            switch (action) {
+                case "place" -> {
+                    // Force place borders for testing
+                    borderManager.updateBordersForPlayer(player);
+                    player.sendMessage(Component.text("✓ Forced border placement around your position.").color(NamedTextColor.GREEN));
+                }
+                
+                case "clear" -> {
+                    // Clear all borders for player
+                    borderManager.removeBordersForPlayer(player);
+                    player.sendMessage(Component.text("✓ Cleared all your borders.").color(NamedTextColor.GREEN));
+                }
+                
+                case "check" -> {
+                    // Check block player is looking at
+                    Block targetBlock = player.getTargetBlockExact(5);
+                    if (targetBlock == null) {
+                        player.sendMessage(Component.text("Look at a block to check.").color(NamedTextColor.RED));
+                        return;
+                    }
+                    
+                    debugBorderBlock(player, targetBlock);
+                }
+                
+                default -> {
+                    player.sendMessage(Component.text("Usage: /chunklock bordertest <place|clear|check>").color(NamedTextColor.YELLOW));
+                }
+            }
+            
+        } catch (Exception e) {
+            player.sendMessage(Component.text("Error in border test: " + e.getMessage()).color(NamedTextColor.RED));
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Border test error", e);
+        }
+    }
+
+    private void handleBorderDebug(Player player) {
+        try {
+            ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
+            var stats = borderManager.getBorderStats();
+            
+            player.sendMessage(Component.text("=== Border System Debug ===").color(NamedTextColor.AQUA));
+            player.sendMessage(Component.text("System enabled: " + stats.get("enabled")).color(NamedTextColor.YELLOW));
+            player.sendMessage(Component.text("Border material: " + stats.get("borderMaterial")).color(NamedTextColor.YELLOW));
+            player.sendMessage(Component.text("Your UUID: " + player.getUniqueId()).color(NamedTextColor.GRAY));
+            
+            // Check if player has borders using reflection
+            try {
+                java.lang.reflect.Field playerBordersField = borderManager.getClass().getDeclaredField("playerBorders");
+                playerBordersField.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                java.util.Map<UUID, java.util.Map<org.bukkit.Location, org.bukkit.block.data.BlockData>> playerBorders = 
+                    (java.util.Map<UUID, java.util.Map<org.bukkit.Location, org.bukkit.block.data.BlockData>>) playerBordersField.get(borderManager);
+                
+                UUID playerId = player.getUniqueId();
+                if (playerBorders.containsKey(playerId)) {
+                    int borderCount = playerBorders.get(playerId).size();
+                    player.sendMessage(Component.text("Your border blocks: " + borderCount).color(NamedTextColor.GREEN));
+                    
+                    // Show first few border locations
+                    int shown = 0;
+                    for (org.bukkit.Location loc : playerBorders.get(playerId).keySet()) {
+                        if (shown >= 5) break;
+                        player.sendMessage(Component.text("  - " + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ())
+                            .color(NamedTextColor.WHITE));
+                        shown++;
+                    }
+                    if (borderCount > 5) {
+                        player.sendMessage(Component.text("  ... and " + (borderCount - 5) + " more").color(NamedTextColor.GRAY));
+                    }
+                } else {
+                    player.sendMessage(Component.text("You have no border blocks").color(NamedTextColor.RED));
+                }
+            } catch (Exception e) {
+                player.sendMessage(Component.text("Could not access border data: " + e.getMessage()).color(NamedTextColor.RED));
+            }
+            
+            // Check current chunk status
+            org.bukkit.Chunk currentChunk = player.getLocation().getChunk();
+            chunkLockManager.initializeChunk(currentChunk, player.getUniqueId());
+            boolean isLocked = chunkLockManager.isLocked(currentChunk);
+            
+            player.sendMessage(Component.text("Current chunk (" + currentChunk.getX() + "," + currentChunk.getZ() + "): " + 
+                (isLocked ? "LOCKED" : "UNLOCKED")).color(isLocked ? NamedTextColor.RED : NamedTextColor.GREEN));
+            
+        } catch (Exception e) {
+            player.sendMessage(Component.text("Error in border debug: " + e.getMessage()).color(NamedTextColor.RED));
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Border debug error", e);
+        }
+    }
+
+    private void debugBorderBlock(Player player, Block block) {
+        ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
+        org.bukkit.Location location = block.getLocation();
+        
+        player.sendMessage(Component.text("=== Block Debug ===").color(NamedTextColor.AQUA));
+        player.sendMessage(Component.text("Location: " + location.getBlockX() + "," + location.getBlockY() + "," + location.getBlockZ())
+            .color(NamedTextColor.WHITE));
+        player.sendMessage(Component.text("Block Type: " + block.getType()).color(NamedTextColor.WHITE));
+        
+        try {
+            // Check border material using reflection
+            java.lang.reflect.Field borderMaterialField = borderManager.getClass().getDeclaredField("borderMaterial");
+            borderMaterialField.setAccessible(true);
+            org.bukkit.Material expectedMaterial = (org.bukkit.Material) borderMaterialField.get(borderManager);
+            
+            player.sendMessage(Component.text("Expected Material: " + expectedMaterial).color(NamedTextColor.WHITE));
+            player.sendMessage(Component.text("Material Match: " + (block.getType() == expectedMaterial))
+                .color(block.getType() == expectedMaterial ? NamedTextColor.GREEN : NamedTextColor.RED));
+            
+            // Check chunk mapping
+            java.lang.reflect.Field borderToChunkField = borderManager.getClass().getDeclaredField("borderToChunk");
+            borderToChunkField.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            java.util.Map<org.bukkit.Location, Object> borderToChunk = 
+                (java.util.Map<org.bukkit.Location, Object>) borderToChunkField.get(borderManager);
+            
+            Object chunkCoord = borderToChunk.get(location);
+            player.sendMessage(Component.text("Chunk Mapping: " + (chunkCoord != null ? chunkCoord.toString() : "NONE"))
+                .color(chunkCoord != null ? NamedTextColor.GREEN : NamedTextColor.RED));
+            
+            // Check if any player has this border
+            java.lang.reflect.Field playerBordersField = borderManager.getClass().getDeclaredField("playerBorders");
+            playerBordersField.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            java.util.Map<java.util.UUID, java.util.Map<org.bukkit.Location, org.bukkit.block.data.BlockData>> playerBorders = 
+                (java.util.Map<java.util.UUID, java.util.Map<org.bukkit.Location, org.bukkit.block.data.BlockData>>) playerBordersField.get(borderManager);
+            
+            int playersWithBorder = 0;
+            for (java.util.Map<org.bukkit.Location, org.bukkit.block.data.BlockData> borders : playerBorders.values()) {
+                if (borders.containsKey(location)) {
+                    playersWithBorder++;
+                }
+            }
+            
+            player.sendMessage(Component.text("Players with this border: " + playersWithBorder)
+                .color(playersWithBorder > 0 ? NamedTextColor.GREEN : NamedTextColor.RED));
+            
+        } catch (Exception e) {
+            player.sendMessage(Component.text("Error accessing border data: " + e.getMessage()).color(NamedTextColor.RED));
+        }
+    }
+
+    // 🔧 NEW: GUI debugging methods
+    private void handleGuiDebug(Player player, String[] args) {
+        try {
+            player.sendMessage(Component.text("=== UnlockGui Debug ===").color(NamedTextColor.AQUA));
+            
+            // Check current chunk status
+            Chunk currentChunk = player.getLocation().getChunk();
+            chunkLockManager.initializeChunk(currentChunk, player.getUniqueId());
+            boolean isLocked = chunkLockManager.isLocked(currentChunk);
+            
+            player.sendMessage(Component.text("Current chunk locked: " + isLocked)
+                .color(isLocked ? NamedTextColor.RED : NamedTextColor.GREEN));
+            
+            if (isLocked) {
+                var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), currentChunk);
+                // 🔧 FIX: Use stored biomeUnlockRegistry field instead of getInstance()
+                var requirement = biomeUnlockRegistry.calculateRequirement(player, evaluation.biome, evaluation.score);
+                
+                player.sendMessage(Component.text("Required: " + requirement.amount() + "x " + requirement.material())
+                    .color(NamedTextColor.YELLOW));
+                
+                int playerHas = countPlayerItems(player, requirement.material());
+                player.sendMessage(Component.text("You have: " + playerHas)
+                    .color(playerHas >= requirement.amount() ? NamedTextColor.GREEN : NamedTextColor.RED));
+            }
+            
+            // Test GUI opening
+            if (args.length > 1 && args[1].equalsIgnoreCase("open")) {
+                if (isLocked) {
+                    player.sendMessage(Component.text("Opening unlock GUI for current chunk...").color(NamedTextColor.YELLOW));
+                    unlockGui.open(player, currentChunk);
+                } else {
+                    player.sendMessage(Component.text("Current chunk is not locked").color(NamedTextColor.RED));
+                }
+            }
+            
+        } catch (Exception e) {
+            player.sendMessage(Component.text("Error in GUI debug: " + e.getMessage()).color(NamedTextColor.RED));
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "GUI debug error", e);
+        }
+    }
+
+    private void handleTestUnlock(Player player, String[] args) {
+        try {
+            Chunk currentChunk = player.getLocation().getChunk();
+            chunkLockManager.initializeChunk(currentChunk, player.getUniqueId());
+            
+            if (!chunkLockManager.isLocked(currentChunk)) {
+                player.sendMessage(Component.text("Current chunk is already unlocked").color(NamedTextColor.RED));
+                return;
+            }
+            
+            var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), currentChunk);
+            // 🔧 FIX: Use stored biomeUnlockRegistry field instead of getInstance()
+            var requirement = biomeUnlockRegistry.calculateRequirement(player, evaluation.biome, evaluation.score);
+            
+            player.sendMessage(Component.text("=== Test Unlock ===").color(NamedTextColor.AQUA));
+            player.sendMessage(Component.text("Chunk: " + currentChunk.getX() + "," + currentChunk.getZ()).color(NamedTextColor.WHITE));
+            player.sendMessage(Component.text("Required: " + requirement.amount() + "x " + requirement.material()).color(NamedTextColor.YELLOW));
+            
+            if (args.length > 1 && args[1].equalsIgnoreCase("give")) {
+                // Give required items
+                ItemStack items = new ItemStack(requirement.material(), requirement.amount());
+                player.getInventory().addItem(items);
+                player.sendMessage(Component.text("✓ Given required items").color(NamedTextColor.GREEN));
+                
+            } else if (args.length > 1 && args[1].equalsIgnoreCase("force")) {
+                // Force unlock without items
+                chunkLockManager.unlockChunk(currentChunk);
+                progressTracker.incrementUnlockedChunks(player.getUniqueId());
+                
+                player.sendMessage(Component.text("✓ Force unlocked chunk").color(NamedTextColor.GREEN));
+                
+                // Update systems
+                try {
+                    ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
+                    if (borderManager != null) {
+                        borderManager.onChunkUnlocked(player, currentChunk);
+                    }
+                } catch (Exception e) {
+                    player.sendMessage(Component.text("Warning: Border update failed").color(NamedTextColor.YELLOW));
+                }
+                
+            } else {
+                int playerHas = countPlayerItems(player, requirement.material());
+                player.sendMessage(Component.text("You have: " + playerHas).color(NamedTextColor.WHITE));
+                
+                if (playerHas >= requirement.amount()) {
+                    player.sendMessage(Component.text("✓ You have enough items!").color(NamedTextColor.GREEN));
+                } else {
+                    player.sendMessage(Component.text("✗ Need " + (requirement.amount() - playerHas) + " more").color(NamedTextColor.RED));
+                }
+                
+                player.sendMessage(Component.text("Use '/chunklock testunlock give' to get items").color(NamedTextColor.GRAY));
+                player.sendMessage(Component.text("Use '/chunklock testunlock force' to force unlock").color(NamedTextColor.GRAY));
+            }
+            
+        } catch (Exception e) {
+            player.sendMessage(Component.text("Error in test unlock: " + e.getMessage()).color(NamedTextColor.RED));
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Test unlock error", e);
+        }
+    }
+
+    // Helper method for counting items (same as in UnlockGui)
+    private int countPlayerItems(Player player, Material material) {
+        int count = 0;
+        try {
+            for (ItemStack item : player.getInventory().getContents()) {
+                if (item != null && item.getType() == material) {
+                    count += item.getAmount();
+                }
+            }
+            
+            // Also check off-hand
+            ItemStack offHand = player.getInventory().getItemInOffHand();
+            if (offHand != null && offHand.getType() == material) {
+                count += offHand.getAmount();
+            }
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().warning("Error counting items for " + player.getName() + ": " + e.getMessage());
+        }
+        
+        return count;
     }
 
     private Chunk findSuitableResetChunk(Player player, World world) {
@@ -521,7 +874,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
             List<String> commands = new ArrayList<>(List.of("status", "reset", "bypass", "unlock", "spawn", "team", "help"));
 
             if (sender.hasPermission("chunklock.admin")) {
-                commands.addAll(List.of("reload", "debug", "resetall", "borders"));
+                commands.addAll(List.of("reload", "debug", "resetall", "borders", "bordertest", "borderdebug", "guidebug", "testunlock"));
             }
 
             for (String sub : commands) {
@@ -550,32 +903,71 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 2) {
-            if (args[0].equalsIgnoreCase("reset") || args[0].equalsIgnoreCase("bypass")) {
-                String prefix = args[1].toLowerCase();
-                for (Player p : Bukkit.getOnlinePlayers()) {
-                    if (p.getName().toLowerCase().startsWith(prefix)) {
-                        completions.add(p.getName());
+            String subCommand = args[0].toLowerCase();
+            String prefix = args[1].toLowerCase();
+
+            switch (subCommand) {
+                case "reset", "bypass" -> {
+                    for (Player p : Bukkit.getOnlinePlayers()) {
+                        if (p.getName().toLowerCase().startsWith(prefix)) {
+                            completions.add(p.getName());
+                        }
                     }
                 }
-            } else if (args[0].equalsIgnoreCase("debug")) {
-                completions.add("list");
-            } else if (args[0].equalsIgnoreCase("resetall")) {
-                completions.add("confirm");
-            } else if (args[0].equalsIgnoreCase("borders")) {
-                String prefix = args[1].toLowerCase();
-                List<String> borderCommands = List.of("refresh", "info", "clear");
-                for (String cmd : borderCommands) {
-                    if (cmd.startsWith(prefix)) {
-                        completions.add(cmd);
+                case "debug" -> {
+                    if ("list".startsWith(prefix)) {
+                        completions.add("list");
+                    }
+                }
+                case "resetall" -> {
+                    if ("confirm".startsWith(prefix)) {
+                        completions.add("confirm");
+                    }
+                }
+                case "borders" -> {
+                    List<String> borderCommands = List.of("refresh", "info", "clear");
+                    for (String cmd : borderCommands) {
+                        if (cmd.startsWith(prefix)) {
+                            completions.add(cmd);
+                        }
+                    }
+                }
+                case "bordertest" -> {
+                    List<String> testCommands = List.of("place", "clear", "check");
+                    for (String cmd : testCommands) {
+                        if (cmd.startsWith(prefix)) {
+                            completions.add(cmd);
+                        }
+                    }
+                }
+                case "guidebug" -> {
+                    if ("open".startsWith(prefix)) {
+                        completions.add("open");
+                    }
+                }
+                case "testunlock" -> {
+                    List<String> unlockCommands = List.of("give", "force");
+                    for (String cmd : unlockCommands) {
+                        if (cmd.startsWith(prefix)) {
+                            completions.add(cmd);
+                        }
+                    }
+                }
+                case "spawn" -> {
+                    if ("center".startsWith(prefix)) {
+                        completions.add("center");
                     }
                 }
             }
         }
         
         if (args.length == 3) {
-            if (args[0].equalsIgnoreCase("borders") && args[1].equalsIgnoreCase("refresh")) {
+            String subCommand = args[0].toLowerCase();
+            String action = args[1].toLowerCase();
+            String prefix = args[2].toLowerCase();
+
+            if (subCommand.equals("borders") && action.equals("refresh")) {
                 // Tab complete player names for borders refresh command
-                String prefix = args[2].toLowerCase();
                 for (Player p : Bukkit.getOnlinePlayers()) {
                     if (p.getName().toLowerCase().startsWith(prefix)) {
                         completions.add(p.getName());
