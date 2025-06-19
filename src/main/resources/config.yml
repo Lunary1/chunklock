@@ -353,3 +353,7 @@ glass-borders:
   skip-valuable-ores: true # Don't replace diamond/emerald ore with borders
   skip-fluids: true # Don't replace water/lava with borders
   skip-important-blocks: true # Don't replace spawners, portals, etc.
+
+performance:
+  border-update-delay: 2
+  max-border-updates-per-tick: 10
