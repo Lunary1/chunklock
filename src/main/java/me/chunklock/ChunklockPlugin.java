@@ -1,6 +1,5 @@
 package me.chunklock;
 
-import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -37,8 +36,11 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     
     // Block protection listener
     private BlockProtectionListener blockProtectionListener;
+    
+    // Glass border system
+    private ChunkBorderManager chunkBorderManager;
 
-    // NEW: Enhanced team system components
+    // Enhanced team system components
     private EnhancedTeamManager enhancedTeamManager;
     private BasicTeamCommandHandler teamCommandHandler;
 
@@ -46,7 +48,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     public void onEnable() {
         try {
             int pluginId = 19876; // Get this from bStats
-            Metrics metrics = new Metrics(this, pluginId);
+            //Metrics metrics = new Metrics(this, pluginId);
             getLogger().info("Analytics initialized successfully");
         } catch (Exception e) {
             getLogger().info("Analytics disabled or failed to initialize");
@@ -83,7 +85,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                 getLogger().warning("Failed to register some commands - some functionality may be unavailable");
             }
             
-            getLogger().info("Chunklock plugin enabled successfully with enhanced team system and protection!");
+            getLogger().info("Chunklock plugin enabled successfully with enhanced team system, protection, and glass borders!");
             
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "Critical error during plugin enable", e);
@@ -138,11 +140,15 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
      */
     public boolean performReload(CommandSender sender) {
         try {
-            sender.sendMessage(Component.text("Step 1/7: Cleaning up existing systems...").color(NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("Step 1/8: Cleaning up existing systems...").color(NamedTextColor.GRAY));
             
             // 1. Stop and cleanup existing systems
             if (hologramManager != null) {
                 hologramManager.cleanup();
+            }
+            
+            if (chunkBorderManager != null) {
+                chunkBorderManager.cleanup();
             }
             
             if (activeTickTask != null && !activeTickTask.isCancelled()) {
@@ -150,33 +156,45 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             }
 
             // 2. Save all current data before reload
-            sender.sendMessage(Component.text("Step 2/7: Saving current data...").color(NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("Step 2/8: Saving current data...").color(NamedTextColor.GRAY));
             saveAllData();
 
             // 3. Reinitialize core components
-            sender.sendMessage(Component.text("Step 3/7: Reinitializing components...").color(NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("Step 3/8: Reinitializing components...").color(NamedTextColor.GRAY));
             boolean componentsOk = initializeComponents();
             if (!componentsOk) {
                 sender.sendMessage(Component.text("Warning: Some components failed to reinitialize").color(NamedTextColor.YELLOW));
             }
 
+            // 3.5. Reload border configuration
+            sender.sendMessage(Component.text("Step 3.5/8: Reloading border configuration...").color(NamedTextColor.GRAY));
+            if (chunkBorderManager != null) {
+                chunkBorderManager.reloadConfiguration();
+            }
+
             // 4. Restart background tasks
-            sender.sendMessage(Component.text("Step 4/7: Restarting background tasks...").color(NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("Step 4/8: Restarting background tasks...").color(NamedTextColor.GRAY));
             boolean tasksOk = startTasks();
             if (!tasksOk) {
                 sender.sendMessage(Component.text("Warning: Some tasks failed to restart").color(NamedTextColor.YELLOW));
             }
 
             // 5. Restart visual effects for online players
-            sender.sendMessage(Component.text("Step 5/7: Restarting visual effects...").color(NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("Step 5/8: Restarting visual effects...").color(NamedTextColor.GRAY));
             restartVisualEffects();
 
             // 6. Restart team system
-            sender.sendMessage(Component.text("Step 6/7: Restarting team system...").color(NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("Step 6/8: Restarting team system...").color(NamedTextColor.GRAY));
             // Team system automatically reloads with component initialization
 
-            // 7. Validate reload success
-            sender.sendMessage(Component.text("Step 7/7: Validating reload...").color(NamedTextColor.GRAY));
+            // 7. Refresh borders for all players
+            sender.sendMessage(Component.text("Step 7/8: Refreshing glass borders...").color(NamedTextColor.GRAY));
+            if (chunkBorderManager != null && chunkBorderManager.isEnabled()) {
+                chunkBorderManager.refreshAllBorders();
+            }
+
+            // 8. Validate reload success
+            sender.sendMessage(Component.text("Step 8/8: Validating reload...").color(NamedTextColor.GRAY));
             
             boolean success = validateReload();
             
@@ -221,8 +239,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                            hologramManager != null &&
                            playerListener != null &&
                            blockProtectionListener != null &&
-                           enhancedTeamManager != null && // NEW: Team system validation
-                           teamCommandHandler != null; // NEW: Team command validation
+                           chunkBorderManager != null &&
+                           enhancedTeamManager != null &&
+                           teamCommandHandler != null;
             
             if (!valid) {
                 getLogger().warning("Reload validation failed: Some components are null");
@@ -232,7 +251,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             // Test a basic operation
             int totalChunks = chunkLockManager.getTotalUnlockedChunks();
             
-            // NEW: Test team system
+            // Test team system
             int totalTeams = enhancedTeamManager.getAllTeams().size();
             
             getLogger().info("Reload validation passed. Total unlocked chunks: " + totalChunks + ", Teams: " + totalTeams);
@@ -246,10 +265,10 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
 
     private boolean initializeComponents() {
         try {
-            // Initialize in dependency order - IMPORTANT: Enhanced team manager comes early
+            // Initialize in dependency order
             this.chunkValueRegistry = new ChunkValueRegistry(this);
             
-            // NEW: Initialize enhanced team system BEFORE old team manager
+            // Initialize enhanced team system
             this.enhancedTeamManager = new EnhancedTeamManager(this);
             this.teamCommandHandler = new BasicTeamCommandHandler(enhancedTeamManager);
             getLogger().info("Enhanced team system initialized successfully");
@@ -269,7 +288,10 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             // Initialize block protection listener
             this.blockProtectionListener = new BlockProtectionListener(chunkLockManager, unlockGui);
             
-            // NEW: Set up team integration in BiomeUnlockRegistry
+            // Initialize glass border system
+            this.chunkBorderManager = new ChunkBorderManager(chunkLockManager, unlockGui);
+            
+            // Set up team integration in BiomeUnlockRegistry
             try {
                 biomeUnlockRegistry.setEnhancedTeamManager(enhancedTeamManager);
                 getLogger().info("Team integration enabled in BiomeUnlockRegistry");
@@ -295,10 +317,13 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             // Register the block protection listener
             Bukkit.getPluginManager().registerEvents(blockProtectionListener, this);
             
+            // Register the glass border manager
+            Bukkit.getPluginManager().registerEvents(chunkBorderManager, this);
+            
             // Register main plugin events (join/quit handlers)
             Bukkit.getPluginManager().registerEvents(this, this);
             
-            getLogger().info("Event listeners registered successfully (including enhanced team and block protection)");
+            getLogger().info("Event listeners registered successfully (including enhanced team, block protection, and glass borders)");
             return true;
             
         } catch (Exception e) {
@@ -329,13 +354,12 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
 
     private boolean registerCommands() {
         try {
-            // MODIFIED: Pass enhanced team command handler to ChunklockCommand
             var chunklockCmd = new ChunklockCommand(progressTracker, chunkLockManager, unlockGui, teamManager, teamCommandHandler);
             
             if (getCommand("chunklock") != null) {
                 getCommand("chunklock").setExecutor(chunklockCmd);
                 getCommand("chunklock").setTabCompleter(chunklockCmd);
-                getLogger().info("Commands registered successfully with enhanced team support");
+                getLogger().info("Commands registered successfully with enhanced team support and border management");
                 return true;
             } else {
                 getLogger().warning("chunklock command not found in plugin.yml");
@@ -390,6 +414,11 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                 hologramManager.cleanup();
             }
             
+            // Clean up glass borders
+            if (chunkBorderManager != null) {
+                chunkBorderManager.cleanup();
+            }
+            
             // Cancel background tasks
             if (activeTickTask != null && !activeTickTask.isCancelled()) {
                 activeTickTask.cancel();
@@ -431,7 +460,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             }
         }
         
-        // NEW: Save enhanced team data
+        // Save enhanced team data
         if (enhancedTeamManager != null) {
             try {
                 enhancedTeamManager.saveTeams();
@@ -543,7 +572,15 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         return blockProtectionListener;
     }
 
-    // NEW: Enhanced team system getters
+    public ChunkBorderManager getChunkBorderManager() {
+        if (chunkBorderManager == null) {
+            getLogger().warning("ChunkBorderManager accessed before initialization");
+            throw new IllegalStateException("ChunkBorderManager not initialized");
+        }
+        return chunkBorderManager;
+    }
+
+    // Enhanced team system getters
     public EnhancedTeamManager getEnhancedTeamManager() {
         if (enhancedTeamManager == null) {
             getLogger().warning("EnhancedTeamManager accessed before initialization");
@@ -572,7 +609,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                 stats.append("Total unlocked chunks: ").append(chunkLockManager.getTotalUnlockedChunks()).append("\n");
             }
             
-            // NEW: Enhanced team statistics
+            // Enhanced team statistics
             if (enhancedTeamManager != null) {
                 var allTeams = enhancedTeamManager.getAllTeams();
                 stats.append("Total teams: ").append(allTeams.size()).append("\n");
@@ -598,6 +635,14 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             if (blockProtectionListener != null) {
                 var protectionStats = blockProtectionListener.getProtectionStats();
                 stats.append("Players with protection warning cooldown: ").append(protectionStats.get("playersWithWarningCooldown")).append("\n");
+            }
+            
+            // Glass border statistics
+            if (chunkBorderManager != null) {
+                var borderStats = chunkBorderManager.getBorderStats();
+                stats.append("Players with glass borders: ").append(borderStats.get("playersWithBorders")).append("\n");
+                stats.append("Total border blocks: ").append(borderStats.get("totalBorderBlocks")).append("\n");
+                stats.append("Border system enabled: ").append(borderStats.get("enabled")).append("\n");
             }
             
             // Memory usage

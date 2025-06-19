@@ -4,7 +4,7 @@ chunk-values:
     easy: 25 # Lower threshold for easier progression
     normal: 50
     hard: 80
-  
+
   # How valuable each biome is (higher = more difficulty)
   biomes:
     PLAINS: 5
@@ -19,7 +19,7 @@ chunk-values:
     TAIGA: 10
     SNOWY_PLAINS: 14
     DEEP_OCEAN: 18
-  
+
   # How much each block contributes to chunk score
   blocks:
     OAK_LOG: 6
@@ -48,281 +48,308 @@ biome-unlocks:
   # Complete biome costs configuration for Chunklock
   # Base costs for unlocking biomes. Each entry is material: amount.
   # Costs are balanced for progression gameplay - early biomes cheaper, rare biomes more expensive
-  
+
   # === BASIC OVERWORLD BIOMES ===
   PLAINS:
     WHEAT: 8
     HAY_BLOCK: 2
-  
+
   FOREST:
     OAK_LOG: 16
     APPLE: 4
-  
+
   BIRCH_FOREST:
     BIRCH_LOG: 16
     MUSHROOM_STEW: 4
-  
+
   DARK_FOREST:
     DARK_OAK_LOG: 16
     DARK_OAK_SAPLING: 4
-  
+
   OLD_GROWTH_BIRCH_FOREST:
     BIRCH_LOG: 24
     GOLDEN_APPLE: 1
-  
+
   OLD_GROWTH_PINE_TAIGA:
     SPRUCE_LOG: 24
     MOSSY_COBBLESTONE: 16
-  
+
   OLD_GROWTH_SPRUCE_TAIGA:
     SPRUCE_LOG: 32
     PODZOL: 16
-  
+
   # === MOUNTAIN BIOMES ===
   WINDSWEPT_HILLS:
     STONE: 40
     EMERALD: 1
-  
+
   WINDSWEPT_FOREST:
     OAK_LOG: 20
     STONE: 24
-  
+
   WINDSWEPT_GRAVELLY_HILLS:
     GRAVEL: 48
     FLINT: 8
-  
+
   MEADOW:
     GRASS: 32
     DANDELION: 16
     POPPY: 8
-  
+
   GROVE:
     SPRUCE_LOG: 20
     SNOW_BLOCK: 16
-  
+
   SNOWY_SLOPES:
     SNOW_BLOCK: 32
     ICE: 12
-  
+
   JAGGED_PEAKS:
     STONE: 64
     DIAMOND: 2
-  
+
   FROZEN_PEAKS:
     PACKED_ICE: 24
     DIAMOND: 1
-  
+
   STONY_PEAKS:
     STONE: 48
     COAL: 16
-  
+
   # === COLD BIOMES ===
   TAIGA:
     SPRUCE_LOG: 16
     SWEET_BERRIES: 8
-  
+
   SNOWY_TAIGA:
     SPRUCE_LOG: 20
     SNOW_BLOCK: 16
-  
+
   SNOWY_PLAINS:
     SNOWBALL: 20
     ICE: 8
-  
+
   ICE_SPIKES:
     PACKED_ICE: 32
     BLUE_ICE: 4
-  
+
   FROZEN_RIVER:
     ICE: 24
     COD: 8
-  
+
   FROZEN_OCEAN:
     ICE: 40
     KELP: 16
-  
+
   DEEP_FROZEN_OCEAN:
     PACKED_ICE: 32
     SALMON: 12
-  
+
   # === TEMPERATE BIOMES ===
   FLOWER_FOREST:
     OAK_LOG: 12
     ROSE_BUSH: 8
     PEONY: 4
-  
+
   RIVER:
     CLAY: 16
     COD: 8
-  
+
   BEACH:
     SAND: 20
     SEAGRASS: 12
-  
+
   STONY_SHORE:
     STONE: 32
     GRAVEL: 24
-  
+
   # === WARM/DRY BIOMES ===
   DESERT:
     SAND: 32
     CACTUS: 6
-  
+
   SAVANNA:
     ACACIA_LOG: 16
     GRASS: 20
-  
+
   SAVANNA_PLATEAU:
     ACACIA_LOG: 24
     COARSE_DIRT: 16
-  
+
   WINDSWEPT_SAVANNA:
     ACACIA_LOG: 20
     STONE: 20
-  
+
   BADLANDS:
     RED_SAND: 32
     TERRACOTTA: 16
-  
+
   WOODED_BADLANDS:
     RED_SAND: 24
     OAK_LOG: 16
     TERRACOTTA: 12
-  
+
   ERODED_BADLANDS:
     RED_SAND: 40
     RED_TERRACOTTA: 20
-  
+
   # === LUSH BIOMES ===
   JUNGLE:
     COCOA_BEANS: 16
     MELON_SLICE: 8
-  
+
   SPARSE_JUNGLE:
     JUNGLE_LOG: 12
     COCOA_BEANS: 8
-  
+
   BAMBOO_JUNGLE:
     BAMBOO: 32
     JUNGLE_LOG: 8
-  
+
   SWAMP:
     SLIME_BALL: 4
     VINE: 16
-  
+
   MANGROVE_SWAMP:
     MANGROVE_LOG: 20
     MUD: 16
     SLIME_BALL: 6
-  
+
   LUSH_CAVES:
     MOSS_BLOCK: 24
     GLOW_BERRIES: 12
-  
+
   # === OCEAN BIOMES ===
   OCEAN:
     KELP: 32
     COD: 6
-  
+
   DEEP_OCEAN:
     KELP: 40
     SALMON: 8
-  
+
   LUKEWARM_OCEAN:
     TROPICAL_FISH: 12
     SEAGRASS: 16
-  
+
   DEEP_LUKEWARM_OCEAN:
     TROPICAL_FISH: 16
     KELP: 24
-  
+
   WARM_OCEAN:
     CORAL: 16
     TROPICAL_FISH: 8
-  
+
   COLD_OCEAN:
     KELP: 36
     COD: 10
-  
+
   DEEP_COLD_OCEAN:
     KELP: 44
     COD: 12
-  
+
   # === RARE/SPECIAL BIOMES ===
   MUSHROOM_FIELDS:
     RED_MUSHROOM: 16
     BROWN_MUSHROOM: 16
-  
+
   DRIPSTONE_CAVES:
     POINTED_DRIPSTONE: 24
     COPPER_INGOT: 8
-  
+
   DEEP_DARK:
     SCULK: 32
     ECHO_SHARD: 4
     EXPERIENCE_BOTTLE: 8
-  
+
   CHERRY_GROVE:
     CHERRY_LOG: 20
     PINK_PETALS: 12
-  
+
   # === NETHER BIOMES ===
   NETHER_WASTES:
     NETHERRACK: 64
     NETHER_WART: 16
-  
+
   CRIMSON_FOREST:
     CRIMSON_STEM: 24
     CRIMSON_FUNGUS: 8
-  
+
   WARPED_FOREST:
     WARPED_STEM: 24
     WARPED_FUNGUS: 8
-  
+
   SOUL_SAND_VALLEY:
     SOUL_SAND: 32
     SOUL_SOIL: 24
     GHAST_TEAR: 2
-  
+
   BASALT_DELTAS:
     BASALT: 48
     BLACKSTONE: 24
     MAGMA_CREAM: 8
-  
+
   # === END BIOMES ===
   THE_END:
     END_STONE: 64
     ENDER_PEARL: 8
-  
+
   SMALL_END_ISLANDS:
     END_STONE: 48
     CHORUS_FRUIT: 12
-  
+
   END_MIDLANDS:
     END_STONE: 56
     SHULKER_SHELL: 2
-  
+
   END_HIGHLANDS:
     END_STONE: 72
     CHORUS_FRUIT: 16
-  
+
   END_BARRENS:
     END_STONE: 40
     PURPUR_BLOCK: 8
 team-settings:
   # Team System Configuration for Chunklock Plugin
-  
+
   # General Settings
   max-team-size: 6 # Maximum members per team
   max-teams-per-server: 100 # Server-wide team limit
   allow-solo-teams: true # Allow single-player teams
   join-request-ttl-hours: 72 # Auto-expire join requests after X hours
-  
+
   # Cost Scaling
   team-cost-multiplier: 0.15 # Additional cost per extra team member (15%)
   base-team-cost: 1.0 # Base multiplier for teams (1.0 = no change)
   max-cost-multiplier: 3.0 # Cap on total cost multiplier
-  
+
   # Team Features
   enable-team-chat: true # Allow team chat functionality
   enable-leaderboards: true # Show team leaderboards (future feature)
+
+glass-borders:
+  # Glass Border System Configuration for Chunklock Plugin
+
+  # Visual Settings
+  enabled: true # Enable/disable the glass border system
+  use-full-height: true # Use full world height (bedrock to max height)
+  border-height: 3 # How many blocks high (only used if use-full-height is false)
+  min-y-offset: -2 # Blocks below base Y level (only used if use-full-height is false)
+  max-y-offset: 4 # Blocks above base Y level (only used if use-full-height is false)
+
+  # Performance Settings
+  scan-range: 8 # How many chunks to scan around player for borders
+  update-delay: 20 # Ticks to wait before updating borders (1 second = 20 ticks)
+  update-cooldown: 2000 # Milliseconds between border updates per player (reduced for better responsiveness)
+
+  # Behavior Settings
+  show-for-bypass-players: false # Whether bypass players should see borders
+  auto-update-on-movement: true # Update borders when players change chunks
+  restore-original-blocks: true # Restore original blocks when removing borders
+  debug-logging: true # Enable debug logging for border system
+
+  # Block Settings
+  border-material: LIGHT_GRAY_STAINED_GLASS # Material to use for borders
+  skip-valuable-ores: true # Don't replace diamond/emerald ore with borders
+  skip-fluids: true # Don't replace water/lava with borders
+  skip-important-blocks: true # Don't replace spawners, portals, etc.

@@ -359,6 +359,16 @@ public class UnlockGui implements Listener {
         // Play unlock effects!
         UnlockEffectsManager.playUnlockEffects(player, state.chunk, total);
         
+        // Update glass borders after unlocking
+        try {
+            ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
+            if (borderManager != null) {
+                borderManager.onChunkUnlocked(player, state.chunk);
+            }
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().warning("Error updating borders after unlock: " + e.getMessage());
+        }
+        
         // Refresh holograms after unlocking
         try {
             HologramManager hologramManager = ChunklockPlugin.getInstance().getHologramManager();

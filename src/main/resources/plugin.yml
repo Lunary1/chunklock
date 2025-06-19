@@ -1,14 +1,14 @@
 name: Chunklock
-version: 1.2.0
+version: 1.3.0
 main: me.chunklock.ChunklockPlugin
 api-version: 1.20
 author: LunaryCraft Dev Team
-description: Advanced chunk-locking system with visual effects and strategic progression
+description: Advanced chunk-locking system with visual effects, glass borders and strategic progression
 
 commands:
   chunklock:
-    description: Chunklock main command with full functionality
-    usage: /chunklock [status|reset <player>|bypass [player]|unlock|spawn|team <player>|reload|debug|resetall|help]
+    description: Chunklock main command with full functionality including glass borders
+    usage: /chunklock [status|reset <player>|bypass [player]|unlock|spawn|team <player>|reload|debug|resetall|borders <refresh|info|clear>|help]
     permission: chunklock.use
     aliases: [cl]
 
@@ -23,7 +23,7 @@ permissions:
       chunklock.team: true
 
   chunklock.admin:
-    description: Allows access to all admin functions including reload
+    description: Allows access to all admin functions including reload and borders
     default: op
     children:
       chunklock.use: true
@@ -32,6 +32,7 @@ permissions:
       chunklock.reload: true
       chunklock.debug: true
       chunklock.resetall: true
+      chunklock.borders: true
 
   chunklock.reload:
     description: Allows reloading the plugin configuration
@@ -47,4 +48,8 @@ permissions:
 
   chunklock.debug:
     description: Allows viewing debug information
+    default: op
+
+  chunklock.borders:
+    description: Allows managing glass borders
     default: op
