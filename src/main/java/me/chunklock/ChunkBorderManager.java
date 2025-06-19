@@ -369,7 +369,8 @@ public class ChunkBorderManager implements Listener {
         if (dx == 1 && dz == 0) {
             // Locked chunk is to the EAST, place border on WEST edge of locked chunk
             int borderX = lockedChunk.x * 16; // West edge
-            for (int z = lockedChunk.z * 16; z < lockedChunk.z * 16 + 16; z++) {
+            int startZ = lockedChunk.z * 16;
+            for (int z = startZ; z < startZ + 15; z++) { // exclude south corner
                 addBorderColumn(locations, world, borderX, baseY, z);
             }
             if (debugLogging) {
@@ -378,7 +379,8 @@ public class ChunkBorderManager implements Listener {
         } else if (dx == -1 && dz == 0) {
             // Locked chunk is to the WEST, place border on EAST edge of locked chunk
             int borderX = lockedChunk.x * 16 + 15; // East edge
-            for (int z = lockedChunk.z * 16; z < lockedChunk.z * 16 + 16; z++) {
+            int startZ = lockedChunk.z * 16;
+            for (int z = startZ + 1; z < startZ + 16; z++) { // exclude north corner
                 addBorderColumn(locations, world, borderX, baseY, z);
             }
             if (debugLogging) {
@@ -387,7 +389,8 @@ public class ChunkBorderManager implements Listener {
         } else if (dx == 0 && dz == 1) {
             // Locked chunk is to the SOUTH, place border on NORTH edge of locked chunk
             int borderZ = lockedChunk.z * 16; // North edge
-            for (int x = lockedChunk.x * 16; x < lockedChunk.x * 16 + 16; x++) {
+            int startX = lockedChunk.x * 16;
+            for (int x = startX + 1; x < startX + 16; x++) { // exclude west corner
                 addBorderColumn(locations, world, x, baseY, borderZ);
             }
             if (debugLogging) {
@@ -396,23 +399,23 @@ public class ChunkBorderManager implements Listener {
         } else if (dx == 0 && dz == -1) {
             // Locked chunk is to the NORTH, place border on SOUTH edge of locked chunk
             int borderZ = lockedChunk.z * 16 + 15; // South edge
-            for (int x = lockedChunk.x * 16; x < lockedChunk.x * 16 + 16; x++) {
+            int startX = lockedChunk.x * 16;
+            for (int x = startX; x < startX + 15; x++) { // exclude east corner
                 addBorderColumn(locations, world, x, baseY, borderZ);
             }
             if (debugLogging) {
                 plugin.getLogger().info("Placing border on SOUTH edge (z=" + borderZ + ") of locked chunk " + lockedChunk.x + "," + lockedChunk.z);
             }
         } else if (Math.abs(dx) == 1 && Math.abs(dz) == 1) {
-            // Diagonal adjacency - place corner border
-            // The corner should be the corner of the locked chunk closest to the unlocked chunk
+            // Diagonal adjacency - place a single column at the corner
             int borderX, borderZ;
-            
+
             if (dx == 1 && dz == 1) {
                 // Locked chunk is SOUTHEAST, border on NORTHWEST corner
                 borderX = lockedChunk.x * 16;
                 borderZ = lockedChunk.z * 16;
             } else if (dx == 1 && dz == -1) {
-                // Locked chunk is NORTHEAST, border on SOUTHWEST corner  
+                // Locked chunk is NORTHEAST, border on SOUTHWEST corner
                 borderX = lockedChunk.x * 16;
                 borderZ = lockedChunk.z * 16 + 15;
             } else if (dx == -1 && dz == 1) {
@@ -424,21 +427,9 @@ public class ChunkBorderManager implements Listener {
                 borderX = lockedChunk.x * 16 + 15;
                 borderZ = lockedChunk.z * 16 + 15;
             }
-            
-            // For corners, place a 3x3 border area centered on the corner
-            for (int offsetX = -1; offsetX <= 1; offsetX++) {
-                for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
-                    int x = borderX + offsetX;
-                    int z = borderZ + offsetZ;
-                    
-                    // Ensure we stay within the locked chunk boundaries
-                    if (x >= lockedChunk.x * 16 && x < lockedChunk.x * 16 + 16 &&
-                        z >= lockedChunk.z * 16 && z < lockedChunk.z * 16 + 16) {
-                        addBorderColumn(locations, world, x, baseY, z);
-                    }
-                }
-            }
-            
+
+            addBorderColumn(locations, world, borderX, baseY, borderZ);
+
             if (debugLogging) {
                 plugin.getLogger().info("Placing diagonal border at corner (" + borderX + "," + borderZ + ") of locked chunk " + lockedChunk.x + "," + lockedChunk.z);
             }
