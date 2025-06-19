@@ -505,7 +505,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
             switch (action) {
                 case "place" -> {
                     // Force place borders for testing
-                    borderManager.updateBordersForPlayer(player);
+                    borderManager.scheduleBorderUpdate(player);
                     player.sendMessage(Component.text("✓ Forced border placement around your position.").color(NamedTextColor.GREEN));
                 }
                 
