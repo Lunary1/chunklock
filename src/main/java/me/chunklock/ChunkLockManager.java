@@ -20,13 +20,22 @@ public class ChunkLockManager {
     private final Map<String, ChunkData> chunkDataMap = new HashMap<>();
     private final ChunkEvaluator chunkEvaluator;
     private final JavaPlugin plugin;
+    private final TeamManager teamManager;
     private final File file;
     private FileConfiguration config;
 
-    public ChunkLockManager(ChunkEvaluator chunkEvaluator, JavaPlugin plugin) {
+    private final double contestedCostMultiplier;
+    private final int maxContestedClaimsPerDay;
+
+    public ChunkLockManager(ChunkEvaluator chunkEvaluator, JavaPlugin plugin, TeamManager teamManager) {
         this.chunkEvaluator = chunkEvaluator;
         this.plugin = plugin;
+        this.teamManager = teamManager;
         this.file = new File(plugin.getDataFolder(), "data.yml");
+
+        this.contestedCostMultiplier = plugin.getConfig().getDouble("contested-cost-multiplier", 3.0);
+        this.maxContestedClaimsPerDay = plugin.getConfig().getInt("max-contested-claims-per-day", 5);
+
         loadAll();
     }
 
@@ -38,14 +47,37 @@ public class ChunkLockManager {
         return getChunkData(chunk).getDifficulty();
     }
 
+    public UUID getChunkOwner(Chunk chunk) {
+        return getChunkData(chunk).getOwnerId();
+    }
+
+    public boolean isContestedChunk(Chunk chunk, UUID teamId) {
+        UUID owner = getChunkOwner(chunk);
+        return owner != null && !owner.equals(teamId);
+    }
+
+    public double getContestedCostMultiplier() {
+        return contestedCostMultiplier;
+    }
+
+    public int getMaxContestedClaimsPerDay() {
+        return maxContestedClaimsPerDay;
+    }
+
     public void lockChunk(Chunk chunk, Difficulty difficulty) {
         String key = getChunkKey(chunk);
         chunkDataMap.put(key, new ChunkData(true, difficulty));
     }
 
-    public void unlockChunk(Chunk chunk) {
+    public void unlockChunk(Chunk chunk, UUID ownerId) {
         ChunkData data = getChunkData(chunk);
         data.setLocked(false);
+        data.setOwnerId(ownerId);
+    }
+
+    // Backwards compatibility
+    public void unlockChunk(Chunk chunk) {
+        unlockChunk(chunk, null);
     }
 
     /**
@@ -147,9 +179,11 @@ public class ChunkLockManager {
                 boolean locked = section.getBoolean(key + ".locked", true);
                 String diffStr = section.getString(key + ".difficulty", "NORMAL");
                 Difficulty diff = Difficulty.valueOf(diffStr.toUpperCase());
+                String ownerStr = section.getString(key + ".owner", null);
+                UUID owner = ownerStr != null ? UUID.fromString(ownerStr) : null;
 
                 String mapKey = world + ":" + x + ":" + z;
-                chunkDataMap.put(mapKey, new ChunkData(locked, diff));
+                chunkDataMap.put(mapKey, new ChunkData(locked, diff, owner));
             } catch (Exception e) {
                 plugin.getLogger().warning("Failed to load chunk entry: " + key);
             }
@@ -185,6 +219,11 @@ public class ChunkLockManager {
             section.set(base + ".z", z);
             section.set(base + ".locked", entry.getValue().isLocked());
             section.set(base + ".difficulty", entry.getValue().getDifficulty().name());
+            if (entry.getValue().getOwnerId() != null) {
+                section.set(base + ".owner", entry.getValue().getOwnerId().toString());
+            } else {
+                section.set(base + ".owner", null);
+            }
         }
 
         try {
@@ -235,5 +274,9 @@ public class ChunkLockManager {
 
     public boolean isBypassing(Player player) {
         return bypassingPlayers.contains(player.getUniqueId());
+    }
+
+    public TeamManager getTeamManager() {
+        return teamManager;
     }
 }

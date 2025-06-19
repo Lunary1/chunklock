@@ -1,5 +1,6 @@
 package me.chunklock;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -24,6 +25,10 @@ public class PlayerListener implements Listener {
     // Thread-safe collections for better performance
     private final Map<UUID, Long> lastWarned = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastUnlockAttempt = new ConcurrentHashMap<>();
+    
+    // Track last border update per player to avoid excessive updates
+    private final Map<UUID, Long> lastBorderUpdate = new ConcurrentHashMap<>();
+    private static final long BORDER_UPDATE_COOLDOWN_MS = 5000L; // 5 seconds between border updates
     
     // FIX: Track if player is truly new (first time joining)
     private final Set<UUID> newPlayers = new HashSet<>();
@@ -56,6 +61,7 @@ public class PlayerListener implements Listener {
             // Clear any stale data
             lastWarned.remove(playerId);
             lastUnlockAttempt.remove(playerId);
+            lastBorderUpdate.remove(playerId); // Clear border update tracking
             
             if (!playerDataManager.hasChunk(playerId)) {
                 // FIX: Mark as new player and assign starting chunk
@@ -99,6 +105,22 @@ public class PlayerListener implements Listener {
                     assignStartingChunk(player);
                 }
             }
+            
+            // Update glass borders after a delay (allow other systems to initialize first)
+            Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
+                if (player.isOnline()) {
+                    try {
+                        ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
+                        if (borderManager != null) {
+                            borderManager.scheduleBorderUpdate(player);
+                            lastBorderUpdate.put(playerId, System.currentTimeMillis());
+                        }
+                    } catch (Exception e) {
+                        ChunklockPlugin.getInstance().getLogger().warning("Error updating borders for joined player " + player.getName() + ": " + e.getMessage());
+                    }
+                }
+            }, 60L); // 3 second delay
+            
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Critical error in player join handling", e);
         }
@@ -115,6 +137,7 @@ public class PlayerListener implements Listener {
             // Clean up player-specific data to prevent memory leaks
             lastWarned.remove(playerId);
             lastUnlockAttempt.remove(playerId);
+            lastBorderUpdate.remove(playerId); // Clean up border tracking
             // FIX: Don't remove from newPlayers here - let it be handled on next join
             
             // Notify TickTask to cleanup player data
@@ -127,6 +150,16 @@ public class PlayerListener implements Listener {
             HologramManager hologramManager = ChunklockPlugin.getInstance().getHologramManager();
             if (hologramManager != null) {
                 hologramManager.stopHologramDisplay(player);
+            }
+            
+            // Clean up glass borders
+            try {
+                ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
+                if (borderManager != null) {
+                    borderManager.removeBordersForPlayer(player);
+                }
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().warning("Error cleaning up borders for leaving player " + player.getName() + ": " + e.getMessage());
             }
             
             ChunklockPlugin.getInstance().getLogger().fine("Cleaned up data for leaving player: " + player.getName());
@@ -150,6 +183,38 @@ public class PlayerListener implements Listener {
         
         lastUnlockAttempt.put(player.getUniqueId(), now);
         return true;
+    }
+
+    /**
+     * Updates borders when player moves to a different chunk (rate limited)
+     */
+    private void updateBordersOnChunkChange(Player player) {
+        UUID playerId = player.getUniqueId();
+        long now = System.currentTimeMillis();
+        Long lastUpdate = lastBorderUpdate.get(playerId);
+        
+        // Rate limit border updates to avoid performance issues
+        if (lastUpdate != null && (now - lastUpdate) < BORDER_UPDATE_COOLDOWN_MS) {
+            return;
+        }
+        
+        try {
+            ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
+            if (borderManager != null && borderManager.isAutoUpdateOnMovementEnabled()) {
+                // Update borders asynchronously to avoid blocking player movement
+                Bukkit.getScheduler().runTaskAsynchronously(ChunklockPlugin.getInstance(), () -> {
+                    // Run the border calculation in async, then update blocks on main thread
+                    Bukkit.getScheduler().runTask(ChunklockPlugin.getInstance(), () -> {
+                        if (player.isOnline()) {
+                            borderManager.scheduleBorderUpdate(player);
+                            lastBorderUpdate.put(playerId, System.currentTimeMillis());
+                        }
+                    });
+                });
+            }
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().fine("Error updating borders on chunk change for " + player.getName() + ": " + e.getMessage());
+        }
     }
 
     /**
@@ -319,7 +384,8 @@ public class PlayerListener implements Listener {
         Location centerSpawn = getCenterLocationOfChunk(startChunk);
         
         // Unlock the starting chunk
-        chunkLockManager.unlockChunk(startChunk);
+        UUID teamId = chunkLockManager.getTeamManager().getTeamLeader(player.getUniqueId());
+        chunkLockManager.unlockChunk(startChunk, teamId);
         
         // Set player data and teleport to center
         playerDataManager.setChunk(player.getUniqueId(), centerSpawn);
@@ -412,6 +478,9 @@ public class PlayerListener implements Listener {
                 }
 
                 event.setCancelled(true);
+            } else {
+                // Player moved to an unlocked chunk, update borders if needed
+                updateBordersOnChunkChange(player);
             }
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error handling chunk change for player " + player.getName(), e);
@@ -457,6 +526,7 @@ public class PlayerListener implements Listener {
         Map<String, Object> stats = new HashMap<>();
         stats.put("playersWithWarningCooldown", lastWarned.size());
         stats.put("playersWithUnlockCooldown", lastUnlockAttempt.size());
+        stats.put("playersWithBorderUpdateTracking", lastBorderUpdate.size());
         stats.put("newPlayersTracked", newPlayers.size());
         return stats;
     }
