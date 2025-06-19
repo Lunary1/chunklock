@@ -46,10 +46,10 @@ on first startup. Original files are preserved with a `.old` extension.
 
 - ✅ Core functionality complete
 - ✅ Dynamic scoring system complete
-- ✅ Multiverse API integrated for personal world creation
-- 🔄 Team system planned
-- 🔄 Visual effects system planned (holograms, borders)
-- 🔄 Admin commands & QoL systems planned
+- ✅ Team system planned
+- ✅ Visual effects system planned (holograms, borders)
+- ✅ Admin commands & QoL systems planned
+- 🔄 Multiverse API integrated for personal world creation
 
 ---
 
