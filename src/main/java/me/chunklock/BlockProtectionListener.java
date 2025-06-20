@@ -20,7 +20,6 @@ import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.event.vehicle.VehicleDestroyEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
-import me.chunklock.ChunkBorderManager;
 
 import java.util.Map;
 import java.util.UUID;
@@ -392,37 +391,8 @@ public class BlockProtectionListener implements Listener {
             player.sendMessage(Component.text("✋ ", NamedTextColor.RED)
                 .append(Component.text("You cannot " + action + " in locked chunks!", NamedTextColor.RED)));
             
-            try {
-                // Show chunk info
-                var evaluation = chunkLockManager.evaluateChunk(playerId, chunk);
-                String biomeName = BiomeUnlockRegistry.getBiomeDisplayName(evaluation.biome);
-                
-                player.sendMessage(Component.text("📍 ", NamedTextColor.GRAY)
-                    .append(Component.text("Chunk " + chunk.getX() + ", " + chunk.getZ(), NamedTextColor.WHITE))
-                    .append(Component.text(" • " + biomeName, NamedTextColor.YELLOW))
-                    .append(Component.text(" • " + evaluation.difficulty, getDifficultyColor(evaluation.difficulty))));
-                
-            } catch (Exception e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
-                    "Error showing chunk info to player", e);
-                player.sendMessage(Component.text("💡 ", NamedTextColor.YELLOW)
-                    .append(Component.text("Right-click to see unlock requirements!", NamedTextColor.YELLOW)));
-            }
-            
             lastProtectionWarning.put(playerId, now);
         }
-    }
-
-    /**
-     * Get color for difficulty level
-     */
-    private NamedTextColor getDifficultyColor(Difficulty difficulty) {
-        return switch (difficulty) {
-            case EASY -> NamedTextColor.GREEN;
-            case NORMAL -> NamedTextColor.YELLOW;
-            case HARD -> NamedTextColor.RED;
-            case IMPOSSIBLE -> NamedTextColor.DARK_PURPLE;
-        };
     }
 
     /**
