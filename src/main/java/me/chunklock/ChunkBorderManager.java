@@ -16,6 +16,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
@@ -797,6 +798,11 @@ public class ChunkBorderManager implements Listener {
     public void onPlayerInteract(PlayerInteractEvent event) {
         // Only proceed if borders are enabled
         if (!enabled || event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        
+        // Only handle main hand interactions to prevent double firing
+        if (event.getHand() != EquipmentSlot.HAND) {
             return;
         }
         
