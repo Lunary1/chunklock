@@ -6,6 +6,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
@@ -26,10 +27,22 @@ public class HologramManager {
     private final BiomeUnlockRegistry biomeUnlockRegistry;
     private final Map<String, ArmorStand> activeHolograms = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> playerHologramTasks = new HashMap<>();
-    
+
     private static final double HOLOGRAM_HEIGHT_OFFSET = 3.0;
     private static final int HOLOGRAM_UPDATE_INTERVAL = 20; // 1 second
     private static final int HOLOGRAM_VIEW_DISTANCE = 48; // blocks (3 chunks)
+
+    private enum WallSide {
+        NORTH(0, -1), EAST(1, 0), SOUTH(0, 1), WEST(-1, 0);
+
+        final int dx;
+        final int dz;
+
+        WallSide(int dx, int dz) {
+            this.dx = dx;
+            this.dz = dz;
+        }
+    }
 
     public HologramManager(ChunkLockManager chunkLockManager, BiomeUnlockRegistry biomeUnlockRegistry) {
         this.chunkLockManager = chunkLockManager;
@@ -115,17 +128,14 @@ private void updateHologramsForPlayer(Player player) {
                         chunkLockManager.initializeChunk(checkChunk, player.getUniqueId());
                         
                         String chunkKey = getChunkKey(checkChunk);
-                        String hologramKey = getHologramKey(player, checkChunk);
-                        
-                        // If this chunk is locked, check if it should show hologram
+
                         if (chunkLockManager.isLocked(checkChunk)) {
-                            // Check if this locked chunk is adjacent to any unlocked chunk
-                            if (isAdjacentToUnlockedChunk(player, checkChunk)) {
+                            Map<WallSide, Location> locs = getWallHologramLocations(player, checkChunk);
+                            if (!locs.isEmpty()) {
                                 var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), checkChunk);
-                                showHologramForChunk(player, checkChunk, evaluation);
+                                showHologramForChunk(player, checkChunk, evaluation, locs);
                                 chunksWithHolograms.add(chunkKey);
                             } else {
-                                // Locked but not adjacent to unlocked - remove hologram if exists
                                 removeHologramForChunk(player, checkChunk);
                             }
                         } else {
@@ -228,79 +238,136 @@ private void updateHologramsForPlayer(Player player) {
     }
 
     /**
+     * Calculates hologram spawn locations for each wall of the locked chunk that
+     * borders an unlocked chunk.
+     */
+    private Map<WallSide, Location> getWallHologramLocations(Player player, Chunk chunk) {
+        Map<WallSide, Location> map = new HashMap<>();
+        World world = chunk.getWorld();
+        int startX = chunk.getX() * 16;
+        int startZ = chunk.getZ() * 16;
+
+        for (WallSide side : WallSide.values()) {
+            try {
+                Chunk neighbor = world.getChunkAt(chunk.getX() + side.dx, chunk.getZ() + side.dz);
+                chunkLockManager.initializeChunk(neighbor, player.getUniqueId());
+                if (chunkLockManager.isLocked(neighbor)) {
+                    continue; // neighbor also locked
+                }
+
+                int x = startX + 8;
+                int z = startZ + 8;
+                if (side == WallSide.NORTH) {
+                    z = startZ;
+                } else if (side == WallSide.SOUTH) {
+                    z = startZ + 15;
+                } else if (side == WallSide.EAST) {
+                    x = startX + 15;
+                } else if (side == WallSide.WEST) {
+                    x = startX;
+                }
+
+                int y = getHighestSolidY(world, x, z) + 2;
+                if (y < 64) y = 64;
+
+                map.put(side, new Location(world, x + 0.5, y, z + 0.5));
+            } catch (Exception ignored) {
+            }
+        }
+
+        return map;
+    }
+
+    /**
+     * Finds the highest solid block at the given coordinates, ignoring glass or barrier blocks.
+     */
+    private int getHighestSolidY(World world, int x, int z) {
+        int y = world.getHighestBlockYAt(x, z);
+        if (y > world.getMaxHeight()) y = world.getMaxHeight();
+        while (y > world.getMinHeight()) {
+            Block block = world.getBlockAt(x, y, z);
+            var type = block.getType();
+            if (type != org.bukkit.Material.BARRIER && !type.name().contains("GLASS") && type.isSolid()) {
+                return y;
+            }
+            y--;
+        }
+        return world.getMinHeight();
+    }
+
+    /**
      * Shows hologram for a specific chunk
      */
-    private void showHologramForChunk(Player player, Chunk chunk, ChunkEvaluator.ChunkValueData evaluation) {
-        String hologramKey = getHologramKey(player, chunk);
-        
-        // Don't recreate if hologram already exists
-        if (activeHolograms.containsKey(hologramKey)) {
+    private void showHologramForChunk(Player player, Chunk chunk, ChunkEvaluator.ChunkValueData evaluation, Map<WallSide, Location> locations) {
+        if (locations == null || locations.isEmpty()) {
             return;
         }
 
         try {
-            Location hologramLocation = getHologramLocation(chunk);
-            
-            // Check distance to player
-            if (player.getLocation().distance(hologramLocation) > HOLOGRAM_VIEW_DISTANCE) {
-                return;
-            }
-
-            ArmorStand hologram = (ArmorStand) chunk.getWorld().spawnEntity(hologramLocation, EntityType.ARMOR_STAND);
-            
-            // Configure armor stand as hologram
-            hologram.setVisible(false);
-            hologram.setGravity(false);
-            hologram.setCanPickupItems(false);
-            hologram.setInvulnerable(true);
-            hologram.setMarker(true);
-            hologram.setSmall(true);
-            
-            // Set hologram text based on whether player has required items
             var requirement = biomeUnlockRegistry.calculateRequirement(player, evaluation.biome, evaluation.score);
             String biomeName = BiomeUnlockRegistry.getBiomeDisplayName(evaluation.biome);
             boolean hasItems = biomeUnlockRegistry.hasRequiredItems(player, evaluation.biome, evaluation.score);
-            
+
             Component hologramText;
             if (hasItems) {
-                // Player has items - show as unlockable
                 hologramText = Component.text()
                     .append(Component.text("🔓 UNLOCKABLE", NamedTextColor.GREEN, TextDecoration.BOLD))
                     .append(Component.newline())
                     .append(Component.text(biomeName, NamedTextColor.YELLOW))
                     .append(Component.newline())
                     .append(Component.text("Required: " + requirement.amount() + "x", NamedTextColor.WHITE))
-                    .append(Component.newline())
-                    .append(Component.text(requirement.material().name().replace("_", " "), NamedTextColor.AQUA))
-                    .append(Component.newline())
-                    .append(Component.text("✓ Items available!", NamedTextColor.GREEN))
-                    .build();
+                .append(Component.newline())
+                .append(Component.text(requirement.material().name().replace("_", " "), NamedTextColor.AQUA))
+                .append(Component.newline())
+                .append(Component.text("✓ Items available!", NamedTextColor.GREEN))
+                .build();
             } else {
-                // Player doesn't have items - show as locked with requirements
                 hologramText = Component.text()
                     .append(Component.text("🔒 LOCKED", NamedTextColor.RED, TextDecoration.BOLD))
                     .append(Component.newline())
                     .append(Component.text(biomeName, NamedTextColor.YELLOW))
                     .append(Component.newline())
                     .append(Component.text("Difficulty: " + evaluation.difficulty, getDifficultyColor(evaluation.difficulty)))
-                    .append(Component.newline())
-                    .append(Component.text("Need: " + requirement.amount() + "x", NamedTextColor.GRAY))
-                    .append(Component.newline())
-                    .append(Component.text(requirement.material().name().replace("_", " "), NamedTextColor.GRAY))
-                    .build();
+                .append(Component.newline())
+                .append(Component.text("Need: " + requirement.amount() + "x", NamedTextColor.GRAY))
+                .append(Component.newline())
+                .append(Component.text(requirement.material().name().replace("_", " "), NamedTextColor.GRAY))
+                .build();
+        }
+
+            for (Map.Entry<WallSide, Location> entry : locations.entrySet()) {
+                String hologramKey = getHologramKey(player, chunk, entry.getKey().name());
+
+                if (activeHolograms.containsKey(hologramKey)) {
+                    continue;
+                }
+
+            Location hologramLocation = entry.getValue();
+            if (player.getLocation().distance(hologramLocation) > HOLOGRAM_VIEW_DISTANCE) {
+                continue;
             }
-            
+
+            ArmorStand hologram = (ArmorStand) chunk.getWorld().spawnEntity(hologramLocation, EntityType.ARMOR_STAND);
+
+            hologram.setVisible(false);
+            hologram.setGravity(false);
+            hologram.setCanPickupItems(false);
+            hologram.setInvulnerable(true);
+            hologram.setMarker(true);
+            hologram.setSmall(true);
+
             hologram.customName(hologramText);
             hologram.setCustomNameVisible(true);
-            
+
             activeHolograms.put(hologramKey, hologram);
-            
-            ChunklockPlugin.getInstance().getLogger().fine("Created hologram for chunk " + 
-                chunk.getX() + "," + chunk.getZ() + " for player " + player.getName());
-            
+
+                ChunklockPlugin.getInstance().getLogger().fine("Created hologram for chunk " +
+                    chunk.getX() + "," + chunk.getZ() + " (" + entry.getKey() + ") for player " + player.getName());
+
+            }
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
-                "Error creating hologram for chunk " + chunk.getX() + "," + chunk.getZ() + 
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING,
+                "Error creating hologram for chunk " + chunk.getX() + "," + chunk.getZ() +
                 " for player " + player.getName(), e);
         }
     }
@@ -321,14 +388,17 @@ private void updateHologramsForPlayer(Player player) {
      * Removes hologram for a specific chunk
      */
     private void removeHologramForChunk(Player player, Chunk chunk) {
-        String hologramKey = getHologramKey(player, chunk);
-        ArmorStand hologram = activeHolograms.remove(hologramKey);
-        
-        if (hologram != null && hologram.isValid()) {
-            hologram.remove();
-            ChunklockPlugin.getInstance().getLogger().fine("Removed hologram for chunk " + 
-                chunk.getX() + "," + chunk.getZ() + " for player " + player.getName());
-        }
+        String prefix = getHologramKey(player, chunk);
+        activeHolograms.entrySet().removeIf(entry -> {
+            if (entry.getKey().startsWith(prefix)) {
+                ArmorStand hologram = entry.getValue();
+                if (hologram != null && hologram.isValid()) {
+                    hologram.remove();
+                }
+                return true;
+            }
+            return false;
+        });
     }
 
     /**
@@ -382,7 +452,15 @@ private void updateHologramsForPlayer(Player player) {
      * Generates unique key for player-chunk hologram
      */
     private String getHologramKey(Player player, Chunk chunk) {
-        return player.getUniqueId() + "_" + chunk.getWorld().getName() + "_" + chunk.getX() + "_" + chunk.getZ();
+        return getHologramKey(player, chunk, null);
+    }
+
+    private String getHologramKey(Player player, Chunk chunk, String suffix) {
+        String base = player.getUniqueId() + "_" + chunk.getWorld().getName() + "_" + chunk.getX() + "_" + chunk.getZ();
+        if (suffix != null) {
+            return base + "_" + suffix;
+        }
+        return base;
     }
 
     /**
