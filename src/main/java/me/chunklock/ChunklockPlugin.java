@@ -11,6 +11,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import me.chunklock.teams.EnhancedTeamManager;
 import me.chunklock.teams.BasicTeamCommandHandler;
 import me.chunklock.migration.DataMigrator;
+import me.chunklock.commands.ChunklockCommandExecutor;
+import java.util.logging.Level;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -46,52 +48,65 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        try {
-            int pluginId = 19876; // Get this from bStats
-            //Metrics metrics = new Metrics(this, pluginId);
-            getLogger().info("Analytics initialized successfully");
-        } catch (Exception e) {
-            getLogger().info("Analytics disabled or failed to initialize");
-        }
-
-        try {
-            instance = this;
-            
-            getLogger().info("Starting Chunklock plugin initialization...");
-            
-            if (!validateConfiguration()) {
-                getLogger().severe("Invalid configuration detected - disabling plugin");
-                Bukkit.getPluginManager().disablePlugin(this);
-                return;
-            }
-            
-            if (!initializeComponents()) {
-                getLogger().severe("Failed to initialize core components - disabling plugin");
-                Bukkit.getPluginManager().disablePlugin(this);
-                return;
-            }
-            
-            if (!registerEventListeners()) {
-                getLogger().severe("Failed to register event listeners - disabling plugin");
-                Bukkit.getPluginManager().disablePlugin(this);
-                return;
-            }
-            
-            if (!startTasks()) {
-                getLogger().warning("Some tasks failed to start - plugin may have reduced functionality");
-            }
-            
-            if (!registerCommands()) {
-                getLogger().warning("Failed to register some commands - some functionality may be unavailable");
-            }
-            
-            getLogger().info("Chunklock plugin enabled successfully with enhanced team system, protection, and glass borders!");
-            
-        } catch (Exception e) {
-            getLogger().log(Level.SEVERE, "Critical error during plugin enable", e);
-            Bukkit.getPluginManager().disablePlugin(this);
-        }
+    try {
+        int pluginId = 19876; // Get this from bStats
+        //Metrics metrics = new Metrics(this, pluginId);
+        getLogger().info("Analytics initialized successfully");
+    } catch (Exception e) {
+        getLogger().info("Analytics disabled or failed to initialize");
     }
+
+    try {
+        instance = this;
+        
+        getLogger().info("=== Starting Chunklock Plugin Initialization ===");
+        
+        getLogger().info("Phase 1: Configuration validation...");
+        if (!validateConfiguration()) {
+            getLogger().severe("Invalid configuration detected - disabling plugin");
+            Bukkit.getPluginManager().disablePlugin(this);
+            return;
+        }
+        getLogger().info("✓ Configuration validation passed");
+        
+        getLogger().info("Phase 2: Component initialization...");
+        if (!initializeComponents()) {
+            getLogger().severe("Failed to initialize core components - disabling plugin");
+            Bukkit.getPluginManager().disablePlugin(this);
+            return;
+        }
+        getLogger().info("✓ Component initialization completed");
+        
+        getLogger().info("Phase 3: Event listener registration...");
+        if (!registerEventListeners()) {
+            getLogger().severe("Failed to register event listeners - disabling plugin");
+            Bukkit.getPluginManager().disablePlugin(this);
+            return;
+        }
+        getLogger().info("✓ Event listeners registered");
+        
+        getLogger().info("Phase 4: Background task startup...");
+        if (!startTasks()) {
+            getLogger().warning("Some tasks failed to start - plugin may have reduced functionality");
+        } else {
+            getLogger().info("✓ Background tasks started");
+        }
+        
+        getLogger().info("Phase 5: Command registration...");
+        if (!registerCommands()) {
+            getLogger().warning("Failed to register some commands - some functionality may be unavailable");
+        } else {
+            getLogger().info("✓ Commands registered successfully");
+        }
+        
+        getLogger().info("=== Chunklock Plugin Initialization Complete ===");
+        getLogger().info("Plugin enabled successfully with enhanced team system, protection, and glass borders!");
+        
+    } catch (Exception e) {
+        getLogger().log(Level.SEVERE, "Critical error during plugin enable", e);
+        Bukkit.getPluginManager().disablePlugin(this);
+    }
+}
 
     /**
      * Validates plugin configuration before startup
@@ -264,49 +279,91 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     }
 
     private boolean initializeComponents() {
+    try {
+        getLogger().info("=== Starting Component Initialization ===");
+        
+        // Initialize in dependency order with detailed logging
+        getLogger().info("Step 1: Initializing ChunkValueRegistry...");
+        this.chunkValueRegistry = new ChunkValueRegistry(this);
+        getLogger().info("✓ ChunkValueRegistry initialized: " + (chunkValueRegistry != null));
+        
+        getLogger().info("Step 2: Initializing EnhancedTeamManager...");
+        this.enhancedTeamManager = new EnhancedTeamManager(this);
+        this.teamCommandHandler = new BasicTeamCommandHandler(enhancedTeamManager);
+        getLogger().info("✓ Enhanced team system initialized: " + (enhancedTeamManager != null));
+        
+        getLogger().info("Step 3: Initializing TeamManager (legacy)...");
+        this.teamManager = new TeamManager(this);
+        getLogger().info("✓ TeamManager initialized: " + (teamManager != null));
+        
+        getLogger().info("Step 4: Initializing PlayerProgressTracker...");
+        this.progressTracker = new PlayerProgressTracker(this, teamManager);
+        getLogger().info("✓ PlayerProgressTracker initialized: " + (progressTracker != null));
+        
+        getLogger().info("Step 5: Initializing PlayerDataManager...");
+        this.playerDataManager = new PlayerDataManager(this);
+        getLogger().info("✓ PlayerDataManager initialized: " + (playerDataManager != null));
+        
+        getLogger().info("Step 6: Initializing BiomeUnlockRegistry...");
+        this.biomeUnlockRegistry = new BiomeUnlockRegistry(this, progressTracker);
+        getLogger().info("✓ BiomeUnlockRegistry initialized: " + (biomeUnlockRegistry != null));
+        
+        getLogger().info("Step 7: Initializing ChunkEvaluator...");
+        this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry);
+        getLogger().info("✓ ChunkEvaluator initialized: " + (chunkEvaluator != null));
+        
+        getLogger().info("Step 8: Initializing ChunkLockManager...");
+        this.chunkLockManager = new ChunkLockManager(chunkEvaluator, this, teamManager);
+        getLogger().info("✓ ChunkLockManager initialized: " + (chunkLockManager != null));
+        
+        getLogger().info("Step 9: Initializing UnlockGui...");
+        this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker, teamManager);
+        getLogger().info("✓ UnlockGui initialized: " + (unlockGui != null));
+        
+        getLogger().info("Step 10: Initializing HologramManager...");
+        this.hologramManager = new HologramManager(chunkLockManager, biomeUnlockRegistry);
+        getLogger().info("✓ HologramManager initialized: " + (hologramManager != null));
+        
+        getLogger().info("Step 11: Initializing PlayerListener...");
+        this.playerListener = new PlayerListener(chunkLockManager, progressTracker, playerDataManager, unlockGui);
+        getLogger().info("✓ PlayerListener initialized: " + (playerListener != null));
+
+        getLogger().info("Step 12: Initializing ChunkBorderManager...");
+        this.chunkBorderManager = new ChunkBorderManager(chunkLockManager, unlockGui, teamManager, progressTracker);
+        getLogger().info("✓ ChunkBorderManager initialized: " + (chunkBorderManager != null));
+
+        getLogger().info("Step 13: Initializing BlockProtectionListener...");
+        this.blockProtectionListener = new BlockProtectionListener(chunkLockManager, unlockGui, chunkBorderManager);
+        getLogger().info("✓ BlockProtectionListener initialized: " + (blockProtectionListener != null));
+
+
+        
+        // Set up team integration in BiomeUnlockRegistry
         try {
-            // Initialize in dependency order
-            this.chunkValueRegistry = new ChunkValueRegistry(this);
-            
-            // Initialize enhanced team system
-            this.enhancedTeamManager = new EnhancedTeamManager(this);
-            this.teamCommandHandler = new BasicTeamCommandHandler(enhancedTeamManager);
-            getLogger().info("Enhanced team system initialized successfully");
-            
-            // Keep old team manager for backward compatibility
-            this.teamManager = new TeamManager(this);
-            
-            this.progressTracker = new PlayerProgressTracker(this, teamManager);
-            this.biomeUnlockRegistry = new BiomeUnlockRegistry(this, progressTracker);
-            this.playerDataManager = new PlayerDataManager(this);
-            this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry);
-            this.chunkLockManager = new ChunkLockManager(chunkEvaluator, this, teamManager);
-            this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker, teamManager);
-            this.hologramManager = new HologramManager(chunkLockManager, biomeUnlockRegistry);
-            this.playerListener = new PlayerListener(chunkLockManager, progressTracker, playerDataManager, unlockGui);
-
-            // Initialize glass border system
-            this.chunkBorderManager = new ChunkBorderManager(chunkLockManager, unlockGui, teamManager, progressTracker);
-
-            // Initialize block protection listener
-            this.blockProtectionListener = new BlockProtectionListener(chunkLockManager, unlockGui, chunkBorderManager);
-            
-            // Set up team integration in BiomeUnlockRegistry
-            try {
-                biomeUnlockRegistry.setEnhancedTeamManager(enhancedTeamManager);
-                getLogger().info("Team integration enabled in BiomeUnlockRegistry");
-            } catch (Exception e) {
-                getLogger().warning("Failed to enable team integration in BiomeUnlockRegistry: " + e.getMessage());
-            }
-            
-            getLogger().info("All core components initialized successfully");
-            return true;
-            
+            getLogger().info("Step 14: Setting up team integration...");
+            biomeUnlockRegistry.setEnhancedTeamManager(enhancedTeamManager);
+            getLogger().info("✓ Team integration enabled in BiomeUnlockRegistry");
         } catch (Exception e) {
-            getLogger().log(Level.SEVERE, "Error initializing components", e);
-            return false;
+            getLogger().warning("Failed to enable team integration in BiomeUnlockRegistry: " + e.getMessage());
         }
+        
+        getLogger().info("=== Component Initialization Summary ===");
+        getLogger().info("progressTracker: " + (progressTracker != null ? "OK" : "NULL"));
+        getLogger().info("chunkLockManager: " + (chunkLockManager != null ? "OK" : "NULL"));
+        getLogger().info("unlockGui: " + (unlockGui != null ? "OK" : "NULL"));
+        getLogger().info("teamManager: " + (teamManager != null ? "OK" : "NULL"));
+        getLogger().info("biomeUnlockRegistry: " + (biomeUnlockRegistry != null ? "OK" : "NULL"));
+        getLogger().info("playerDataManager: " + (playerDataManager != null ? "OK" : "NULL"));
+        getLogger().info("teamCommandHandler: " + (teamCommandHandler != null ? "OK" : "NULL"));
+        
+        getLogger().info("All core components initialized successfully");
+        return true;
+        
+    } catch (Exception e) {
+        getLogger().log(Level.SEVERE, "Error initializing components", e);
+        return false;
     }
+}
 
     private boolean registerEventListeners() {
         try {
@@ -352,26 +409,105 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    private boolean registerCommands() {
-        try {
-            // 🔧 FIX: Pass BiomeUnlockRegistry to ChunklockCommand constructor
-            var chunklockCmd = new ChunklockCommand(progressTracker, chunkLockManager, unlockGui, teamManager, teamCommandHandler, biomeUnlockRegistry);
+// Update for ChunklockPlugin.java - replace the registerCommands() method
+
+private boolean registerCommands() {
+    try {
+        getLogger().info("=== Starting Command Registration ===");
+        
+        // Count how many dependencies are available
+        int availableDependencies = 0;
+        int totalDependencies = 6;
+        
+        if (progressTracker != null) {
+            getLogger().info("✓ PlayerProgressTracker available");
+            availableDependencies++;
+        } else {
+            getLogger().severe("✗ PlayerProgressTracker is NULL");
+        }
+        
+        if (chunkLockManager != null) {
+            getLogger().info("✓ ChunkLockManager available");
+            availableDependencies++;
+        } else {
+            getLogger().severe("✗ ChunkLockManager is NULL");
+        }
+        
+        if (unlockGui != null) {
+            getLogger().info("✓ UnlockGui available");
+            availableDependencies++;
+        } else {
+            getLogger().severe("✗ UnlockGui is NULL");
+        }
+        
+        if (teamManager != null) {
+            getLogger().info("✓ TeamManager available");
+            availableDependencies++;
+        } else {
+            getLogger().severe("✗ TeamManager is NULL");
+        }
+        
+        if (biomeUnlockRegistry != null) {
+            getLogger().info("✓ BiomeUnlockRegistry available");
+            availableDependencies++;
+        } else {
+            getLogger().severe("✗ BiomeUnlockRegistry is NULL");
+        }
+        
+        if (playerDataManager != null) {
+            getLogger().info("✓ PlayerDataManager available");
+            availableDependencies++;
+        } else {
+            getLogger().severe("✗ PlayerDataManager is NULL");
+        }
+        
+        getLogger().info("Dependencies available: " + availableDependencies + "/" + totalDependencies);
+        
+        if (availableDependencies == totalDependencies) {
+            getLogger().info("All dependencies available. Using new command system...");
+            
+            // Create command executor with EXACT parameter order matching constructor
+            var chunklockCmd = new me.chunklock.commands.ChunklockCommandExecutor(
+                progressTracker,        // PlayerProgressTracker
+                chunkLockManager,       // ChunkLockManager
+                unlockGui,              // UnlockGui
+                teamManager,            // TeamManager
+                teamCommandHandler,     // BasicTeamCommandHandler
+                biomeUnlockRegistry,    // BiomeUnlockRegistry
+                playerDataManager);     // PlayerDataManager
             
             if (getCommand("chunklock") != null) {
                 getCommand("chunklock").setExecutor(chunklockCmd);
                 getCommand("chunklock").setTabCompleter(chunklockCmd);
-                getLogger().info("Commands registered successfully with enhanced team support and border management");
+                getLogger().info("✓ New command system registered successfully");
                 return true;
-            } else {
-                getLogger().warning("chunklock command not found in plugin.yml");
-                return false;
             }
+        } else {
+            getLogger().warning("Not all dependencies available. Falling back to legacy command system...");
             
-        } catch (Exception e) {
-            getLogger().log(Level.WARNING, "Error registering commands", e);
-            return false;
+            // Fallback to legacy system if available
+            try {
+                var legacyCmd = new ChunklockCommand(progressTracker, chunkLockManager, unlockGui, teamManager, teamCommandHandler, biomeUnlockRegistry);
+                
+                if (getCommand("chunklock") != null) {
+                    getCommand("chunklock").setExecutor(legacyCmd);
+                    getCommand("chunklock").setTabCompleter(legacyCmd);
+                    getLogger().warning("Using legacy command system due to missing dependencies");
+                    return true;
+                }
+            } catch (Exception fallbackError) {
+                getLogger().log(Level.SEVERE, "Legacy command system also failed", fallbackError);
+            }
         }
+        
+        getLogger().severe("Both new and legacy command systems failed to initialize");
+        return false;
+        
+    } catch (Exception e) {
+        getLogger().log(Level.SEVERE, "Critical error during command registration", e);
+        return false;
     }
+}
 
     // Enhanced hologram management events
     @EventHandler
