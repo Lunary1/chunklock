@@ -1,8 +1,18 @@
 // src/main/java/me/chunklock/commands/ChunklockCommandExecutor.java
 package me.chunklock.commands;
 
-import me.chunklock.*;
-import me.chunklock.teams.BasicTeamCommandHandler;
+import me.chunklock.commands.BasicTeamCommandHandler;
+import me.chunklock.commands.DiagnosticCommand;
+import me.chunklock.commands.HelpCommand;
+import me.chunklock.commands.SpawnCommand;
+import me.chunklock.commands.StatusCommand;
+import me.chunklock.managers.BiomeUnlockRegistry;
+import me.chunklock.managers.ChunkLockManager;
+import me.chunklock.managers.PlayerDataManager;
+import me.chunklock.managers.PlayerProgressTracker;
+import me.chunklock.managers.TeamManager;
+import me.chunklock.ui.UnlockGui;
+import me.chunklock.ChunklockPlugin;
 
 /**
  * Main command executor for the chunklock plugin.

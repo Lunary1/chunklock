@@ -1,4 +1,4 @@
-package me.chunklock;
+package me.chunklock.managers;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -14,6 +14,7 @@ import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
+import me.chunklock.ChunklockPlugin;
 
 import java.time.Duration;
 

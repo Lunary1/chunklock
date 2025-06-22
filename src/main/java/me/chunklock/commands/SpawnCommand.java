@@ -2,7 +2,7 @@
 package me.chunklock.commands;
 
 import me.chunklock.ChunklockPlugin;
-import me.chunklock.PlayerDataManager;
+import me.chunklock.managers.PlayerDataManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Chunk;

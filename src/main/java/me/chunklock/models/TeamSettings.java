@@ -1,4 +1,4 @@
-package me.chunklock.teams;
+package me.chunklock.models;
 
 public class TeamSettings {
     private boolean allowOfficerInvites = true;

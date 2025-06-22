@@ -1,4 +1,4 @@
-package me.chunklock;
+package me.chunklock.managers;
 
 import org.bukkit.Chunk;
 import org.bukkit.entity.Player;
@@ -6,6 +6,9 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
+import me.chunklock.models.ChunkData;
+import me.chunklock.models.Difficulty;
+import me.chunklock.managers.TeamManager;
 
 import java.io.File;
 import java.io.IOException;

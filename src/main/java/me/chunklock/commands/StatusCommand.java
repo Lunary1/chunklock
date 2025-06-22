@@ -1,11 +1,11 @@
 // src/main/java/me/chunklock/commands/StatusCommand.java
 package me.chunklock.commands;
 
-import me.chunklock.BiomeUnlockRegistry;
-import me.chunklock.ChunkEvaluator;
-import me.chunklock.ChunkLockManager;
+import me.chunklock.managers.BiomeUnlockRegistry;
+import me.chunklock.managers.ChunkEvaluator;
+import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.ChunklockPlugin;
-import me.chunklock.PlayerProgressTracker;
+import me.chunklock.managers.PlayerProgressTracker;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Chunk;

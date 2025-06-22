@@ -1,4 +1,4 @@
-package me.chunklock;
+package me.chunklock.listeners;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -20,6 +20,10 @@ import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.event.vehicle.VehicleDestroyEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
+import me.chunklock.managers.ChunkLockManager;
+import me.chunklock.ui.UnlockGui;
+import me.chunklock.managers.ChunkBorderManager;
+import me.chunklock.ChunklockPlugin;
 
 import java.util.Map;
 import java.util.UUID;

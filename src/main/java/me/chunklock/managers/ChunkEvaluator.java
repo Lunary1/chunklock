@@ -1,9 +1,13 @@
-package me.chunklock;
+package me.chunklock.managers;
 
 import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.block.Biome;
 import org.bukkit.block.Block;
+import me.chunklock.managers.PlayerDataManager;
+import me.chunklock.managers.ChunkValueRegistry;
+import me.chunklock.models.Difficulty;
+import me.chunklock.ChunklockPlugin;
 
 import java.util.UUID;
 import java.util.logging.Level;

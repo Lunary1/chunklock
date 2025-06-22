@@ -1,5 +1,5 @@
 // src/main/java/me/chunklock/teams/BasicTeamCommandHandler.java
-package me.chunklock.teams;
+package me.chunklock.commands;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -7,6 +7,8 @@ import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import me.chunklock.managers.EnhancedTeamManager;
+import me.chunklock.models.Team;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;

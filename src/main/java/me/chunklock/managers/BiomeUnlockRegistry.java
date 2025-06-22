@@ -1,4 +1,4 @@
-package me.chunklock;
+package me.chunklock.managers;
 
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -9,7 +9,9 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
-import me.chunklock.teams.EnhancedTeamManager;
+import me.chunklock.managers.EnhancedTeamManager;
+import me.chunklock.managers.PlayerProgressTracker;
+import me.chunklock.ChunklockPlugin;
 
 import java.io.File;
 import java.util.*;

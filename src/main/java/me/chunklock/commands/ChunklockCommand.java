@@ -1,4 +1,4 @@
-package me.chunklock;
+package me.chunklock.commands;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -15,7 +15,15 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import me.chunklock.teams.BasicTeamCommandHandler;
+import me.chunklock.commands.BasicTeamCommandHandler;
+import me.chunklock.managers.BiomeUnlockRegistry;
+import me.chunklock.managers.ChunkLockManager;
+import me.chunklock.managers.PlayerProgressTracker;
+import me.chunklock.managers.TeamManager;
+import me.chunklock.ui.UnlockGui;
+import me.chunklock.ChunklockPlugin;
+import me.chunklock.managers.ChunkEvaluator;
+import me.chunklock.managers.ChunkBorderManager;
 
 import java.util.ArrayList;
 import java.util.Collections;

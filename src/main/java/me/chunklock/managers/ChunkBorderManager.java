@@ -1,4 +1,4 @@
-package me.chunklock;
+package me.chunklock.managers;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
@@ -18,6 +18,11 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.java.JavaPlugin;
+import me.chunklock.managers.ChunkLockManager;
+import me.chunklock.ui.UnlockGui;
+import me.chunklock.managers.TeamManager;
+import me.chunklock.managers.PlayerProgressTracker;
+import me.chunklock.ChunklockPlugin;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
