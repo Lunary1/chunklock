@@ -1,4 +1,4 @@
-package me.chunklock;
+package me.chunklock.models;
 
 import java.util.UUID;
 

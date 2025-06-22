@@ -1,4 +1,4 @@
-package me.chunklock;
+package me.chunklock.models;
 
 public enum Difficulty {
     EASY,

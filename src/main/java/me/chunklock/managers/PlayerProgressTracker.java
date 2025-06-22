@@ -1,9 +1,10 @@
-package me.chunklock;
+package me.chunklock.managers;
 
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
+import me.chunklock.managers.TeamManager;
 
 import java.io.File;
 import java.io.IOException;

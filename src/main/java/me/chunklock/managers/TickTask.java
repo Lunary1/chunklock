@@ -1,4 +1,4 @@
-package me.chunklock;
+package me.chunklock.managers;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
@@ -9,6 +9,10 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
+import me.chunklock.managers.ChunkLockManager;
+import me.chunklock.managers.BiomeUnlockRegistry;
+import me.chunklock.models.Difficulty;
+import me.chunklock.ChunklockPlugin;
 
 import java.util.HashMap;
 import java.util.HashSet;

@@ -1,4 +1,4 @@
-package me.chunklock.teams;
+package me.chunklock.models;
 
 public enum TeamRole {
     OWNER("Owner"),

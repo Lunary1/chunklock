@@ -1,10 +1,20 @@
-package me.chunklock;
+package me.chunklock.listeners;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
 import me.chunklock.util.ChunkUtils;
+import me.chunklock.managers.ChunkLockManager;
+import me.chunklock.managers.PlayerProgressTracker;
+import me.chunklock.managers.PlayerDataManager;
+import me.chunklock.ui.UnlockGui;
+import me.chunklock.ChunklockPlugin;
+import me.chunklock.managers.ChunkBorderManager;
+import me.chunklock.managers.TickTask;
+import me.chunklock.managers.HologramManager;
+import me.chunklock.managers.ChunkEvaluator;
+import me.chunklock.managers.BiomeUnlockRegistry;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;

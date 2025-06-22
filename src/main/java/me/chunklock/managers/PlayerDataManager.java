@@ -1,4 +1,4 @@
-package me.chunklock;
+package me.chunklock.managers;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;

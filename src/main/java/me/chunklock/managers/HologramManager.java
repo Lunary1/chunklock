@@ -1,4 +1,4 @@
-package me.chunklock;
+package me.chunklock.managers;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -12,6 +12,10 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
+import me.chunklock.managers.ChunkLockManager;
+import me.chunklock.managers.BiomeUnlockRegistry;
+import me.chunklock.models.Difficulty;
+import me.chunklock.ChunklockPlugin;
 
 import java.util.HashMap;
 import java.util.HashSet;

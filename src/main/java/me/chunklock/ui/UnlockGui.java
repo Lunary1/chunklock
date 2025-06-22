@@ -1,4 +1,4 @@
-package me.chunklock;
+package me.chunklock.ui;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -17,6 +17,16 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import me.chunklock.managers.ChunkLockManager;
+import me.chunklock.managers.BiomeUnlockRegistry;
+import me.chunklock.managers.PlayerProgressTracker;
+import me.chunklock.managers.TeamManager;
+import me.chunklock.managers.ChunkEvaluator;
+import me.chunklock.models.Difficulty;
+import me.chunklock.ChunklockPlugin;
+import me.chunklock.managers.UnlockEffectsManager;
+import me.chunklock.managers.ChunkBorderManager;
+import me.chunklock.managers.HologramManager;
 
 import java.util.ArrayList;
 import java.util.HashMap;
