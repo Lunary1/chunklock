@@ -6,6 +6,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import me.chunklock.util.ChunkUtils;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.command.Command;
@@ -158,7 +159,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 }
 
                 // Calculate exact center of the chosen chunk
-                Location centerSpawn = getCenterLocationOfChunk(newChunk);
+                Location centerSpawn = ChunkUtils.getChunkCenter(newChunk);
 
                 // IMPORTANT: Reset player progress FIRST
                 progressTracker.resetPlayer(target.getUniqueId());
@@ -428,7 +429,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
 
                     if (forceCenter) {
                         // Teleport to exact center
-                        Location centerLoc = getCenterLocationOfChunk(savedLoc.getChunk());
+                        Location centerLoc = ChunkUtils.getChunkCenter(savedLoc.getChunk());
                         player.teleport(centerLoc);
                         player.sendMessage(Component.text("Teleported to center of your starting chunk.").color(NamedTextColor.GREEN));
                     } else {
@@ -798,7 +799,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 if (evaluation.score <= MAX_RESET_SCORE) {
                     validChunksFound++;
 
-                    Location centerLocation = getCenterLocationOfChunk(chunk);
+                    Location centerLocation = ChunkUtils.getChunkCenter(chunk);
                     if (isSafeSpawnLocation(centerLocation)) {
 
                         if (evaluation.score < bestScore) {
@@ -822,30 +823,6 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 (bestChunk != null ? bestScore : "none"));
 
         return bestChunk;
-    }
-
-    private Location getCenterLocationOfChunk(Chunk chunk) {
-        if (chunk == null || chunk.getWorld() == null) {
-            throw new IllegalArgumentException("Invalid chunk provided");
-        }
-
-        World world = chunk.getWorld();
-        int chunkX = chunk.getX();
-        int chunkZ = chunk.getZ();
-
-        int centerX = chunkX * 16 + 8;
-        int centerZ = chunkZ * 16 + 8;
-
-        int centerY;
-        try {
-            centerY = world.getHighestBlockAt(centerX, centerZ).getY() + 1;
-            centerY = Math.max(world.getMinHeight() + 1,
-                    Math.min(centerY, world.getMaxHeight() - 2));
-        } catch (Exception e) {
-            centerY = world.getSpawnLocation().getBlockY();
-        }
-
-        return new Location(world, centerX + 0.5, centerY, centerZ + 0.5);
     }
 
     private boolean isSafeSpawnLocation(Location location) {

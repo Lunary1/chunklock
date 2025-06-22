@@ -8,6 +8,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
+import me.chunklock.util.ChunkUtils;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -58,7 +59,7 @@ public class SpawnCommand extends SubCommand {
             
             if (forceCenter) {
                 // Teleport to exact center
-                Location centerLoc = getCenterLocationOfChunk(savedLoc.getChunk());
+                Location centerLoc = ChunkUtils.getChunkCenter(savedLoc.getChunk());
                 player.teleport(centerLoc);
                 player.sendMessage(Component.text("Teleported to center of your starting chunk.")
                     .color(NamedTextColor.GREEN));
@@ -83,48 +84,7 @@ public class SpawnCommand extends SubCommand {
         }
     }
     
-    /**
-     * Calculates the exact center location of a chunk with improved error handling.
-     * This is extracted from the original ChunklockCommand.java
-     */
-    private Location getCenterLocationOfChunk(Chunk chunk) {
-        if (chunk == null) {
-            throw new IllegalArgumentException("Chunk cannot be null");
-        }
         
-        World world = chunk.getWorld();
-        if (world == null) {
-            throw new IllegalStateException("Chunk world is null");
-        }
-
-        int chunkX = chunk.getX();
-        int chunkZ = chunk.getZ();
-        
-        // Calculate exact center coordinates
-        int centerX = chunkX * 16 + 8;
-        int centerZ = chunkZ * 16 + 8;
-        
-        // Get the highest solid block at center with better error handling
-        int centerY;
-        try {
-            centerY = world.getHighestBlockAt(centerX, centerZ).getY();
-            // Add 1 to place player on top of the block, not inside it
-            centerY += 1;
-            
-            // Ensure Y is within world bounds
-            centerY = Math.max(world.getMinHeight() + 1, 
-                      Math.min(centerY, world.getMaxHeight() - 2));
-        } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().warning(
-                "Error getting highest block at chunk center (" + centerX + "," + centerZ + 
-                "), using fallback Y: " + e.getMessage());
-            centerY = Math.max(world.getMinHeight() + 10, world.getSpawnLocation().getBlockY());
-        }
-        
-        // Return center location with 0.5 offset for perfect centering
-        return new Location(world, centerX + 0.5, centerY, centerZ + 0.5);
-    }
-    
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         List<String> completions = new ArrayList<>();
