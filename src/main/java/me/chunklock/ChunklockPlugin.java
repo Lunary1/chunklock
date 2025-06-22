@@ -25,6 +25,10 @@ import me.chunklock.managers.TeamManager;
 import me.chunklock.managers.TickTask;
 import me.chunklock.listeners.BlockProtectionListener;
 import me.chunklock.listeners.PlayerListener;
+import me.chunklock.listener.BorderListener;
+import me.chunklock.listener.PlayerJoinQuitListener;
+import me.chunklock.ui.UnlockGuiListener;
+import me.chunklock.border.BorderRefreshService;
 import me.chunklock.ui.UnlockGui;
 import java.util.logging.Level;
 
@@ -55,6 +59,10 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     
     // Glass border system
     private ChunkBorderManager chunkBorderManager;
+    private me.chunklock.listener.BorderListener borderListener;
+    private me.chunklock.listener.PlayerJoinQuitListener joinQuitListener;
+    private me.chunklock.ui.UnlockGuiListener unlockGuiListener;
+    private me.chunklock.border.BorderRefreshService borderRefreshService;
 
     // Enhanced team system components
     private EnhancedTeamManager enhancedTeamManager;
@@ -346,6 +354,12 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         this.chunkBorderManager = new ChunkBorderManager(chunkLockManager, unlockGui, teamManager, progressTracker);
         getLogger().info("✓ ChunkBorderManager initialized: " + (chunkBorderManager != null));
 
+        this.borderRefreshService = new me.chunklock.border.BorderRefreshService(chunkBorderManager);
+        this.playerListener.setBorderRefreshService(borderRefreshService);
+        this.joinQuitListener = new me.chunklock.listener.PlayerJoinQuitListener(playerListener);
+        this.unlockGuiListener = new me.chunklock.ui.UnlockGuiListener(unlockGui);
+        this.borderListener = new me.chunklock.listener.BorderListener(chunkBorderManager);
+
         getLogger().info("Step 13: Initializing BlockProtectionListener...");
         this.blockProtectionListener = new BlockProtectionListener(chunkLockManager, unlockGui, chunkBorderManager);
         getLogger().info("✓ BlockProtectionListener initialized: " + (blockProtectionListener != null));
@@ -383,13 +397,14 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         try {
             // Register all event listeners
             Bukkit.getPluginManager().registerEvents(playerListener, this);
-            Bukkit.getPluginManager().registerEvents(unlockGui, this);
+            Bukkit.getPluginManager().registerEvents(joinQuitListener, this);
+            Bukkit.getPluginManager().registerEvents(unlockGuiListener, this);
             
             // Register the block protection listener
             Bukkit.getPluginManager().registerEvents(blockProtectionListener, this);
-            
-            // Register the glass border manager
-            Bukkit.getPluginManager().registerEvents(chunkBorderManager, this);
+
+            // Register the glass border listener
+            Bukkit.getPluginManager().registerEvents(borderListener, this);
             
             // Register main plugin events (join/quit handlers)
             Bukkit.getPluginManager().registerEvents(this, this);
