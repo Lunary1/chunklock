@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
+import me.chunklock.util.ChunkUtils;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -81,13 +82,13 @@ public class PlayerListener implements Listener {
                         
                         if (newPlayers.contains(playerId) || !currentChunkUnlocked) {
                             // Only teleport to center if it's a new player or they're in a locked chunk
-                            Location centerSpawn = getCenterLocationOfChunk(savedChunk);
+                            Location centerSpawn = ChunkUtils.getChunkCenter(savedChunk);
                             player.teleport(centerSpawn);
                             player.setRespawnLocation(centerSpawn, true);
                             player.sendMessage("§aWelcome back! You've been returned to your starting chunk.");
                         } else {
                             // Player is in an unlocked chunk, just set respawn location but don't teleport
-                            Location centerSpawn = getCenterLocationOfChunk(savedChunk);
+                            Location centerSpawn = ChunkUtils.getChunkCenter(savedChunk);
                             player.setRespawnLocation(centerSpawn, true);
                             player.sendMessage("§aWelcome back! Your respawn point has been set to your starting chunk.");
                         }
@@ -216,47 +217,6 @@ public class PlayerListener implements Listener {
             ChunklockPlugin.getInstance().getLogger().fine("Error updating borders on chunk change for " + player.getName() + ": " + e.getMessage());
         }
     }
-
-    /**
-     * Calculates the exact center location of a chunk with improved error handling
-     */
-    private Location getCenterLocationOfChunk(Chunk chunk) {
-        if (chunk == null) {
-            throw new IllegalArgumentException("Chunk cannot be null");
-        }
-        
-        World world = chunk.getWorld();
-        if (world == null) {
-            throw new IllegalStateException("Chunk world is null");
-        }
-
-        int chunkX = chunk.getX();
-        int chunkZ = chunk.getZ();
-        
-        // Calculate exact center coordinates
-        int centerX = chunkX * 16 + 8;
-        int centerZ = chunkZ * 16 + 8;
-        
-        // Get the highest solid block at center with better error handling
-        int centerY;
-        try {
-            centerY = world.getHighestBlockAt(centerX, centerZ).getY();
-            // Add 1 to place player on top of the block, not inside it
-            centerY += 1;
-            
-            // Ensure Y is within world bounds
-            centerY = Math.max(world.getMinHeight() + 1, 
-                      Math.min(centerY, world.getMaxHeight() - 2));
-        } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
-                "Error getting highest block at chunk center (" + centerX + "," + centerZ + "), using fallback Y", e);
-            centerY = Math.max(world.getMinHeight() + 10, world.getSpawnLocation().getBlockY());
-        }
-        
-        // Return center location with 0.5 offset for perfect centering
-        return new Location(world, centerX + 0.5, centerY, centerZ + 0.5);
-    }
-
     private void assignStartingChunk(Player player) {
         try {
             if (player == null) {
@@ -331,7 +291,7 @@ public class PlayerListener implements Listener {
                     validChunksFound++;
                     
                     // Additional safety check - ensure spawn location is safe
-                    Location centerLocation = getCenterLocationOfChunk(chunk);
+                    Location centerLocation = ChunkUtils.getChunkCenter(chunk);
                     if (isSafeSpawnLocation(centerLocation)) {
                         
                         // Prefer the chunk with the lowest score
@@ -381,7 +341,7 @@ public class PlayerListener implements Listener {
         }
 
         // Get the exact center location of the chunk
-        Location centerSpawn = getCenterLocationOfChunk(startChunk);
+        Location centerSpawn = ChunkUtils.getChunkCenter(startChunk);
         
         // Unlock the starting chunk
         UUID teamId = chunkLockManager.getTeamManager().getTeamLeader(player.getUniqueId());
