@@ -9,9 +9,6 @@ import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.block.Biome;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
@@ -21,6 +18,7 @@ import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.managers.TeamManager;
+import me.chunklock.ui.UnlockGuiBuilder;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.models.Difficulty;
 import me.chunklock.ChunklockPlugin;
@@ -35,7 +33,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 
-public class UnlockGui implements Listener {
+public class UnlockGui {
     private final ChunkLockManager chunkLockManager;
     private final BiomeUnlockRegistry biomeUnlockRegistry;
     private final PlayerProgressTracker progressTracker;
@@ -63,10 +61,12 @@ public class UnlockGui implements Listener {
     private final Map<UUID, PendingUnlock> pending = new HashMap<>();
     
     // 🔧 FIX: Use a more unique GUI title that's easier to match
-    private static final String GUI_TITLE = "ChunkLock Unlock GUI";
+    public static final String GUI_TITLE = "ChunkLock Unlock GUI";
     
     // 🔧 FIX: Track which inventories belong to our plugin
     private final Map<UUID, Inventory> activeGuis = new HashMap<>();
+
+    private final UnlockGuiBuilder builder = new UnlockGuiBuilder();
 
     private final TeamManager teamManager;
 
@@ -99,17 +99,7 @@ public class UnlockGui implements Listener {
             player.sendMessage("§cContested chunk! Cost x" + mult);
         }
 
-        // Create larger inventory for better display
-        Inventory inv = Bukkit.createInventory(null, 27, Component.text(GUI_TITLE));
-
-        // Add chunk info item
-        addChunkInfoItem(inv, chunk, eval);
-        
-        // Add requirement display (improved for large amounts)
-        addRequirementItems(inv, player, requirement);
-
-        // Add unlock button
-        addUnlockButton(inv, player, requirement);
+        Inventory inv = builder.build(player, chunk, eval, requirement);
 
         // 🔧 FIX: Store both pending state and inventory reference
         PendingUnlock pendingUnlock = new PendingUnlock(chunk, biome, requirement, contested);
@@ -358,8 +348,7 @@ public class UnlockGui implements Listener {
         };
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onInventoryClick(InventoryClickEvent event) {
+    public void handleInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         
         UUID playerId = player.getUniqueId();
@@ -562,8 +551,7 @@ public class UnlockGui implements Listener {
     }
 
     // 🔧 FIX: Only clean up on manual close, not during unlock process
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onInventoryClose(InventoryCloseEvent event) {
+    public void handleInventoryClose(InventoryCloseEvent event) {
         if (!(event.getPlayer() instanceof Player player)) return;
         
         UUID playerId = player.getUniqueId();

@@ -9,20 +9,18 @@ import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
-import org.bukkit.event.block.Action;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.ui.UnlockGui;
 import me.chunklock.managers.TeamManager;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.ChunklockPlugin;
+import me.chunklock.border.BorderConfig;
+import me.chunklock.border.BorderConfigLoader;
+import me.chunklock.border.BorderPlacementService;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,13 +32,15 @@ import java.util.logging.Level;
  * Places glass blocks on the edges of locked chunks that are adjacent to unlocked chunks,
  * creating a visual boundary that players can right-click to open unlock GUIs.
  */
-public class ChunkBorderManager implements Listener {
+public class ChunkBorderManager {
     
     private final ChunkLockManager chunkLockManager;
     private final UnlockGui unlockGui;
     private final JavaPlugin plugin;
     private final TeamManager teamManager;
     private final PlayerProgressTracker progressTracker;
+    private final BorderConfigLoader configLoader = new BorderConfigLoader();
+    private BorderPlacementService placementService;
     
     // Store border blocks per player: Player UUID -> Location -> Original BlockData
     private final Map<UUID, Map<Location, BlockData>> playerBorders = new ConcurrentHashMap<>();
@@ -79,7 +79,7 @@ public class ChunkBorderManager implements Listener {
         this.plugin = ChunklockPlugin.getInstance();
 
         loadConfiguration();
-
+        this.placementService = new BorderPlacementService(chunkLockManager, teamManager, createConfigObject());
         Bukkit.getScheduler().runTaskTimer(plugin, this::processUpdateQueue, 1L, 1L);
     }
     
@@ -87,40 +87,26 @@ public class ChunkBorderManager implements Listener {
      * Loads configuration from config.yml
      */
     private void loadConfiguration() {
-        FileConfiguration config = plugin.getConfig();
-        
-        // Load glass-borders configuration section
-        enabled = config.getBoolean("glass-borders.enabled", true);
-        useFullHeight = config.getBoolean("glass-borders.use-full-height", true);
-        borderHeight = config.getInt("glass-borders.border-height", 3);
-        minYOffset = config.getInt("glass-borders.min-y-offset", -2);
-        maxYOffset = config.getInt("glass-borders.max-y-offset", 4);
-        scanRange = config.getInt("glass-borders.scan-range", 8);
-        updateDelay = config.getLong("glass-borders.update-delay", 20L);
-        updateCooldown = config.getLong("glass-borders.update-cooldown", 2000L);
-        showForBypassPlayers = config.getBoolean("glass-borders.show-for-bypass-players", false);
-        autoUpdateOnMovement = config.getBoolean("glass-borders.auto-update-on-movement", true);
-        restoreOriginalBlocks = config.getBoolean("glass-borders.restore-original-blocks", true);
-        debugLogging = config.getBoolean("glass-borders.debug-logging", false);
-        
-        // Parse border material
-        String materialName = config.getString("glass-borders.border-material", "LIGHT_GRAY_STAINED_GLASS");
-        try {
-            borderMaterial = Material.valueOf(materialName.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            plugin.getLogger().warning("Invalid border material '" + materialName + "', using LIGHT_GRAY_STAINED_GLASS");
-            borderMaterial = Material.LIGHT_GRAY_STAINED_GLASS;
-        }
-        
-        skipValuableOres = config.getBoolean("glass-borders.skip-valuable-ores", true);
-        skipFluids = config.getBoolean("glass-borders.skip-fluids", true);
-        skipImportantBlocks = config.getBoolean("glass-borders.skip-important-blocks", true);
+        BorderConfig cfg = configLoader.load(plugin);
 
-        if (config.isConfigurationSection("performance")) {
-            var perf = config.getConfigurationSection("performance");
-            borderUpdateDelayTicks = perf.getInt("border-update-delay", borderUpdateDelayTicks);
-            maxBorderUpdatesPerTick = perf.getInt("max-border-updates-per-tick", maxBorderUpdatesPerTick);
-        }
+        enabled = cfg.enabled;
+        useFullHeight = cfg.useFullHeight;
+        borderHeight = cfg.borderHeight;
+        minYOffset = cfg.minYOffset;
+        maxYOffset = cfg.maxYOffset;
+        scanRange = cfg.scanRange;
+        updateDelay = cfg.updateDelay;
+        updateCooldown = cfg.updateCooldown;
+        showForBypassPlayers = cfg.showForBypassPlayers;
+        autoUpdateOnMovement = cfg.autoUpdateOnMovement;
+        restoreOriginalBlocks = cfg.restoreOriginalBlocks;
+        debugLogging = cfg.debugLogging;
+        borderMaterial = cfg.borderMaterial;
+        skipValuableOres = cfg.skipValuableOres;
+        skipFluids = cfg.skipFluids;
+        skipImportantBlocks = cfg.skipImportantBlocks;
+        borderUpdateDelayTicks = cfg.borderUpdateDelayTicks;
+        maxBorderUpdatesPerTick = cfg.maxBorderUpdatesPerTick;
         
         if (debugLogging) {
             plugin.getLogger().info("Glass borders " + (enabled ? "enabled" : "disabled") +
@@ -135,6 +121,7 @@ public class ChunkBorderManager implements Listener {
      */
     public void reloadConfiguration() {
         loadConfiguration();
+        this.placementService = new BorderPlacementService(chunkLockManager, teamManager, createConfigObject());
         
         // If borders were disabled, clean up all existing borders
         if (!enabled) {
@@ -194,7 +181,7 @@ public class ChunkBorderManager implements Listener {
             if (!unlockedChunks.isEmpty()) {
                 for (ChunkCoordinate coord : unlockedChunks) {
                     Chunk chunk = player.getWorld().getChunkAt(coord.x, coord.z);
-                    createBordersForChunk(player, chunk);
+                    placementService.createBordersForChunk(player, chunk, playerBorders, borderToChunk);
                 }
 
                 if (debugLogging) {
@@ -779,8 +766,8 @@ public class ChunkBorderManager implements Listener {
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
 
-            removeSharedBorders(unlockedChunk, player);
-            createBordersForChunk(player, unlockedChunk);
+            placementService.removeSharedBorders(unlockedChunk, player, playerBorders, borderToChunk);
+            placementService.createBordersForChunk(player, unlockedChunk, playerBorders, borderToChunk);
 
             // Refresh neighboring unlocked chunks
             for (BorderDirection dir : BorderDirection.values()) {
@@ -788,8 +775,8 @@ public class ChunkBorderManager implements Listener {
                     Chunk neighbor = unlockedChunk.getWorld().getChunkAt(unlockedChunk.getX() + dir.dx, unlockedChunk.getZ() + dir.dz);
                     chunkLockManager.initializeChunk(neighbor, player.getUniqueId());
                     if (!chunkLockManager.isLocked(neighbor)) {
-                        removeSharedBorders(neighbor, player);
-                        createBordersForChunk(player, neighbor);
+                        placementService.removeSharedBorders(neighbor, player, playerBorders, borderToChunk);
+                        placementService.createBordersForChunk(player, neighbor, playerBorders, borderToChunk);
                     }
                 } catch (Exception ignored) {
                 }
@@ -800,7 +787,7 @@ public class ChunkBorderManager implements Listener {
     // Event Handlers
     
     @EventHandler(priority = EventPriority.HIGH)
-    public void onPlayerInteract(PlayerInteractEvent event) {
+    public void handlePlayerInteract(PlayerInteractEvent event) {
         // Only proceed if borders are enabled
         if (!enabled || event.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
@@ -870,7 +857,7 @@ public class ChunkBorderManager implements Listener {
     }
     
     @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
+    public void handlePlayerJoin(PlayerJoinEvent event) {
         if (!enabled) return;
         
         Player player = event.getPlayer();
@@ -897,7 +884,7 @@ public class ChunkBorderManager implements Listener {
     }
     
     @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
+    public void handlePlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         
         // Clean up borders when player leaves
@@ -958,6 +945,29 @@ public class ChunkBorderManager implements Listener {
         }
         
         scheduleBorderUpdate(player);
+    }
+
+    private BorderConfig createConfigObject() {
+        BorderConfig cfg = new BorderConfig();
+        cfg.enabled = enabled;
+        cfg.useFullHeight = useFullHeight;
+        cfg.borderHeight = borderHeight;
+        cfg.minYOffset = minYOffset;
+        cfg.maxYOffset = maxYOffset;
+        cfg.scanRange = scanRange;
+        cfg.updateDelay = updateDelay;
+        cfg.updateCooldown = updateCooldown;
+        cfg.showForBypassPlayers = showForBypassPlayers;
+        cfg.autoUpdateOnMovement = autoUpdateOnMovement;
+        cfg.restoreOriginalBlocks = restoreOriginalBlocks;
+        cfg.debugLogging = debugLogging;
+        cfg.borderMaterial = borderMaterial;
+        cfg.skipValuableOres = skipValuableOres;
+        cfg.skipFluids = skipFluids;
+        cfg.skipImportantBlocks = skipImportantBlocks;
+        cfg.borderUpdateDelayTicks = borderUpdateDelayTicks;
+        cfg.maxBorderUpdatesPerTick = maxBorderUpdatesPerTick;
+        return cfg;
     }
     
     /**

@@ -32,6 +32,7 @@ public class PlayerListener implements Listener {
     private final ChunkLockManager chunkLockManager;
     private final PlayerDataManager playerDataManager;
     private final UnlockGui unlockGui;
+    private me.chunklock.border.BorderRefreshService borderRefreshService;
     
     // Thread-safe collections for better performance
     private final Map<UUID, Long> lastWarned = new ConcurrentHashMap<>();
@@ -57,8 +58,12 @@ public class PlayerListener implements Listener {
         this.unlockGui = unlockGui;
     }
 
+    public void setBorderRefreshService(me.chunklock.border.BorderRefreshService service) {
+        this.borderRefreshService = service;
+    }
+
     @EventHandler(priority = EventPriority.HIGH)
-    public void onPlayerJoin(PlayerJoinEvent event) {
+    public void handlePlayerJoin(PlayerJoinEvent event) {
         try {
             Player player = event.getPlayer();
             
@@ -138,7 +143,7 @@ public class PlayerListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
-    public void onPlayerQuit(PlayerQuitEvent event) {
+    public void handlePlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         if (player == null) return;
         
@@ -200,31 +205,8 @@ public class PlayerListener implements Listener {
      * Updates borders when player moves to a different chunk (rate limited)
      */
     private void updateBordersOnChunkChange(Player player) {
-        UUID playerId = player.getUniqueId();
-        long now = System.currentTimeMillis();
-        Long lastUpdate = lastBorderUpdate.get(playerId);
-        
-        // Rate limit border updates to avoid performance issues
-        if (lastUpdate != null && (now - lastUpdate) < BORDER_UPDATE_COOLDOWN_MS) {
-            return;
-        }
-        
-        try {
-            ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
-            if (borderManager != null && borderManager.isAutoUpdateOnMovementEnabled()) {
-                // Update borders asynchronously to avoid blocking player movement
-                Bukkit.getScheduler().runTaskAsynchronously(ChunklockPlugin.getInstance(), () -> {
-                    // Run the border calculation in async, then update blocks on main thread
-                    Bukkit.getScheduler().runTask(ChunklockPlugin.getInstance(), () -> {
-                        if (player.isOnline()) {
-                            borderManager.scheduleBorderUpdate(player);
-                            lastBorderUpdate.put(playerId, System.currentTimeMillis());
-                        }
-                    });
-                });
-            }
-        } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().fine("Error updating borders on chunk change for " + player.getName() + ": " + e.getMessage());
+        if (borderRefreshService != null) {
+            borderRefreshService.refreshBordersOnMove(player, lastBorderUpdate);
         }
     }
     private void assignStartingChunk(Player player) {
