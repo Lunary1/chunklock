@@ -7,13 +7,18 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.block.Action;
+
 import me.chunklock.managers.ChunkLockManager;
+import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.ui.UnlockGui;
 import me.chunklock.managers.TeamManager;
 import me.chunklock.managers.PlayerProgressTracker;
@@ -21,10 +26,11 @@ import me.chunklock.ChunklockPlugin;
 import me.chunklock.border.BorderConfig;
 import me.chunklock.border.BorderConfigLoader;
 import me.chunklock.border.BorderPlacementService;
+import me.chunklock.border.BorderUpdateQueue;
+import me.chunklock.border.BorderStateManager;
+import me.chunklock.util.ChunkCoordinate;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Level;
 
 /**
@@ -41,12 +47,8 @@ public class ChunkBorderManager {
     private final PlayerProgressTracker progressTracker;
     private final BorderConfigLoader configLoader = new BorderConfigLoader();
     private BorderPlacementService placementService;
-    
-    // Store border blocks per player: Player UUID -> Location -> Original BlockData
-    private final Map<UUID, Map<Location, BlockData>> playerBorders = new ConcurrentHashMap<>();
-    
-    // Store which chunk each border block belongs to: Location -> Chunk coordinates
-    private final Map<Location, ChunkCoordinate> borderToChunk = new ConcurrentHashMap<>();
+    private final BorderStateManager borderState;
+    private final BorderUpdateQueue updateQueue;
     
     // Configuration values (loaded from config.yml)
     private boolean enabled;
@@ -69,7 +71,6 @@ public class ChunkBorderManager {
     private boolean skipImportantBlocks;
     private int borderUpdateDelayTicks = 2;
     private int maxBorderUpdatesPerTick = 10;
-    private final Queue<Runnable> updateQueue = new ConcurrentLinkedQueue<>();
 
     public ChunkBorderManager(ChunkLockManager chunkLockManager, UnlockGui unlockGui, TeamManager teamManager, PlayerProgressTracker progressTracker) {
         this.chunkLockManager = chunkLockManager;
@@ -79,8 +80,9 @@ public class ChunkBorderManager {
         this.plugin = ChunklockPlugin.getInstance();
 
         loadConfiguration();
+        this.borderState = new BorderStateManager();
         this.placementService = new BorderPlacementService(chunkLockManager, teamManager, createConfigObject());
-        Bukkit.getScheduler().runTaskTimer(plugin, this::processUpdateQueue, 1L, 1L);
+        this.updateQueue = new BorderUpdateQueue(plugin, maxBorderUpdatesPerTick, this::updateBordersForPlayer);
     }
     
     /**
@@ -113,6 +115,16 @@ public class ChunkBorderManager {
                 " - Material: " + borderMaterial + ", Range: " + scanRange +
                 ", Full Height: " + useFullHeight + (useFullHeight ? "" : ", Height: " + borderHeight));
             plugin.getLogger().info("Border queue: delay " + borderUpdateDelayTicks + " ticks, max " + maxBorderUpdatesPerTick + " per tick");
+        }
+    }
+
+    public void shutdown() {
+        if (updateQueue != null) {
+            updateQueue.shutdown();
+        }
+        // Clean up existing borders
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            removeBordersForPlayer(player);
         }
     }
     
@@ -181,7 +193,7 @@ public class ChunkBorderManager {
             if (!unlockedChunks.isEmpty()) {
                 for (ChunkCoordinate coord : unlockedChunks) {
                     Chunk chunk = player.getWorld().getChunkAt(coord.x, coord.z);
-                    placementService.createBordersForChunk(player, chunk, playerBorders, borderToChunk);
+                    placementService.createBordersForChunk(player, chunk, borderState);
                 }
 
                 if (debugLogging) {
@@ -228,482 +240,13 @@ public class ChunkBorderManager {
     }
     
     /**
-     * Places borders around all adjacent locked chunks
-     */
-    private void placeBordersForUnlockedChunks(Player player, Set<ChunkCoordinate> unlockedChunks) {
-        UUID playerId = player.getUniqueId();
-        Map<Location, BlockData> borderBlocks = new HashMap<>();
-        int adjacentChecked = 0;
-        int bordersPlaced = 0;
-        
-        for (ChunkCoordinate unlockedChunk : unlockedChunks) {
-            // Check all 8 adjacent chunks (N, S, E, W, NE, NW, SE, SW)
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    if (dx == 0 && dz == 0) continue; // Skip the center chunk itself
-                    
-                    adjacentChecked++;
-                    
-                    ChunkCoordinate adjacentCoord = new ChunkCoordinate(
-                        unlockedChunk.x + dx, 
-                        unlockedChunk.z + dz, 
-                        unlockedChunk.world
-                    );
-                    
-                    // Skip if the adjacent chunk is also unlocked
-                    if (unlockedChunks.contains(adjacentCoord)) {
-                        continue;
-                    }
-                    
-                    // Check if the adjacent chunk is locked
-                    try {
-                        Chunk adjacentChunk = player.getWorld().getChunkAt(adjacentCoord.x, adjacentCoord.z);
-                        chunkLockManager.initializeChunk(adjacentChunk, playerId);
-                        
-                        if (chunkLockManager.isLocked(adjacentChunk)) {
-                            if (debugLogging) {
-                                plugin.getLogger().info("Found locked adjacent chunk at " + adjacentCoord.x + "," + adjacentCoord.z + 
-                                    " next to unlocked chunk " + unlockedChunk.x + "," + unlockedChunk.z);
-                            }
-                            
-                            // Place border on the edge of the locked chunk facing the unlocked chunk
-                            int bordersBefore = borderBlocks.size();
-                            placeBorderBetweenChunks(player, unlockedChunk, adjacentCoord, dx, dz, borderBlocks);
-                            int bordersAdded = borderBlocks.size() - bordersBefore;
-                            bordersPlaced += bordersAdded;
-                            
-                            if (debugLogging && bordersAdded > 0) {
-                                plugin.getLogger().info("Placed " + bordersAdded + " border blocks between chunks " + 
-                                    unlockedChunk.x + "," + unlockedChunk.z + " and " + adjacentCoord.x + "," + adjacentCoord.z);
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Skip chunks that can't be accessed
-                        if (debugLogging) {
-                            plugin.getLogger().warning("Error checking adjacent chunk " + adjacentCoord.x + "," + adjacentCoord.z + ": " + e.getMessage());
-                        }
-                        continue;
-                    }
-                }
-            }
-        }
-        
-        // Store the border blocks for this player
-        if (!borderBlocks.isEmpty()) {
-            playerBorders.put(playerId, borderBlocks);
-            if (debugLogging) {
-                plugin.getLogger().info("Stored " + borderBlocks.size() + " border blocks for player " + player.getName() + 
-                    " (checked " + adjacentChecked + " adjacent chunks, placed " + bordersPlaced + " total borders)");
-            }
-        } else {
-            if (debugLogging) {
-                plugin.getLogger().info("No border blocks to store for player " + player.getName() + 
-                    " (checked " + adjacentChecked + " adjacent chunks)");
-            }
-        }
-    }
-    
-    /**
-     * Places border blocks between an unlocked chunk and a locked chunk
-     */
-    private void placeBorderBetweenChunks(Player player, ChunkCoordinate unlockedChunk, 
-                                        ChunkCoordinate lockedChunk, int dx, int dz, 
-                                        Map<Location, BlockData> borderBlocks) {
-        World world = player.getWorld();
-        
-        List<Location> borderLocations = calculateBorderLocations(world, lockedChunk, dx, dz, player);
-        
-        if (debugLogging) {
-            plugin.getLogger().info("Calculated " + borderLocations.size() + " border locations between " + 
-                unlockedChunk.x + "," + unlockedChunk.z + " and " + lockedChunk.x + "," + lockedChunk.z + 
-                " (direction: " + dx + "," + dz + ")");
-        }
-        
-        int blocksPlaced = 0;
-        int blocksSkipped = 0;
-        
-        for (Location location : borderLocations) {
-            try {
-                Block block = location.getBlock();
-                
-                // Don't replace certain important blocks
-                if (shouldSkipBlock(block)) {
-                    blocksSkipped++;
-                    continue;
-                }
-                
-                // Don't place borders if there's already a border block from another border
-                if (block.getType() == borderMaterial) {
-                    blocksSkipped++;
-                    continue;
-                }
-                
-                // Store original block data
-                borderBlocks.put(location, block.getBlockData().clone());
-                
-                // Track which chunk this border belongs to
-                borderToChunk.put(location, lockedChunk);
-                
-                // Place border block
-                block.setType(borderMaterial);
-                blocksPlaced++;
-                
-            } catch (Exception e) {
-                if (debugLogging) {
-                    plugin.getLogger().log(Level.FINE, 
-                        "Error placing border block at " + location, e);
-                }
-            }
-        }
-        
-        if (debugLogging) {
-            plugin.getLogger().info("Border placement complete: " + blocksPlaced + " blocks placed, " + 
-                blocksSkipped + " blocks skipped for direction " + dx + "," + dz);
-        }
-    }
-    
-    /**
-     * Calculates border block locations for a locked chunk based on where the unlocked chunk is
-     */
-    private List<Location> calculateBorderLocations(World world, ChunkCoordinate lockedChunk, 
-                                                   int dx, int dz, Player player) {
-        List<Location> locations = new ArrayList<>();
-        
-        // Get appropriate Y level for border placement
-        int baseY = getBaseYForBorder(world, lockedChunk, player);
-        
-        if (debugLogging) {
-            plugin.getLogger().info("Calculating border for locked chunk " + lockedChunk.x + "," + lockedChunk.z + 
-                " with direction " + dx + "," + dz + " (dx>0=locked is east, dz>0=locked is south)");
-        }
-        
-        // Determine which edge(s) of the locked chunk to place borders on
-        // The border should be on the edge of the locked chunk that faces the unlocked chunk
-        
-        if (dx == 1 && dz == 0) {
-            // Locked chunk is to the EAST, place border on WEST edge of locked chunk
-            int borderX = lockedChunk.x * 16; // West edge
-            int startZ = lockedChunk.z * 16;
-            for (int z = startZ; z < startZ + 15; z++) { // exclude south corner
-                addBorderColumn(locations, world, borderX, baseY, z);
-            }
-            if (debugLogging) {
-                plugin.getLogger().info("Placing border on WEST edge (x=" + borderX + ") of locked chunk " + lockedChunk.x + "," + lockedChunk.z);
-            }
-        } else if (dx == -1 && dz == 0) {
-            // Locked chunk is to the WEST, place border on EAST edge of locked chunk
-            int borderX = lockedChunk.x * 16 + 15; // East edge
-            int startZ = lockedChunk.z * 16;
-            for (int z = startZ + 1; z < startZ + 16; z++) { // exclude north corner
-                addBorderColumn(locations, world, borderX, baseY, z);
-            }
-            if (debugLogging) {
-                plugin.getLogger().info("Placing border on EAST edge (x=" + borderX + ") of locked chunk " + lockedChunk.x + "," + lockedChunk.z);
-            }
-        } else if (dx == 0 && dz == 1) {
-            // Locked chunk is to the SOUTH, place border on NORTH edge of locked chunk
-            int borderZ = lockedChunk.z * 16; // North edge
-            int startX = lockedChunk.x * 16;
-            for (int x = startX + 1; x < startX + 16; x++) { // exclude west corner
-                addBorderColumn(locations, world, x, baseY, borderZ);
-            }
-            if (debugLogging) {
-                plugin.getLogger().info("Placing border on NORTH edge (z=" + borderZ + ") of locked chunk " + lockedChunk.x + "," + lockedChunk.z);
-            }
-        } else if (dx == 0 && dz == -1) {
-            // Locked chunk is to the NORTH, place border on SOUTH edge of locked chunk
-            int borderZ = lockedChunk.z * 16 + 15; // South edge
-            int startX = lockedChunk.x * 16;
-            for (int x = startX; x < startX + 15; x++) { // exclude east corner
-                addBorderColumn(locations, world, x, baseY, borderZ);
-            }
-            if (debugLogging) {
-                plugin.getLogger().info("Placing border on SOUTH edge (z=" + borderZ + ") of locked chunk " + lockedChunk.x + "," + lockedChunk.z);
-            }
-        } else if (Math.abs(dx) == 1 && Math.abs(dz) == 1) {
-            // Diagonal adjacency - place a single column at the corner
-            int borderX, borderZ;
-
-            if (dx == 1 && dz == 1) {
-                // Locked chunk is SOUTHEAST, border on NORTHWEST corner
-                borderX = lockedChunk.x * 16;
-                borderZ = lockedChunk.z * 16;
-            } else if (dx == 1 && dz == -1) {
-                // Locked chunk is NORTHEAST, border on SOUTHWEST corner
-                borderX = lockedChunk.x * 16;
-                borderZ = lockedChunk.z * 16 + 15;
-            } else if (dx == -1 && dz == 1) {
-                // Locked chunk is SOUTHWEST, border on NORTHEAST corner
-                borderX = lockedChunk.x * 16 + 15;
-                borderZ = lockedChunk.z * 16;
-            } else { // dx == -1 && dz == -1
-                // Locked chunk is NORTHWEST, border on SOUTHEAST corner
-                borderX = lockedChunk.x * 16 + 15;
-                borderZ = lockedChunk.z * 16 + 15;
-            }
-
-            addBorderColumn(locations, world, borderX, baseY, borderZ);
-
-            if (debugLogging) {
-                plugin.getLogger().info("Placing diagonal border at corner (" + borderX + "," + borderZ + ") of locked chunk " + lockedChunk.x + "," + lockedChunk.z);
-            }
-        }
-        
-        return locations;
-    }
-    
-    /**
-     * Adds a vertical column of border blocks at the specified x, z coordinates
-     */
-    private void addBorderColumn(Collection<Location> locations, World world, int x, int baseY, int z) {
-        if (useFullHeight) {
-            // Use full world height from bedrock to max
-            int minY = world.getMinHeight();
-            int maxY = world.getMaxHeight() - 1; // -1 because getMaxHeight is exclusive
-            
-            if (debugLogging) {
-                // Only log first few columns to avoid spam
-                if (locations.size() < 32) {
-                    plugin.getLogger().info("Adding full height border column at " + x + "," + z + 
-                        " from Y " + minY + " to " + maxY + " (height: " + (maxY - minY + 1) + ")");
-                }
-            }
-            
-            for (int y = minY; y <= maxY; y++) {
-                locations.add(new Location(world, x, y, z));
-            }
-        } else {
-            // Use configured height offsets
-            for (int y = baseY + minYOffset; y <= baseY + maxYOffset; y++) {
-                // Ensure Y is within world bounds
-                if (y >= world.getMinHeight() && y <= world.getMaxHeight()) {
-                    locations.add(new Location(world, x, y, z));
-                }
-            }
-        }
-    }
-    
-    /**
-     * Determines the base Y level for border placement
-     */
-    private int getBaseYForBorder(World world, ChunkCoordinate chunkCoord, Player player) {
-        try {
-            // Try to get a good Y level based on the chunk's terrain
-            int centerX = chunkCoord.x * 16 + 8;
-            int centerZ = chunkCoord.z * 16 + 8;
-            int surfaceY = world.getHighestBlockYAt(centerX, centerZ);
-            
-            // Use player's level as a reference point
-            int playerY = player.getLocation().getBlockY();
-            
-            // Use a level that's reasonable based on both surface and player position
-            int baseY = Math.max(surfaceY, Math.min(playerY, surfaceY + 10));
-            
-            // Ensure it's within reasonable bounds
-            return Math.max(baseY, world.getMinHeight() + 10);
-            
-        } catch (Exception e) {
-            // Fallback to a reasonable default
-            return Math.max(64, world.getMinHeight() + 10);
-        }
-    }
-
-    /**
-     * Determine which sides of a chunk touch locked chunks for this player
-     */
-    private EnumSet<BorderDirection> getSidesTouchingLockedChunks(Chunk chunk, Player player) {
-        EnumSet<BorderDirection> sides = EnumSet.noneOf(BorderDirection.class);
-        World world = chunk.getWorld();
-        UUID id = player.getUniqueId();
-
-        for (BorderDirection dir : BorderDirection.values()) {
-            try {
-                Chunk neighbor = world.getChunkAt(chunk.getX() + dir.dx, chunk.getZ() + dir.dz);
-                chunkLockManager.initializeChunk(neighbor, id);
-                if (chunkLockManager.isLocked(neighbor)) {
-                    sides.add(dir);
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return sides;
-    }
-
-    /**
-     * Removes shared border walls between this chunk and adjacent unlocked chunks
-     */
-    private void removeSharedBorders(Chunk chunk, Player player) {
-        Map<Location, BlockData> borders = playerBorders.get(player.getUniqueId());
-        if (borders == null || borders.isEmpty()) return;
-
-        World world = chunk.getWorld();
-        UUID id = player.getUniqueId();
-
-        for (BorderDirection dir : BorderDirection.values()) {
-            try {
-                Chunk neighbor = world.getChunkAt(chunk.getX() + dir.dx, chunk.getZ() + dir.dz);
-                chunkLockManager.initializeChunk(neighbor, id);
-                if (!chunkLockManager.isLocked(neighbor)) {
-                    for (Location loc : getBorderLocationsForSide(chunk, dir, player)) {
-                        BlockData data = borders.remove(loc);
-                        borderToChunk.remove(loc);
-                        if (data != null) {
-                            Block block = loc.getBlock();
-                            if (block.getType() == borderMaterial) {
-                                if (restoreOriginalBlocks) {
-                                    block.setBlockData(data);
-                                } else {
-                                    block.setType(Material.AIR);
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-        }
-    }
-
-    /**
-     * Create borders for a single chunk based on locked neighbors
-     */
-    private void createBordersForChunk(Player player, Chunk chunk) {
-        EnumSet<BorderDirection> sides = getSidesTouchingLockedChunks(chunk, player);
-        if (sides.isEmpty()) return;
-
-        UUID id = player.getUniqueId();
-        Map<Location, BlockData> playerMap = playerBorders.computeIfAbsent(id, k -> new HashMap<>());
-
-        for (BorderDirection dir : sides) {
-            // Determine which neighboring chunk is locked for this side
-            int lockedX = chunk.getX() + dir.dx;
-            int lockedZ = chunk.getZ() + dir.dz;
-            ChunkCoordinate lockedCoord = new ChunkCoordinate(lockedX, lockedZ, chunk.getWorld().getName());
-
-            for (Location loc : getBorderLocationsForSide(chunk, dir, player)) {
-                try {
-                    Block block = loc.getBlock();
-                    if (shouldSkipBlock(block)) continue;
-                    if (block.getType() == borderMaterial || block.getType() == ownBorderMaterial || block.getType() == enemyBorderMaterial) continue;
-
-                    playerMap.put(loc, block.getBlockData().clone());
-                    // Map this border block to the locked chunk it protects
-                    borderToChunk.put(loc, lockedCoord);
-
-                    Chunk neighbor = chunk.getWorld().getChunkAt(lockedX, lockedZ);
-                    UUID owner = chunkLockManager.getChunkOwner(neighbor);
-                    UUID teamId = teamManager.getTeamLeader(player.getUniqueId());
-                    Material mat = borderMaterial;
-                    if (owner != null) {
-                        mat = owner.equals(teamId) ? ownBorderMaterial : enemyBorderMaterial;
-                    }
-
-                    block.setType(mat);
-                } catch (Exception e) {
-                    if (debugLogging) {
-                        plugin.getLogger().log(Level.FINE, "Error placing border block at " + loc, e);
-                    }
-                }
-            }
-        }
-    }
-
-    /** Get border locations for a specific side of a chunk */
-    private List<Location> getBorderLocationsForSide(Chunk chunk, BorderDirection side, Player player) {
-        World world = chunk.getWorld();
-        ChunkCoordinate coord = new ChunkCoordinate(chunk.getX(), chunk.getZ(), world.getName());
-        int baseY = getBaseYForBorder(world, coord, player);
-        List<Location> list = new ArrayList<>();
-        int startX = chunk.getX() * 16;
-        int startZ = chunk.getZ() * 16;
-
-        switch (side) {
-            case NORTH -> {
-                for (int x = startX; x <= startX + 15; x++) {
-                    addBorderColumn(list, world, x, baseY, startZ);
-                }
-            }
-            case SOUTH -> {
-                for (int x = startX; x <= startX + 15; x++) {
-                    addBorderColumn(list, world, x, baseY, startZ + 15);
-                }
-            }
-            case WEST -> {
-                for (int z = startZ; z <= startZ + 15; z++) {
-                    addBorderColumn(list, world, startX, baseY, z);
-                }
-            }
-            case EAST -> {
-                for (int z = startZ; z <= startZ + 15; z++) {
-                    addBorderColumn(list, world, startX + 15, baseY, z);
-                }
-            }
-        }
-        return list;
-    }
-    
-    /**
-     * Checks if a block should be skipped when placing borders
-     */
-    private boolean shouldSkipBlock(Block block) {
-        Material type = block.getType();
-        
-        // Always skip these critical blocks
-        if (type == Material.BEDROCK || 
-            type == Material.SPAWNER ||
-            type == Material.END_PORTAL ||
-            type == Material.END_PORTAL_FRAME ||
-            type == Material.NETHER_PORTAL) {
-            return true;
-        }
-        
-        // Skip important blocks if configured
-        if (skipImportantBlocks) {
-            if (type == Material.BEACON ||
-                type == Material.CONDUIT ||
-                type == Material.CHEST ||
-                type == Material.TRAPPED_CHEST ||
-                type == Material.SHULKER_BOX) {
-                return true;
-            }
-        }
-        
-        // Skip valuable ores if configured
-        if (skipValuableOres) {
-            if (type == Material.DIAMOND_ORE || 
-                type == Material.EMERALD_ORE ||
-                type == Material.ANCIENT_DEBRIS ||
-                type == Material.DEEPSLATE_DIAMOND_ORE ||
-                type == Material.DEEPSLATE_EMERALD_ORE ||
-                type == Material.GOLD_ORE ||
-                type == Material.DEEPSLATE_GOLD_ORE) {
-                return true;
-            }
-        }
-        
-        // Skip fluids if configured
-        if (skipFluids) {
-            if (type == Material.WATER || type == Material.LAVA) {
-                return true;
-            }
-        }
-        
-        // Don't replace existing border material
-        if (type == borderMaterial) {
-            return true;
-        }
-        
-        return false;
-    }
-    
-    /**
      * Removes all borders for a player and restores original blocks
      */
     public void removeBordersForPlayer(Player player) {
         UUID playerId = player.getUniqueId();
-        Map<Location, BlockData> borders = playerBorders.remove(playerId);
+        Map<Location, BlockData> borders = borderState.removeAllBordersForPlayer(playerId);
         
-        if (borders == null || borders.isEmpty()) {
+        if (borders.isEmpty()) {
             return;
         }
         
@@ -712,9 +255,6 @@ public class ChunkBorderManager {
             for (Map.Entry<Location, BlockData> entry : borders.entrySet()) {
                 Location location = entry.getKey();
                 BlockData originalData = entry.getValue();
-                
-                // Remove from chunk mapping
-                borderToChunk.remove(location);
                 
                 // Restore original block if configured and it's still our border material
                 if (restoreOriginalBlocks) {
@@ -754,29 +294,29 @@ public class ChunkBorderManager {
     /**
      * Updates borders after a chunk is unlocked
      */
-    public void onChunkUnlocked(Player player, Chunk unlockedChunk) {
+    public void onChunkUnlocked(Player player, Chunk chunk) {
         if (!enabled || player == null || !player.isOnline()) {
             return;
         }
         
         plugin.getLogger().fine(
             "Chunk unlocked, updating borders for " + player.getName() + " at " + 
-            unlockedChunk.getX() + "," + unlockedChunk.getZ());
+            chunk.getX() + "," + chunk.getZ());
         
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
 
-            placementService.removeSharedBorders(unlockedChunk, player, playerBorders, borderToChunk);
-            placementService.createBordersForChunk(player, unlockedChunk, playerBorders, borderToChunk);
+            placementService.removeSharedBorders(chunk, player, borderState);
+            placementService.createBordersForChunk(player, chunk, borderState);
 
             // Refresh neighboring unlocked chunks
             for (BorderDirection dir : BorderDirection.values()) {
                 try {
-                    Chunk neighbor = unlockedChunk.getWorld().getChunkAt(unlockedChunk.getX() + dir.dx, unlockedChunk.getZ() + dir.dz);
+                    Chunk neighbor = chunk.getWorld().getChunkAt(chunk.getX() + dir.dx, chunk.getZ() + dir.dz);
                     chunkLockManager.initializeChunk(neighbor, player.getUniqueId());
                     if (!chunkLockManager.isLocked(neighbor)) {
-                        placementService.removeSharedBorders(neighbor, player, playerBorders, borderToChunk);
-                        placementService.createBordersForChunk(player, neighbor, playerBorders, borderToChunk);
+                        placementService.removeSharedBorders(neighbor, player, borderState);
+                        placementService.createBordersForChunk(player, neighbor, borderState);
                     }
                 } catch (Exception ignored) {
                 }
@@ -903,8 +443,7 @@ public class ChunkBorderManager {
                 removeBordersForPlayer(player);
             }
             
-            playerBorders.clear();
-            borderToChunk.clear();
+            borderState.clearAllBorders();
             
             plugin.getLogger().info("ChunkBorderManager cleanup completed");
             
@@ -981,14 +520,13 @@ public class ChunkBorderManager {
         stats.put("useFullHeight", useFullHeight);
         stats.put("borderHeight", borderHeight);
         stats.put("debugLogging", debugLogging);
-        stats.put("playersWithBorders", playerBorders.size());
+        stats.put("updateQueue", updateQueue.getStats().toString());
         
-        int totalBorderBlocks = 0;
-        for (Map<Location, BlockData> borders : playerBorders.values()) {
-            totalBorderBlocks += borders.size();
-        }
-        stats.put("totalBorderBlocks", totalBorderBlocks);
-        stats.put("borderToChunkMappings", borderToChunk.size());
+        // Use BorderStateManager for statistics
+        BorderStateManager.BorderStateStats borderStats = borderState.getStats();
+        stats.put("playersWithBorders", borderStats.playersWithBorders);
+        stats.put("totalBorderBlocks", borderStats.totalBorderBlocks);
+        stats.put("borderToChunkMappings", borderStats.borderToChunkMappings);
 
         // Configuration summary
         stats.put("config", Map.of(
@@ -1020,27 +558,10 @@ public class ChunkBorderManager {
         return enabled && autoUpdateOnMovement;
     }
 
-    /** Process queued border updates */
-    private void processUpdateQueue() {
-        int processed = 0;
-        while (processed < maxBorderUpdatesPerTick) {
-            Runnable task = updateQueue.poll();
-            if (task == null) {
-                break;
-            }
-            try {
-                task.run();
-            } catch (Exception e) {
-                plugin.getLogger().warning("Error processing border update: " + e.getMessage());
-            }
-            processed++;
-        }
-    }
-
     /** Schedule a border update for a player */
     public void scheduleBorderUpdate(Player player) {
         if (!enabled || player == null) return;
-        updateQueue.add(() -> updateBordersForPlayer(player));
+        updateQueue.scheduleBorderUpdate(player);
     }
 
     /**
@@ -1051,13 +572,12 @@ public class ChunkBorderManager {
         if (block == null || player == null) return null;
 
         // Verify this block belongs to this player's border set
-        Map<Location, BlockData> playerMap = playerBorders.get(player.getUniqueId());
         Location loc = block.getLocation();
-        if (playerMap == null || !playerMap.containsKey(loc)) {
+        if (!borderState.isPlayerBorderBlock(player.getUniqueId(), loc)) {
             return null;
         }
 
-        ChunkCoordinate coord = borderToChunk.get(loc);
+        ChunkCoordinate coord = borderState.getChunkForBorder(loc);
         if (coord == null) return null;
 
         World world = Bukkit.getWorld(coord.world);
@@ -1075,13 +595,7 @@ public class ChunkBorderManager {
      */
     public boolean isBorderBlock(Block block) {
         if (!enabled || block == null) return false;
-
-        Material type = block.getType();
-        if (type != borderMaterial && type != ownBorderMaterial && type != enemyBorderMaterial) {
-            return false;
-        }
-
-        return borderToChunk.containsKey(block.getLocation());
+        return borderState.isBorderBlock(block, borderMaterial, ownBorderMaterial, enemyBorderMaterial);
     }
 
     /**
@@ -1090,7 +604,7 @@ public class ChunkBorderManager {
     public Chunk getBorderChunk(Block block) {
         if (block == null) return null;
 
-        ChunkCoordinate coord = borderToChunk.get(block.getLocation());
+        ChunkCoordinate coord = borderState.getChunkForBorder(block.getLocation());
         if (coord == null) return null;
 
         World world = Bukkit.getWorld(coord.world);
@@ -1116,38 +630,6 @@ public class ChunkBorderManager {
         BorderDirection(int dx, int dz) {
             this.dx = dx;
             this.dz = dz;
-        }
-    }
-    
-    /**
-     * Simple class to represent chunk coordinates
-     */
-    private static class ChunkCoordinate {
-        final int x, z;
-        final String world;
-        
-        ChunkCoordinate(int x, int z, String world) {
-            this.x = x;
-            this.z = z;
-            this.world = world;
-        }
-        
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) return true;
-            if (obj == null || getClass() != obj.getClass()) return false;
-            ChunkCoordinate that = (ChunkCoordinate) obj;
-            return x == that.x && z == that.z && Objects.equals(world, that.world);
-        }
-        
-        @Override
-        public int hashCode() {
-            return Objects.hash(x, z, world);
-        }
-        
-        @Override
-        public String toString() {
-            return world + ":" + x + ":" + z;
         }
     }
 }

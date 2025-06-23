@@ -12,6 +12,7 @@ import org.bukkit.util.Vector;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.models.Difficulty;
+import me.chunklock.util.ChunkUtils;
 import me.chunklock.ChunklockPlugin;
 
 import java.util.HashMap;
@@ -154,10 +155,8 @@ public class TickTask extends BukkitRunnable {
         Location playerLoc = player.getLocation();
         
         // Distance check first (cheapest)
-        int chunkX = chunk.getX() << 4;
-        int chunkZ = chunk.getZ() << 4;
-        double chunkCenterX = chunkX + 8;
-        double chunkCenterZ = chunkZ + 8;
+        double chunkCenterX = ChunkUtils.getChunkCenterX(chunk);
+        double chunkCenterZ = ChunkUtils.getChunkCenterZ(chunk);
         
         double distanceSquared = Math.pow(playerLoc.getX() - chunkCenterX, 2) + 
                                 Math.pow(playerLoc.getZ() - chunkCenterZ, 2);

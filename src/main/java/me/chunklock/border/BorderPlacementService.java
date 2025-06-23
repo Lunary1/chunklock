@@ -2,6 +2,7 @@ package me.chunklock.border;
 
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.TeamManager;
+import me.chunklock.util.ChunkCoordinate;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
@@ -22,14 +23,11 @@ public class BorderPlacementService {
         this.config = config;
     }
 
-    public void createBordersForChunk(Player player, Chunk chunk,
-                                      Map<UUID, Map<Location, BlockData>> playerBorders,
-                                      Map<Location, ChunkCoordinate> borderToChunk) {
+    public void createBordersForChunk(Player player, Chunk chunk, BorderStateManager borderState) {
         EnumSet<BorderDirection> sides = getSidesTouchingLockedChunks(chunk, player);
         if (sides.isEmpty()) return;
 
         UUID id = player.getUniqueId();
-        Map<Location, BlockData> playerMap = playerBorders.computeIfAbsent(id, k -> new HashMap<>());
 
         for (BorderDirection dir : sides) {
             int lockedX = chunk.getX() + dir.dx;
@@ -42,8 +40,8 @@ public class BorderPlacementService {
                     if (shouldSkipBlock(block)) continue;
                     if (block.getType() == config.borderMaterial || block.getType() == ownBorderMaterial || block.getType() == enemyBorderMaterial) continue;
 
-                    playerMap.put(loc, block.getBlockData().clone());
-                    borderToChunk.put(loc, lockedCoord);
+                    // Use BorderStateManager instead of direct map access
+                    borderState.addBorderBlock(id, loc, block.getBlockData().clone(), lockedCoord);
 
                     Chunk neighbor = chunk.getWorld().getChunkAt(lockedX, lockedZ);
                     UUID owner = chunkLockManager.getChunkOwner(neighbor);
@@ -60,11 +58,8 @@ public class BorderPlacementService {
         }
     }
 
-    public void removeSharedBorders(Chunk chunk, Player player,
-                                    Map<UUID, Map<Location, BlockData>> playerBorders,
-                                    Map<Location, ChunkCoordinate> borderToChunk) {
-        Map<Location, BlockData> borders = playerBorders.get(player.getUniqueId());
-        if (borders == null || borders.isEmpty()) return;
+    public void removeSharedBorders(Chunk chunk, Player player, BorderStateManager borderState) {
+        if (!borderState.hasPlayerBorders(player.getUniqueId())) return;
 
         World world = chunk.getWorld();
         UUID id = player.getUniqueId();
@@ -75,12 +70,15 @@ public class BorderPlacementService {
                 chunkLockManager.initializeChunk(neighbor, id);
                 if (!chunkLockManager.isLocked(neighbor)) {
                     for (Location loc : getBorderLocationsForSide(chunk, dir, player)) {
-                        BlockData data = borders.remove(loc);
-                        borderToChunk.remove(loc);
+                        BlockData data = borderState.removeBorderBlock(id, loc);
                         if (data != null) {
                             Block block = loc.getBlock();
                             if (block.getType() == config.borderMaterial) {
-                                block.setBlockData(data);
+                                if (config.restoreOriginalBlocks) {
+                                    block.setBlockData(data);
+                                } else {
+                                    block.setType(Material.AIR);
+                                }
                             }
                         }
                     }
@@ -224,16 +222,6 @@ public class BorderPlacementService {
         BorderDirection(int dx, int dz) {
             this.dx = dx;
             this.dz = dz;
-        }
-    }
-
-    public static class ChunkCoordinate {
-        final int x, z;
-        final String world;
-        public ChunkCoordinate(int x, int z, String world) {
-            this.x = x;
-            this.z = z;
-            this.world = world;
         }
     }
 }

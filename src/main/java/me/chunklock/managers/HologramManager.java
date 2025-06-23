@@ -15,6 +15,7 @@ import org.bukkit.scheduler.BukkitTask;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.models.Difficulty;
+import me.chunklock.util.ChunkUtils;
 import me.chunklock.ChunklockPlugin;
 
 import java.util.HashMap;
@@ -431,8 +432,8 @@ private void updateHologramsForPlayer(Player player) {
     private Location getHologramLocation(Chunk chunk) {
         try {
             World world = chunk.getWorld();
-            int centerX = chunk.getX() * 16 + 8;
-            int centerZ = chunk.getZ() * 16 + 8;
+            int centerX = ChunkUtils.getChunkCenterX(chunk);
+            int centerZ = ChunkUtils.getChunkCenterZ(chunk);
             
             // Get surface height at center
             int centerY = world.getHighestBlockYAt(centerX, centerZ) + (int)HOLOGRAM_HEIGHT_OFFSET;

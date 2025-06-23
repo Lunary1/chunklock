@@ -12,6 +12,7 @@ import me.chunklock.ui.UnlockGui;
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.managers.ChunkBorderManager;
 import me.chunklock.managers.TickTask;
+import me.chunklock.services.StartingChunkService;
 import me.chunklock.managers.HologramManager;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.managers.BiomeUnlockRegistry;
@@ -22,6 +23,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import me.chunklock.services.StartingChunkService;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,17 +47,17 @@ public class PlayerListener implements Listener {
     // FIX: Track if player is truly new (first time joining)
     private final Set<UUID> newPlayers = new HashSet<>();
     
-    private final Random random = new Random();
     private static final long COOLDOWN_MS = 2000L;
     private static final long UNLOCK_COOLDOWN_MS = 1000L; // Rate limiting for unlock attempts
-    private static final int MAX_SPAWN_ATTEMPTS = 100;
-    private static final int MAX_SCORE_THRESHOLD = 25;
+
+    private final StartingChunkService startingChunkService;
 
     public PlayerListener(ChunkLockManager chunkLockManager, PlayerProgressTracker progressTracker, 
-                         PlayerDataManager playerDataManager, UnlockGui unlockGui) {
+                        PlayerDataManager playerDataManager, UnlockGui unlockGui) {
         this.chunkLockManager = chunkLockManager;
         this.playerDataManager = playerDataManager;
         this.unlockGui = unlockGui;
+        this.startingChunkService = new StartingChunkService(chunkLockManager, playerDataManager);
     }
 
     public void setBorderRefreshService(me.chunklock.border.BorderRefreshService service) {
@@ -82,11 +84,11 @@ public class PlayerListener implements Listener {
             if (!playerDataManager.hasChunk(playerId)) {
                 // FIX: Mark as new player and assign starting chunk
                 newPlayers.add(playerId);
-                assignStartingChunk(player);
+                startingChunkService.assignStartingChunk(player);
             } else {
                 try {
                     Location savedSpawn = playerDataManager.getChunkSpawn(playerId);
-                    if (savedSpawn != null && isValidLocation(savedSpawn)) {
+                    if (savedSpawn != null && startingChunkService.isValidLocation(savedSpawn)) {
                         // FIX: Only teleport to center if this is a new player or if they're outside their assigned chunk
                         Chunk savedChunk = savedSpawn.getChunk();
                         Chunk currentChunk = player.getLocation().getChunk();
@@ -113,12 +115,12 @@ public class PlayerListener implements Listener {
                     } else {
                         ChunklockPlugin.getInstance().getLogger().warning("Invalid saved spawn for player " + player.getName() + ", reassigning");
                         newPlayers.add(playerId);
-                        assignStartingChunk(player);
+                        startingChunkService.assignStartingChunk(player);
                     }
                 } catch (Exception e) {
                     ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error handling returning player " + player.getName(), e);
                     newPlayers.add(playerId);
-                    assignStartingChunk(player);
+                    startingChunkService.assignStartingChunk(player);
                 }
             }
             
@@ -207,194 +209,6 @@ public class PlayerListener implements Listener {
     private void updateBordersOnChunkChange(Player player) {
         if (borderRefreshService != null) {
             borderRefreshService.refreshBordersOnMove(player, lastBorderUpdate);
-        }
-    }
-    private void assignStartingChunk(Player player) {
-        try {
-            if (player == null) {
-                ChunklockPlugin.getInstance().getLogger().severe("Cannot assign starting chunk: null player");
-                return;
-            }
-            
-            World world = player.getWorld();
-            if (world == null) {
-                ChunklockPlugin.getInstance().getLogger().severe("Cannot assign starting chunk: player world is null");
-                return;
-            }
-
-            Chunk bestChunk = findBestStartingChunk(player, world);
-
-            if (bestChunk == null) {
-                ChunklockPlugin.getInstance().getLogger().warning("Could not find suitable starting chunk for " + player.getName() + ", using world spawn area");
-                bestChunk = world.getSpawnLocation().getChunk();
-            }
-
-            try {
-                setupPlayerSpawn(player, bestChunk);
-            } catch (IllegalArgumentException e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Invalid arguments for player spawn setup: " + player.getName(), e);
-                // Try fallback to world spawn chunk
-                try {
-                    setupPlayerSpawn(player, world.getSpawnLocation().getChunk());
-                } catch (Exception e2) {
-                    ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Critical error: Could not set up any spawn for " + player.getName(), e2);
-                }
-            } catch (IllegalStateException e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Invalid state during player spawn setup: " + player.getName(), e);
-            } catch (Exception e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Unexpected error setting up player spawn for " + player.getName(), e);
-                // Try fallback to world spawn chunk
-                try {
-                    setupPlayerSpawn(player, world.getSpawnLocation().getChunk());
-                } catch (Exception e2) {
-                    ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Critical error: Could not set up any spawn for " + player.getName(), e2);
-                }
-            }
-        } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Critical error in assignStartingChunk for player " + (player != null ? player.getName() : "null"), e);
-        }
-    }
-
-    /**
-     * Finds the best starting chunk with score below threshold
-     */
-    private Chunk findBestStartingChunk(Player player, World world) {
-        Chunk bestChunk = null;
-        int bestScore = Integer.MAX_VALUE;
-        int validChunksFound = 0;
-
-        ChunklockPlugin.getInstance().getLogger().info("Searching for suitable starting chunk for " + player.getName() + 
-            " (target score <= " + MAX_SCORE_THRESHOLD + ")");
-
-        for (int attempt = 0; attempt < MAX_SPAWN_ATTEMPTS; attempt++) {
-            try {
-                // Search in a reasonable area around spawn (±20 chunks = ±320 blocks)
-                int cx = random.nextInt(41) - 20; // -20 to +20 chunk range
-                int cz = random.nextInt(41) - 20;
-                
-                Chunk chunk = world.getChunkAt(cx, cz);
-                if (chunk == null) continue;
-
-                // Evaluate chunk score
-                ChunkEvaluator.ChunkValueData evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), chunk);
-                
-                // Check if this chunk meets our criteria
-                if (evaluation.score <= MAX_SCORE_THRESHOLD) {
-                    validChunksFound++;
-                    
-                    // Additional safety check - ensure spawn location is safe
-                    Location centerLocation = ChunkUtils.getChunkCenter(chunk);
-                    if (isSafeSpawnLocation(centerLocation)) {
-                        
-                        // Prefer the chunk with the lowest score
-                        if (evaluation.score < bestScore) {
-                            bestChunk = chunk;
-                            bestScore = evaluation.score;
-                            
-                            ChunklockPlugin.getInstance().getLogger().fine("Found better starting chunk at " + 
-                                cx + "," + cz + " with score " + evaluation.score + 
-                                " (difficulty: " + evaluation.difficulty + ")");
-                        }
-                        
-                        // If we found a really good chunk (score <= 10), use it immediately
-                        if (evaluation.score <= 10) {
-                            ChunklockPlugin.getInstance().getLogger().info("Found excellent starting chunk at " + 
-                                cx + "," + cz + " with score " + evaluation.score);
-                            break;
-                        }
-                    }
-                }
-            } catch (IllegalArgumentException e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid chunk coordinates in attempt " + attempt, e);
-                continue;
-            } catch (IllegalStateException e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Chunk state error in attempt " + attempt, e);
-                continue;
-            } catch (Exception e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Error in chunk evaluation attempt " + attempt, e);
-                continue;
-            }
-        }
-
-        ChunklockPlugin.getInstance().getLogger().info("Chunk search completed for " + player.getName() + 
-            ": found " + validChunksFound + " valid chunks, selected chunk with score " + 
-            (bestChunk != null ? bestScore : "none"));
-
-        return bestChunk;
-    }
-
-    private void setupPlayerSpawn(Player player, Chunk startChunk) throws IllegalArgumentException, IllegalStateException {
-        if (startChunk == null) {
-            throw new IllegalArgumentException("Starting chunk cannot be null");
-        }
-        
-        if (startChunk.getWorld() == null) {
-            throw new IllegalStateException("Starting chunk world is null");
-        }
-
-        // Get the exact center location of the chunk
-        Location centerSpawn = ChunkUtils.getChunkCenter(startChunk);
-        
-        // Unlock the starting chunk
-        UUID teamId = chunkLockManager.getTeamManager().getTeamLeader(player.getUniqueId());
-        chunkLockManager.unlockChunk(startChunk, teamId);
-        
-        // Set player data and teleport to center
-        playerDataManager.setChunk(player.getUniqueId(), centerSpawn);
-        player.teleport(centerSpawn);
-        player.setRespawnLocation(centerSpawn, true);
-        
-        try {
-            ChunkEvaluator.ChunkValueData evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), startChunk);
-            player.sendMessage("§aYou have been assigned a starting chunk at " + startChunk.getX() + ", " + startChunk.getZ());
-            player.sendMessage("§7Spawning at center coordinates: " + (int)centerSpawn.getX() + ", " + (int)centerSpawn.getZ());
-            
-            String biomeName = BiomeUnlockRegistry.getBiomeDisplayName(evaluation.biome);
-            player.sendMessage("§7Chunk difficulty: " + evaluation.difficulty + " | Score: " + evaluation.score + " | Biome: " + biomeName);
-        } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error sending chunk info to player", e);
-            player.sendMessage("§aYou have been assigned a starting chunk at " + startChunk.getX() + ", " + startChunk.getZ());
-        }
-    }
-
-    private boolean isSafeSpawnLocation(Location location) {
-        try {
-            if (location == null) return false;
-            
-            World world = location.getWorld();
-            if (world == null) return false;
-            
-            int x = location.getBlockX();
-            int y = location.getBlockY();
-            int z = location.getBlockZ();
-            
-            // Check if Y is within reasonable bounds
-            if (y < world.getMinHeight() + 1 || y > world.getMaxHeight() - 10) return false;
-            
-            var blockAt = world.getBlockAt(x, y, z);
-            var blockBelow = world.getBlockAt(x, y - 1, z);
-            var blockAbove = world.getBlockAt(x, y + 1, z);
-            
-            // Check for solid ground, air space to stand, and air above head
-            return blockBelow != null && blockBelow.getType().isSolid() && 
-                   blockAt != null && (blockAt.getType().isAir() || !blockAt.getType().isSolid()) && 
-                   blockAbove != null && (blockAbove.getType().isAir() || !blockAbove.getType().isSolid()) &&
-                   !blockBelow.isLiquid();
-        } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.FINE, 
-                "Error checking spawn safety at " + location, e);
-            return false;
-        }
-    }
-
-    private boolean isValidLocation(Location location) {
-        try {
-            return location != null && 
-                   location.getWorld() != null && 
-                   location.getY() >= location.getWorld().getMinHeight() && 
-                   location.getY() <= location.getWorld().getMaxHeight();
-        } catch (Exception e) {
-            return false;
         }
     }
 
