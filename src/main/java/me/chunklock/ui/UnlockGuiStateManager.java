@@ -137,13 +137,13 @@ public class UnlockGuiStateManager {
      * Clean up expired pending unlocks.
      */
     public int cleanupExpired() {
-        int cleaned = 0;
+        final int[] cleaned = {0}; // Use array to make it effectively final
         pendingUnlocks.entrySet().removeIf(entry -> {
             boolean expired = entry.getValue().isExpired();
-            if (expired) cleaned++;
+            if (expired) cleaned[0]++;
             return expired;
         });
-        return cleaned;
+        return cleaned[0];
     }
     
     /**

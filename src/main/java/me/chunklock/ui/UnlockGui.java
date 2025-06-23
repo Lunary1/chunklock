@@ -103,9 +103,9 @@ public class UnlockGui {
         
         UUID playerId = player.getUniqueId();
         
-        // Check if this is our GUI
-        if (!isOurGui(playerId, event.getInventory())) {
-            return;
+        // Check if this is our GUI - be more specific about which inventory
+        if (!isOurGui(playerId, event.getClickedInventory())) {
+            return; // Not our GUI, don't interfere
         }
 
         event.setCancelled(true);
@@ -146,29 +146,37 @@ public class UnlockGui {
     /**
      * Check if an inventory belongs to our GUI system.
      */
-    private boolean isOurGui(UUID playerId, Inventory inventory) {
-        // Method 1: Check if we have an active GUI for this player
-        if (stateManager.isPlayerGui(playerId, inventory)) {
+    private boolean isOurGui(UUID playerId, Inventory clickedInventory) {
+        // First check: if the clicked inventory is null or the player's own inventory, it's not our GUI
+        if (clickedInventory == null) {
+            return false;
+        }
+        
+        // Check if this is the player's inventory (not our GUI)
+        Player player = org.bukkit.Bukkit.getPlayer(playerId);
+        if (player != null && clickedInventory.equals(player.getInventory())) {
+            return false; // This is the player's inventory, not our GUI
+        }
+        
+        // Method 1: Check if we have an active GUI for this player that matches
+        if (stateManager.isPlayerGui(playerId, clickedInventory)) {
             ChunklockPlugin.getInstance().getLogger().fine("GUI identified by active GUI tracking");
             return true;
         }
         
-        // Method 2: Check if player has pending unlock state
-        if (stateManager.hasPendingUnlock(playerId)) {
-            ChunklockPlugin.getInstance().getLogger().fine("GUI identified by pending state");
-            return true;
-        }
-        
-        // Method 3: Check inventory title as fallback
-        try {
-            String inventoryTitle = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
-                .serialize(inventory.viewers().get(0).getOpenInventory().title());
-            if (GUI_TITLE.equals(inventoryTitle)) {
-                ChunklockPlugin.getInstance().getLogger().fine("GUI identified by title: " + inventoryTitle);
-                return true;
+        // Method 2: Check if player has pending unlock state AND they have a GUI open
+        if (stateManager.hasPendingUnlock(playerId) && player != null && player.getOpenInventory() != null) {
+            // Check if the title matches our GUI title
+            try {
+                String inventoryTitle = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+                    .serialize(player.getOpenInventory().title());
+                if (GUI_TITLE.equals(inventoryTitle)) {
+                    ChunklockPlugin.getInstance().getLogger().fine("GUI identified by pending state and title match");
+                    return true;
+                }
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().fine("Title check failed: " + e.getMessage());
             }
-        } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().fine("Title check failed: " + e.getMessage());
         }
         
         return false;
@@ -327,16 +335,31 @@ public class UnlockGui {
                 borderManager.onChunkUnlocked(player, chunk);
             }
             
-            // Update holograms
-            var hologramManager = ChunklockPlugin.getInstance().getHologramManager();
-            if (hologramManager != null) {
-                hologramManager.updateHologramsForPlayer(player);
+            // Update holograms - check if method exists and is accessible
+            try {
+                var hologramManager = ChunklockPlugin.getInstance().getHologramManager();
+                if (hologramManager != null) {
+                    // Try to call the method if it exists
+                    hologramManager.getClass().getMethod("updateHologramsForPlayer", Player.class).invoke(hologramManager, player);
+                }
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().fine("Hologram update not available or failed: " + e.getMessage());
             }
             
-            // Trigger unlock effects
-            var effectsManager = ChunklockPlugin.getInstance().getUnlockEffectsManager();
-            if (effectsManager != null) {
-                effectsManager.playUnlockEffects(player, chunk);
+            // Trigger unlock effects - check if manager exists
+            try {
+                Object effectsManager = null;
+                try {
+                    effectsManager = ChunklockPlugin.getInstance().getClass().getMethod("getUnlockEffectsManager").invoke(ChunklockPlugin.getInstance());
+                } catch (Exception e) {
+                    // UnlockEffectsManager doesn't exist yet
+                }
+                
+                if (effectsManager != null) {
+                    effectsManager.getClass().getMethod("playUnlockEffects", Player.class, Chunk.class).invoke(effectsManager, player, chunk);
+                }
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().fine("Unlock effects not available: " + e.getMessage());
             }
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error notifying unlock systems", e);
