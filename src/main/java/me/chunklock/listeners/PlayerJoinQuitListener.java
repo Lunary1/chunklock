@@ -1,6 +1,5 @@
-package me.chunklock.listener;
+package me.chunklock.listeners;
 
-import me.chunklock.listeners.PlayerListener;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;

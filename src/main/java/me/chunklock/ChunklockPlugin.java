@@ -24,9 +24,9 @@ import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.managers.TeamManager;
 import me.chunklock.managers.TickTask;
 import me.chunklock.listeners.BlockProtectionListener;
+import me.chunklock.listeners.BorderListener;
+import me.chunklock.listeners.PlayerJoinQuitListener;
 import me.chunklock.listeners.PlayerListener;
-import me.chunklock.listener.BorderListener;
-import me.chunklock.listener.PlayerJoinQuitListener;
 import me.chunklock.ui.UnlockGuiListener;
 import me.chunklock.border.BorderRefreshService;
 import me.chunklock.ui.UnlockGui;
@@ -59,8 +59,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     
     // Glass border system
     private ChunkBorderManager chunkBorderManager;
-    private me.chunklock.listener.BorderListener borderListener;
-    private me.chunklock.listener.PlayerJoinQuitListener joinQuitListener;
+    private me.chunklock.listeners.BorderListener borderListener;
+    private me.chunklock.listeners.PlayerJoinQuitListener joinQuitListener;
     private me.chunklock.ui.UnlockGuiListener unlockGuiListener;
     private me.chunklock.border.BorderRefreshService borderRefreshService;
 
@@ -356,9 +356,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
 
         this.borderRefreshService = new me.chunklock.border.BorderRefreshService(chunkBorderManager);
         this.playerListener.setBorderRefreshService(borderRefreshService);
-        this.joinQuitListener = new me.chunklock.listener.PlayerJoinQuitListener(playerListener);
+        this.joinQuitListener = new me.chunklock.listeners.PlayerJoinQuitListener(playerListener);
         this.unlockGuiListener = new me.chunklock.ui.UnlockGuiListener(unlockGui);
-        this.borderListener = new me.chunklock.listener.BorderListener(chunkBorderManager);
+        this.borderListener = new me.chunklock.listeners.BorderListener(chunkBorderManager);
 
         getLogger().info("Step 13: Initializing BlockProtectionListener...");
         this.blockProtectionListener = new BlockProtectionListener(chunkLockManager, unlockGui, chunkBorderManager);

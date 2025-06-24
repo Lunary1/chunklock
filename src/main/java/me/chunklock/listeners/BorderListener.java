@@ -1,4 +1,4 @@
-package me.chunklock.listener;
+package me.chunklock.listeners;
 
 import me.chunklock.managers.ChunkBorderManager;
 import org.bukkit.event.EventHandler;

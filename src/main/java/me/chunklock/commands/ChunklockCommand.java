@@ -134,79 +134,6 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 }
             }
 
-            case "reset" -> {
-                if (!sender.hasPermission("chunklock.admin")) {
-                    sender.sendMessage(Component.text("You don't have permission to use this command.").color(NamedTextColor.RED));
-                    return true;
-                }
-
-                if (args.length < 2) {
-                    sender.sendMessage(Component.text("Usage: /chunklock reset <player>").color(NamedTextColor.YELLOW));
-                    return true;
-                }
-
-                Player target = Bukkit.getPlayer(args[1]);
-                if (target == null) {
-                    sender.sendMessage(Component.text("Player not found or not online.").color(NamedTextColor.RED));
-                    return true;
-                }
-
-                // Get count of currently unlocked chunks before reset
-                int unlockedBefore = chunkLockManager.getTotalUnlockedChunks();
-
-                sender.sendMessage(Component.text("Starting reset for " + target.getName() + "...").color(NamedTextColor.YELLOW));
-                sender.sendMessage(Component.text("Chunks unlocked before reset: " + unlockedBefore).color(NamedTextColor.GRAY));
-
-                // Find a new suitable chunk with improved logic
-                World world = target.getWorld();
-                Chunk newChunk = findSuitableResetChunk(target, world);
-
-                if (newChunk == null) {
-                    sender.sendMessage(Component.text("Warning: Could not find ideal chunk, using world spawn area").color(NamedTextColor.YELLOW));
-                    newChunk = world.getSpawnLocation().getChunk();
-                }
-
-                // Calculate exact center of the chosen chunk
-                Location centerSpawn = ChunkUtils.getChunkCenter(newChunk);
-
-                // IMPORTANT: Reset player progress FIRST
-                progressTracker.resetPlayer(target.getUniqueId());
-
-                // IMPORTANT: Reset chunks in world (re-lock all except new starting chunk)
-                chunkLockManager.resetPlayerChunks(target.getUniqueId(), newChunk);
-
-                // Set up player data
-                ChunklockPlugin.getInstance().getPlayerDataManager().setChunk(target.getUniqueId(), centerSpawn);
-
-                // Teleport to center and clear inventory
-                target.teleport(centerSpawn);
-                target.getInventory().clear();
-                target.setRespawnLocation(centerSpawn, true);
-
-                // Get stats after reset
-                int unlockedAfter = chunkLockManager.getTotalUnlockedChunks();
-                ChunkEvaluator.ChunkValueData evaluation = chunkLockManager.evaluateChunk(target.getUniqueId(), newChunk);
-
-                // Provide detailed feedback
-                sender.sendMessage(Component.text("✓ Reset completed successfully!").color(NamedTextColor.GREEN));
-                sender.sendMessage(Component.text("Player progress reset for " + target.getName()).color(NamedTextColor.GREEN));
-                sender.sendMessage(Component.text("Chunks locked: " + (unlockedBefore - unlockedAfter) +
-                        " (from " + unlockedBefore + " to " + unlockedAfter + ")").color(NamedTextColor.GRAY));
-                sender.sendMessage(Component.text("New starting chunk: " + newChunk.getX() + ", " + newChunk.getZ() +
-                        " (Score: " + evaluation.score + ", Difficulty: " + evaluation.difficulty + ")").color(NamedTextColor.GRAY));
-
-                target.sendMessage(Component.text("Your progress has been completely reset by an admin.").color(NamedTextColor.RED));
-                target.sendMessage(Component.text("All previously unlocked chunks have been locked again.").color(NamedTextColor.RED));
-                target.sendMessage(Component.text("New starting chunk: " + newChunk.getX() + ", " + newChunk.getZ()).color(NamedTextColor.GREEN));
-                target.sendMessage(Component.text("Spawning at center: " + (int) centerSpawn.getX() + ", " + (int) centerSpawn.getZ()).color(NamedTextColor.GRAY));
-
-                // Regenerate borders for the player immediately
-                ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
-                if (borderManager != null) {
-                    borderManager.updateBordersForPlayer(target);
-                }
-            }
-
             case "debug" -> {
                 if (!sender.hasPermission("chunklock.admin")) {
                     sender.sendMessage(Component.text("You don't have permission to use this command.").color(NamedTextColor.RED));
@@ -257,35 +184,6 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                     int before = chunkLockManager.getTotalUnlockedChunks();
                     chunkLockManager.resetAllChunks();
                     sender.sendMessage(Component.text("Locked " + before + " chunks. All chunks are now locked.").color(NamedTextColor.GREEN));
-                }
-            }
-
-            case "bypass" -> {
-                if (!sender.hasPermission("chunklock.admin")) {
-                    sender.sendMessage(Component.text("You don't have permission to use this command.").color(NamedTextColor.RED));
-                    return true;
-                }
-
-                Player target;
-                if (args.length >= 2) {
-                    target = Bukkit.getPlayer(args[1]);
-                    if (target == null) {
-                        sender.sendMessage(Component.text("Player not found or not online.").color(NamedTextColor.RED));
-                        return true;
-                    }
-                } else {
-                    if (!(sender instanceof Player p)) {
-                        sender.sendMessage(Component.text("Only players can toggle their own bypass.").color(NamedTextColor.RED));
-                        return true;
-                    }
-                    target = p;
-                }
-
-                chunkLockManager.setBypassing(target, !chunkLockManager.isBypassing(target));
-                boolean state = chunkLockManager.isBypassing(target);
-                sender.sendMessage(Component.text("Chunklock bypass " + (state ? "enabled" : "disabled") + " for " + target.getName()).color(NamedTextColor.GREEN));
-                if (sender != target) {
-                    target.sendMessage(Component.text("Chunklock bypass " + (state ? "enabled" : "disabled") + " by admin.").color(NamedTextColor.YELLOW));
                 }
             }
 
@@ -899,7 +797,7 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
             String prefix = args[1].toLowerCase();
 
             switch (subCommand) {
-                case "reset", "bypass" -> {
+                case "bypass" -> {
                     for (Player p : Bukkit.getOnlinePlayers()) {
                         if (p.getName().toLowerCase().startsWith(prefix)) {
                             completions.add(p.getName());

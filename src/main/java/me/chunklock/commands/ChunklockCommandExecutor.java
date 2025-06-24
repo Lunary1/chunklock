@@ -75,61 +75,81 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
         this.initialize();
     }
     
-    @Override
-    protected void registerSubCommands() {
-        ChunklockPlugin plugin = ChunklockPlugin.getInstance();
+@Override
+protected void registerSubCommands() {
+    ChunklockPlugin plugin = ChunklockPlugin.getInstance();
+    
+    try {
+        plugin.getLogger().info("=== Starting SubCommand Registration ===");
+        plugin.getLogger().info("Verifying dependencies are available:");
+        plugin.getLogger().info("  progressTracker: " + (progressTracker != null ? "OK" : "NULL"));
+        plugin.getLogger().info("  chunkLockManager: " + (chunkLockManager != null ? "OK" : "NULL"));
+        plugin.getLogger().info("  unlockGui: " + (unlockGui != null ? "OK" : "NULL"));
+        plugin.getLogger().info("  teamManager: " + (teamManager != null ? "OK" : "NULL"));
+        plugin.getLogger().info("  biomeUnlockRegistry: " + (biomeUnlockRegistry != null ? "OK" : "NULL"));
+        plugin.getLogger().info("  playerDataManager: " + (playerDataManager != null ? "OK" : "NULL"));
+        plugin.getLogger().info("  teamCommandHandler: " + (teamCommandHandler != null ? "OK" : "NULL"));
         
-        try {
-            plugin.getLogger().info("=== Starting SubCommand Registration ===");
-            plugin.getLogger().info("Verifying dependencies are available:");
-            plugin.getLogger().info("  progressTracker: " + (progressTracker != null ? "OK" : "NULL"));
-            plugin.getLogger().info("  chunkLockManager: " + (chunkLockManager != null ? "OK" : "NULL"));
-            plugin.getLogger().info("  unlockGui: " + (unlockGui != null ? "OK" : "NULL"));
-            plugin.getLogger().info("  teamManager: " + (teamManager != null ? "OK" : "NULL"));
-            plugin.getLogger().info("  biomeUnlockRegistry: " + (biomeUnlockRegistry != null ? "OK" : "NULL"));
-            plugin.getLogger().info("  playerDataManager: " + (playerDataManager != null ? "OK" : "NULL"));
-            plugin.getLogger().info("  teamCommandHandler: " + (teamCommandHandler != null ? "OK" : "NULL"));
-            
-            // Add diagnostic command first to test system
-            registerSubCommand(new DiagnosticCommand());
-            plugin.getLogger().info("✓ Registered DiagnosticCommand");
-            
-            // Basic user commands with null checks
-            if (progressTracker != null && chunkLockManager != null) {
-                registerSubCommand(new StatusCommand(progressTracker, chunkLockManager));
-                plugin.getLogger().info("✓ Registered StatusCommand with valid dependencies");
-            } else {
-                plugin.getLogger().severe("✗ Cannot register StatusCommand - dependencies are null: " +
-                    "progressTracker=" + (progressTracker != null ? "OK" : "NULL") + 
-                    ", chunkLockManager=" + (chunkLockManager != null ? "OK" : "NULL"));
-            }
-            
-            // Spawn command
-            if (playerDataManager != null) {
-                registerSubCommand(new SpawnCommand(playerDataManager));
-                plugin.getLogger().info("✓ Registered SpawnCommand with valid dependencies");
-            } else {
-                plugin.getLogger().severe("✗ Cannot register SpawnCommand - PlayerDataManager is null");
-            }
-            
-            registerSubCommand(new HelpCommand(this));
-            plugin.getLogger().info("✓ Registered HelpCommand");
-            
-            // TODO: Add more subcommands as they are extracted from the original ChunklockCommand
-            
-            // For now, we'll create a legacy command wrapper for commands not yet extracted
-            registerSubCommand(new LegacyCommandWrapper(
-                progressTracker, chunkLockManager, unlockGui, teamManager, 
-                teamCommandHandler, biomeUnlockRegistry, playerDataManager));
-            plugin.getLogger().info("✓ Registered LegacyCommandWrapper");
-            
-            plugin.getLogger().info("SubCommand registration completed. Total commands: " + getSubCommands().size());
-            
-        } catch (Exception e) {
-            plugin.getLogger().severe("Error during subcommand registration: " + e.getMessage());
-            e.printStackTrace();
+        // Diagnostic command
+        registerSubCommand(new DiagnosticCommand());
+        plugin.getLogger().info("✓ Registered DiagnosticCommand");
+        
+        // Status command
+        if (progressTracker != null && chunkLockManager != null) {
+            registerSubCommand(new StatusCommand(progressTracker, chunkLockManager));
+            plugin.getLogger().info("✓ Registered StatusCommand with valid dependencies");
+        } else {
+            plugin.getLogger().severe("✗ Cannot register StatusCommand - dependencies are null: " +
+                "progressTracker=" + (progressTracker != null ? "OK" : "NULL") + 
+                ", chunkLockManager=" + (chunkLockManager != null ? "OK" : "NULL"));
         }
+        
+        // Spawn command
+        if (playerDataManager != null) {
+            registerSubCommand(new SpawnCommand(playerDataManager));
+            plugin.getLogger().info("✓ Registered SpawnCommand with valid dependencies");
+        } else {
+            plugin.getLogger().severe("✗ Cannot register SpawnCommand - PlayerDataManager is null");
+        }
+
+        // Bypass command
+        if (chunkLockManager != null) {
+            registerSubCommand(new BypassCommand(chunkLockManager));
+            plugin.getLogger().info("✓ Registered BypassCommand with valid dependencies");
+        } else {
+            plugin.getLogger().severe("✗ Cannot register BypassCommand - ChunkLockManager is null");
+        }
+        
+        // Reset command
+        if (progressTracker != null && chunkLockManager != null && playerDataManager != null) {
+            registerSubCommand(new ResetCommand(progressTracker, chunkLockManager, playerDataManager));
+            plugin.getLogger().info("✓ Registered ResetCommand with valid dependencies");
+        } else {
+            plugin.getLogger().severe("✗ Cannot register ResetCommand - dependencies are null: " +
+                "progressTracker=" + (progressTracker != null ? "OK" : "NULL") + 
+                ", chunkLockManager=" + (chunkLockManager != null ? "OK" : "NULL") +
+                ", playerDataManager=" + (playerDataManager != null ? "OK" : "NULL"));
+        }
+        
+        // Help command
+        registerSubCommand(new HelpCommand(this));
+        plugin.getLogger().info("✓ Registered HelpCommand");
+        
+        // TODO: Add more subcommands as they are extracted from the original ChunklockCommand
+        
+        // For now, we'll create a legacy command wrapper for commands not yet extracted
+        registerSubCommand(new LegacyCommandWrapper(
+            progressTracker, chunkLockManager, unlockGui, teamManager, 
+            teamCommandHandler, biomeUnlockRegistry, playerDataManager));
+        plugin.getLogger().info("✓ Registered LegacyCommandWrapper");
+        
+        plugin.getLogger().info("SubCommand registration completed. Total commands: " + getSubCommands().size());
+        
+    } catch (Exception e) {
+        plugin.getLogger().severe("Error during subcommand registration: " + e.getMessage());
+        e.printStackTrace();
     }
+}
     
     /**
      * Temporary wrapper for commands that haven't been extracted yet.
