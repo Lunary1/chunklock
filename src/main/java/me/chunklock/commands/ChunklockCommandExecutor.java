@@ -134,8 +134,17 @@ protected void registerSubCommands() {
         // Help command
         registerSubCommand(new HelpCommand(this));
         plugin.getLogger().info("✓ Registered HelpCommand");
-        
-        // TODO: Add more subcommands as they are extracted from the original ChunklockCommand
+
+        // Debug command
+        if (chunkLockManager != null && biomeUnlockRegistry != null && unlockGui != null) {
+            registerSubCommand(new DebugCommand(chunkLockManager, biomeUnlockRegistry, unlockGui));
+            plugin.getLogger().info("✓ Registered DebugCommand with valid dependencies");
+        } else {
+            plugin.getLogger().severe("✗ Cannot register DebugCommand - dependencies are null: " +
+                "chunkLockManager=" + (chunkLockManager != null ? "OK" : "NULL") + 
+                ", biomeUnlockRegistry=" + (biomeUnlockRegistry != null ? "OK" : "NULL") +
+                ", unlockGui=" + (unlockGui != null ? "OK" : "NULL"));
+        }
         
         // For now, we'll create a legacy command wrapper for commands not yet extracted
         registerSubCommand(new LegacyCommandWrapper(
