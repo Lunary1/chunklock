@@ -67,21 +67,38 @@ public class PlayerProgressTracker {
     }
 
     public void saveAll() {
-        for (Map.Entry<UUID, Integer> entry : unlockedChunkCount.entrySet()) {
-            String key = "players." + entry.getKey();
-            config.set(key + ".progress.unlocked_chunks", entry.getValue());
-
-            ContestedData cd = contestedClaims.get(entry.getKey());
-            if (cd != null) {
-                config.set(key + ".progress.contested_claims.count", cd.count);
-                config.set(key + ".progress.contested_claims.last_reset", cd.lastReset);
-            }
-        }
-        
         try {
+            // CRITICAL FIX: Load existing file to preserve other sections
+            if (!file.exists()) {
+                file.getParentFile().mkdirs();
+                file.createNewFile();
+            }
+            
+            // Load existing configuration first
+            FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+            
+            // Update only the progress data for each team leader
+            for (Map.Entry<UUID, Integer> entry : unlockedChunkCount.entrySet()) {
+                String key = "players." + entry.getKey();
+                config.set(key + ".progress.unlocked_chunks", entry.getValue());
+
+                ContestedData cd = contestedClaims.get(entry.getKey());
+                if (cd != null) {
+                    config.set(key + ".progress.contested_claims.count", cd.count);
+                    config.set(key + ".progress.contested_claims.last_reset", cd.lastReset);
+                }
+            }
+            
+            // Save the file  
             config.save(file);
+            plugin.getLogger().info("Saved progress data for " + unlockedChunkCount.size() + " teams to data.yml");
+            
         } catch (IOException e) {
-            plugin.getLogger().severe("Could not save data.yml");
+            plugin.getLogger().severe("Could not save progress data to data.yml: " + e.getMessage());
+            e.printStackTrace();
+        } catch (Exception e) {
+            plugin.getLogger().severe("Unexpected error saving progress data: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

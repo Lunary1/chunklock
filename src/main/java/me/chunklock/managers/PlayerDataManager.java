@@ -57,18 +57,36 @@ public class PlayerDataManager {
     }
 
     public void saveAll() {
-        for (Map.Entry<UUID, Location> entry : playerSpawns.entrySet()) {
-            String key = "players." + entry.getKey();
-            Location loc = entry.getValue();
-            config.set(key + ".spawn.x", loc.getBlockX());
-            config.set(key + ".spawn.y", loc.getBlockY());
-            config.set(key + ".spawn.z", loc.getBlockZ());
-            config.set(key + ".spawn.world", loc.getWorld().getName());
-        }
         try {
+            // CRITICAL FIX: Load existing file to preserve other sections
+            if (!file.exists()) {
+                file.getParentFile().mkdirs();
+                file.createNewFile();
+            }
+            
+            // Load existing configuration first
+            FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+            
+            // Update only the players section
+            for (Map.Entry<UUID, Location> entry : playerSpawns.entrySet()) {
+                String key = "players." + entry.getKey();
+                Location loc = entry.getValue();
+                config.set(key + ".spawn.x", loc.getBlockX());
+                config.set(key + ".spawn.y", loc.getBlockY());
+                config.set(key + ".spawn.z", loc.getBlockZ());
+                config.set(key + ".spawn.world", loc.getWorld().getName());
+            }
+            
+            // Save the file
             config.save(file);
+            plugin.getLogger().info("Saved " + playerSpawns.size() + " player spawn locations to data.yml");
+            
         } catch (IOException e) {
-            plugin.getLogger().severe("Could not save data.yml");
+            plugin.getLogger().severe("Could not save player data to data.yml: " + e.getMessage());
+            e.printStackTrace();
+        } catch (Exception e) {
+            plugin.getLogger().severe("Unexpected error saving player data: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

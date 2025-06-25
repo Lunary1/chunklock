@@ -196,44 +196,54 @@ public class ChunkLockManager {
     }
 
     public void saveAll() {
-        if (config == null) {
-            config = new YamlConfiguration();
-        }
-
-        ConfigurationSection section = config.getConfigurationSection("chunks");
-        if (section == null) {
-            section = config.createSection("chunks");
-        }
-        for (String key : section.getKeys(false)) {
-            section.set(key, null); // Clear existing entries
-        }
-
-        for (Map.Entry<String, ChunkData> entry : chunkDataMap.entrySet()) {
-            String[] parts = entry.getKey().split(":");
-            if (parts.length != 3) continue;
-
-            String world = parts[0];
-            int x = Integer.parseInt(parts[1]);
-            int z = Integer.parseInt(parts[2]);
-            String base = entry.getKey();
-
-            section.set(base + ".world", world);
-            section.set(base + ".x", x);
-            section.set(base + ".z", z);
-            section.set(base + ".locked", entry.getValue().isLocked());
-            section.set(base + ".difficulty", entry.getValue().getDifficulty().name());
-            if (entry.getValue().getOwnerId() != null) {
-                section.set(base + ".owner", entry.getValue().getOwnerId().toString());
-            } else {
-                section.set(base + ".owner", null);
-            }
-        }
-
         try {
+            if (!file.exists()) {
+                file.getParentFile().mkdirs();
+                file.createNewFile();
+            }
+            
+            config = YamlConfiguration.loadConfiguration(file);
+            
+            ConfigurationSection section = config.getConfigurationSection("chunks");
+            if (section == null) {
+                section = config.createSection("chunks");
+            }
+
+            Set<String> existingKeys = new HashSet<>(section.getKeys(false));
+            for (String key : existingKeys) {
+                section.set(key, null);
+            }
+
+            for (Map.Entry<String, ChunkData> entry : chunkDataMap.entrySet()) {
+                String[] parts = entry.getKey().split(":");
+                if (parts.length != 3) continue;
+
+                String world = parts[0];
+                int x = Integer.parseInt(parts[1]);
+                int z = Integer.parseInt(parts[2]);
+                String base = entry.getKey();
+
+                section.set(base + ".world", world);
+                section.set(base + ".x", x);
+                section.set(base + ".z", z);
+                section.set(base + ".locked", entry.getValue().isLocked());
+                section.set(base + ".difficulty", entry.getValue().getDifficulty().name());
+                if (entry.getValue().getOwnerId() != null) {
+                    section.set(base + ".owner", entry.getValue().getOwnerId().toString());
+                } else {
+                    section.set(base + ".owner", null);
+                }
+            }
+
             config.save(file);
-            plugin.getLogger().info("Saved chunk data to data.yml");
+            plugin.getLogger().info("Saved " + chunkDataMap.size() + " chunks to data.yml");
+            
         } catch (IOException e) {
-            plugin.getLogger().severe("Could not save data.yml");
+            plugin.getLogger().severe("Could not save chunk data to data.yml: " + e.getMessage());
+            e.printStackTrace();
+        } catch (Exception e) {
+            plugin.getLogger().severe("Unexpected error saving chunk data: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

@@ -281,14 +281,12 @@ public class ChunklockCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(Component.text("Chunklock Commands:").color(NamedTextColor.AQUA));
                 sender.sendMessage(Component.text("/chunklock status - View your unlocked chunks").color(NamedTextColor.GRAY));
                 sender.sendMessage(Component.text("/chunklock team - Team management commands").color(NamedTextColor.GRAY));
-                sender.sendMessage(Component.text("/chunklock unlock - Attempt to unlock your current chunk").color(NamedTextColor.GRAY));
                 sender.sendMessage(Component.text("/chunklock spawn - Return to your starting chunk center").color(NamedTextColor.GRAY));
                 if (sender.hasPermission("chunklock.admin")) {
                     sender.sendMessage(Component.text("=== Admin Commands ===").color(NamedTextColor.YELLOW));
                     sender.sendMessage(Component.text("/chunklock reset <player> - Admin: Complete reset (progress + chunks)").color(NamedTextColor.GRAY));
                     sender.sendMessage(Component.text("/chunklock bypass [player] - Admin: Toggle bypass mode").color(NamedTextColor.GRAY));
                     sender.sendMessage(Component.text("/chunklock reload - Admin: Reload plugin configuration").color(NamedTextColor.GRAY));
-                    sender.sendMessage(Component.text("/chunklock borders <refresh [player]|info|clear> - Admin: Manage glass borders").color(NamedTextColor.GRAY));
                     sender.sendMessage(Component.text("/chunklock resetall confirm - Admin: Lock all chunks").color(NamedTextColor.GRAY));
                     sender.sendMessage(Component.text("/chunklock debug - Admin: Debugging tools").color(NamedTextColor.GRAY));
                 }
