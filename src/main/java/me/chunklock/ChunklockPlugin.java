@@ -12,7 +12,6 @@ import me.chunklock.managers.EnhancedTeamManager;
 import me.chunklock.commands.BasicTeamCommandHandler;
 import me.chunklock.util.DataMigrator;
 import me.chunklock.commands.ChunklockCommandExecutor;
-import me.chunklock.commands.ChunklockCommand;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkBorderManager;
 import me.chunklock.managers.ChunkEvaluator;
@@ -513,20 +512,6 @@ private boolean registerCommands() {
             }
         } else {
             getLogger().warning("Not all dependencies available. Falling back to legacy command system...");
-            
-            // Fallback to legacy system if available
-            try {
-                var legacyCmd = new ChunklockCommand(progressTracker, chunkLockManager, unlockGui, teamManager, teamCommandHandler, biomeUnlockRegistry);
-                
-                if (getCommand("chunklock") != null) {
-                    getCommand("chunklock").setExecutor(legacyCmd);
-                    getCommand("chunklock").setTabCompleter(legacyCmd);
-                    getLogger().warning("Using legacy command system due to missing dependencies");
-                    return true;
-                }
-            } catch (Exception fallbackError) {
-                getLogger().log(Level.SEVERE, "Legacy command system also failed", fallbackError);
-            }
         }
         
         getLogger().severe("Both new and legacy command systems failed to initialize");
