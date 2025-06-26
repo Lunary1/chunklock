@@ -19,6 +19,7 @@ import me.chunklock.managers.TeamManager;
 import me.chunklock.ui.UnlockGui;
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.managers.ChunkBorderManager;
+import me.chunklock.commands.UnlockCommand;
 
 /**
  * Main command executor for the chunklock plugin.
@@ -168,79 +169,23 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
                     ", biomeUnlockRegistry=" + (biomeUnlockRegistry != null ? "OK" : "NULL") +
                     ", unlockGui=" + (unlockGui != null ? "OK" : "NULL"));
             }
-            
-            // For now, we'll create a legacy command wrapper for commands not yet extracted
-            registerSubCommand(new LegacyCommandWrapper(
-                progressTracker, chunkLockManager, unlockGui, teamManager, 
-                teamCommandHandler, biomeUnlockRegistry, playerDataManager));
-            plugin.getLogger().info("✓ Registered LegacyCommandWrapper");
+
+            // Unlock command (admin-only)
+            if (chunkLockManager != null && progressTracker != null && teamManager != null) {
+                registerSubCommand(new UnlockCommand(chunkLockManager, progressTracker, teamManager));
+                plugin.getLogger().info("✓ Registered UnlockCommand (admin-only) with valid dependencies");
+            } else {
+                plugin.getLogger().severe("✗ Cannot register UnlockCommand - dependencies are null: " +
+                    "chunkLockManager=" + (chunkLockManager != null ? "OK" : "NULL") + 
+                    ", progressTracker=" + (progressTracker != null ? "OK" : "NULL") +
+                    ", teamManager=" + (teamManager != null ? "OK" : "NULL"));
+            }
             
             plugin.getLogger().info("SubCommand registration completed. Total commands: " + getSubCommands().size());
             
         } catch (Exception e) {
             plugin.getLogger().severe("Error during subcommand registration: " + e.getMessage());
             e.printStackTrace();
-        }
-    }
-    
-    /**
-     * Temporary wrapper for commands that haven't been extracted yet.
-     * This allows gradual migration from the old command system.
-     */
-    private static class LegacyCommandWrapper extends SubCommand {
-        
-        private final PlayerProgressTracker progressTracker;
-        private final ChunkLockManager chunkLockManager;
-        private final UnlockGui unlockGui;
-        private final TeamManager teamManager;
-        private final BasicTeamCommandHandler teamCommandHandler;
-        private final BiomeUnlockRegistry biomeUnlockRegistry;
-        private final PlayerDataManager playerDataManager;
-        
-        public LegacyCommandWrapper(PlayerProgressTracker progressTracker,
-                                   ChunkLockManager chunkLockManager,
-                                   UnlockGui unlockGui,
-                                   TeamManager teamManager,
-                                   BasicTeamCommandHandler teamCommandHandler,
-                                   BiomeUnlockRegistry biomeUnlockRegistry,
-                                   PlayerDataManager playerDataManager) {
-            super("*", null, false); // Special wildcard command
-            this.progressTracker = progressTracker;
-            this.chunkLockManager = chunkLockManager;
-            this.unlockGui = unlockGui;
-            this.teamManager = teamManager;
-            this.teamCommandHandler = teamCommandHandler;
-            this.biomeUnlockRegistry = biomeUnlockRegistry;
-            this.playerDataManager = playerDataManager;
-        }
-        
-        @Override
-        public boolean execute(org.bukkit.command.CommandSender sender, String[] args) {
-            // This would contain the original command logic for commands not yet extracted
-            // For now, just show a message
-            sender.sendMessage("§eThis command is not yet migrated to the new system.");
-            sender.sendMessage("§7Please use the original plugin version until migration is complete.");
-            return true;
-        }
-        
-        @Override
-        public java.util.List<String> getTabCompletions(org.bukkit.command.CommandSender sender, String[] args) {
-            return java.util.Collections.emptyList();
-        }
-        
-        @Override
-        public String getUsage() {
-            return "/chunklock <legacy command>";
-        }
-        
-        @Override
-        public String getDescription() {
-            return "Legacy command wrapper (temporary)";
-        }
-        
-        @Override
-        public boolean hasPermission(org.bukkit.command.CommandSender sender) {
-            return true; // Allow access to determine if command exists
         }
     }
 }

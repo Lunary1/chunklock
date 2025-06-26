@@ -73,16 +73,18 @@ public class HelpCommand extends SubCommand {
             .color(NamedTextColor.GRAY));
         sender.sendMessage(Component.text("/chunklock status - View your unlocked chunks")
             .color(NamedTextColor.WHITE));
-        sender.sendMessage(Component.text("/chunklock unlock - Attempt to unlock current chunk")
-            .color(NamedTextColor.WHITE));
         sender.sendMessage(Component.text("/chunklock spawn - Return to your starting chunk")
             .color(NamedTextColor.WHITE));
         sender.sendMessage(Component.text("/chunklock team - Team management commands")
             .color(NamedTextColor.WHITE));
+        sender.sendMessage(Component.text("💡 Right-click a block to open the unlock GUI")
+            .color(NamedTextColor.GOLD));
         
         if (sender.hasPermission("chunklock.admin")) {
             sender.sendMessage(Component.text("═══ Admin Commands ═══")
                 .color(NamedTextColor.YELLOW));
+            sender.sendMessage(Component.text("/chunklock unlock <player> - Force unlock chunk for player")
+                .color(NamedTextColor.GRAY));
             sender.sendMessage(Component.text("/chunklock reset <player> - Reset player progress")
                 .color(NamedTextColor.GRAY));
             sender.sendMessage(Component.text("/chunklock bypass [player] - Toggle bypass mode")

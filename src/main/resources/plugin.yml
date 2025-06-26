@@ -27,6 +27,7 @@ permissions:
     default: op
     children:
       chunklock.use: true
+      chunklock.unlock: true
       chunklock.reset: true
       chunklock.bypass: true
       chunklock.reload: true
@@ -36,6 +37,10 @@ permissions:
 
   chunklock.reload:
     description: Allows reloading the plugin configuration
+    default: op
+
+  chunklock.unlock:
+    description: Allows force unlocking chunks for players (admin only)
     default: op
 
   chunklock.reset:
