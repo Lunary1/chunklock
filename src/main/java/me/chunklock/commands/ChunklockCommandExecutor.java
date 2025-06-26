@@ -2,14 +2,15 @@
 package me.chunklock.commands;
 
 import me.chunklock.commands.BasicTeamCommandHandler;
+import me.chunklock.commands.BorderCommand;
+import me.chunklock.commands.BypassCommand;
+import me.chunklock.commands.DebugCommand;
 import me.chunklock.commands.DiagnosticCommand;
 import me.chunklock.commands.HelpCommand;
 import me.chunklock.commands.ReloadCommand;
+import me.chunklock.commands.ResetCommand;
 import me.chunklock.commands.SpawnCommand;
 import me.chunklock.commands.StatusCommand;
-import me.chunklock.commands.BypassCommand;
-import me.chunklock.commands.ResetCommand;
-import me.chunklock.commands.DebugCommand;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.PlayerDataManager;
@@ -17,6 +18,7 @@ import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.managers.TeamManager;
 import me.chunklock.ui.UnlockGui;
 import me.chunklock.ChunklockPlugin;
+import me.chunklock.managers.ChunkBorderManager;
 
 /**
  * Main command executor for the chunklock plugin.
@@ -139,9 +141,22 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
             registerSubCommand(new HelpCommand(this));
             plugin.getLogger().info("✓ Registered HelpCommand");
 
-            // Reload command
+            // RELOAD COMMAND - NO DEPENDENCIES NEEDED
             registerSubCommand(new ReloadCommand());
-            plugin.getLogger().info("✓ Registered ReloadCommand");
+            plugin.getLogger().info("✓ Registered ReloadCommand - NO DEPENDENCIES REQUIRED");
+
+            // BORDER COMMAND - NEEDS ChunkBorderManager
+            try {
+                ChunkBorderManager borderManager = plugin.getChunkBorderManager();
+                if (borderManager != null) {
+                    registerSubCommand(new BorderCommand());
+                    plugin.getLogger().info("✓ Registered BorderCommand with ChunkBorderManager");
+                } else {
+                    plugin.getLogger().warning("✗ Cannot register BorderCommand - ChunkBorderManager is null");
+                }
+            } catch (Exception e) {
+                plugin.getLogger().warning("✗ Cannot register BorderCommand - ChunkBorderManager error: " + e.getMessage());
+            }
 
             // Debug command
             if (chunkLockManager != null && biomeUnlockRegistry != null && unlockGui != null) {
