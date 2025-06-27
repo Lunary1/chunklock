@@ -11,7 +11,6 @@ import me.chunklock.managers.PlayerDataManager;
 import me.chunklock.ui.UnlockGui;
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.managers.ChunkBorderManager;
-import me.chunklock.managers.TickTask;
 import me.chunklock.services.StartingChunkService;
 import me.chunklock.managers.HologramManager;
 import me.chunklock.managers.ChunkEvaluator;
@@ -156,13 +155,6 @@ public class PlayerListener implements Listener {
             lastWarned.remove(playerId);
             lastUnlockAttempt.remove(playerId);
             lastBorderUpdate.remove(playerId); // Clean up border tracking
-            // FIX: Don't remove from newPlayers here - let it be handled on next join
-            
-            // Notify TickTask to cleanup player data
-            TickTask tickTask = ChunklockPlugin.getInstance().getTickTask();
-            if (tickTask != null) {
-                tickTask.removePlayer(playerId);
-            }
             
             // Notify HologramManager to cleanup
             HologramManager hologramManager = ChunklockPlugin.getInstance().getHologramManager();

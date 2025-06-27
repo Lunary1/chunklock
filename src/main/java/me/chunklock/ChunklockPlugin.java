@@ -11,7 +11,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import me.chunklock.managers.EnhancedTeamManager;
 import me.chunklock.commands.BasicTeamCommandHandler;
 import me.chunklock.util.DataMigrator;
-import me.chunklock.commands.ChunklockCommandExecutor;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkBorderManager;
 import me.chunklock.managers.ChunkEvaluator;
@@ -21,20 +20,13 @@ import me.chunklock.managers.HologramManager;
 import me.chunklock.managers.PlayerDataManager;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.managers.TeamManager;
-import me.chunklock.managers.TickTask;
 import me.chunklock.listeners.BlockProtectionListener;
-import me.chunklock.listeners.BorderListener;
-import me.chunklock.listeners.PlayerJoinQuitListener;
 import me.chunklock.listeners.PlayerListener;
-import me.chunklock.ui.UnlockGuiListener;
-import me.chunklock.border.BorderRefreshService;
 import me.chunklock.ui.UnlockGui;
 import java.util.logging.Level;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-
-import java.util.logging.Level;
 
 public class ChunklockPlugin extends JavaPlugin implements Listener {
 
@@ -49,9 +41,6 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private UnlockGui unlockGui;
     private HologramManager hologramManager;
     private PlayerListener playerListener;
-    
-    // Keep track of active tasks for cleanup
-    private TickTask activeTickTask;
     
     // Block protection listener
     private BlockProtectionListener blockProtectionListener;
@@ -185,10 +174,6 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             
             if (chunkBorderManager != null) {
                 chunkBorderManager.cleanup();
-            }
-            
-            if (activeTickTask != null && !activeTickTask.isCancelled()) {
-                activeTickTask.cancel();
             }
 
             // 2. Save all current data before reload
@@ -418,16 +403,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     }
 
     private boolean startTasks() {
-        try {
-            // Cancel existing task if it exists
-            if (activeTickTask != null && !activeTickTask.isCancelled()) {
-                activeTickTask.cancel();
-            }
-            
-            // Start new task
-            activeTickTask = new TickTask(chunkLockManager, biomeUnlockRegistry);
-            activeTickTask.runTaskTimer(this, 0L, 2L);
-            
+        try {            
             getLogger().info("Background tasks started successfully");
             return true;
             
@@ -570,11 +546,6 @@ private boolean registerCommands() {
                 chunkBorderManager.cleanup();
             }
             
-            // Cancel background tasks
-            if (activeTickTask != null && !activeTickTask.isCancelled()) {
-                activeTickTask.cancel();
-            }
-            
             // Save all data
             saveAllData();
             
@@ -703,10 +674,6 @@ private boolean registerCommands() {
         return hologramManager;
     }
 
-    public TickTask getTickTask() {
-        return activeTickTask;
-    }
-
     public PlayerListener getPlayerListener() {
         if (playerListener == null) {
             getLogger().warning("PlayerListener accessed before initialization");
@@ -768,13 +735,6 @@ private boolean registerCommands() {
                 int totalTeamChunks = allTeams.stream().mapToInt(team -> team.getTotalChunksUnlocked()).sum();
                 stats.append("Total team members: ").append(totalTeamMembers).append("\n");
                 stats.append("Total team chunks unlocked: ").append(totalTeamChunks).append("\n");
-            }
-            
-            if (activeTickTask != null) {
-                var tickStats = activeTickTask.getCacheStats();
-                stats.append("TickTask cache size: ").append(tickStats.get("cacheSize")).append("\n");
-                stats.append("Particles spawned: ").append(tickStats.get("particlesSpawned")).append("\n");
-                stats.append("Cache hits: ").append(tickStats.get("cacheHits")).append("\n");
             }
             
             if (playerListener != null) {

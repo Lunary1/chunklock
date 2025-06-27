@@ -359,3 +359,10 @@ glass-borders:
 performance:
   border-update-delay: 2
   max-border-updates-per-tick: 10
+
+worlds:
+  enabled-worlds:
+    - "world"
+    - "world_nether"
+    - "world_the_end"
+  auto-assign-on-world-change: true
