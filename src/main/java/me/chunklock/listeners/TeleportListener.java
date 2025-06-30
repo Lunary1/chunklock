@@ -7,6 +7,7 @@ import me.chunklock.services.StartingChunkService;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.Bukkit;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -110,9 +111,28 @@ public class TeleportListener implements Listener {
                             if (player.isOnline()) {
                                 player.teleport(existingSpawn);
                                 player.sendMessage("§aReturned to your existing chunk in " + newWorld.getName());
+
+                                // Schedule visual updates after teleport
+                                Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
+                                    if (player.isOnline()) {
+                                        try {
+                                            var borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
+                                            if (borderManager != null) {
+                                                borderManager.scheduleBorderUpdate(player);
+                                            }
+
+                                            var hologramManager = ChunklockPlugin.getInstance().getHologramManager();
+                                            if (hologramManager != null) {
+                                                hologramManager.startHologramDisplay(player);
+                                            }
+                                        } catch (Exception e) {
+                                            ChunklockPlugin.getInstance().getLogger().warning("Error updating visual effects for " + player.getName() + ": " + e.getMessage());
+                                        }
+                                    }
+                                }, 60L); // 3 second delay
                             }
                         } catch (Exception e) {
-                            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING,
                                 "Error during delayed teleport for " + player.getName(), e);
                         } finally {
                             // Always remove from processing set
@@ -125,9 +145,28 @@ public class TeleportListener implements Listener {
             
             // Assign new starting chunk in the new world
             startingChunkService.assignStartingChunk(player);
-            
+
             ChunklockPlugin.getInstance().getLogger().info(
                 "Assigned new starting chunk to " + player.getName() + " in world " + newWorld.getName());
+
+            // Schedule visual update for the player after spawn assignment
+            Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
+                if (player.isOnline()) {
+                    try {
+                        var borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
+                        if (borderManager != null) {
+                            borderManager.scheduleBorderUpdate(player);
+                        }
+
+                        var hologramManager = ChunklockPlugin.getInstance().getHologramManager();
+                        if (hologramManager != null) {
+                            hologramManager.startHologramDisplay(player);
+                        }
+                    } catch (Exception e) {
+                        ChunklockPlugin.getInstance().getLogger().warning("Error updating visual effects for " + player.getName() + ": " + e.getMessage());
+                    }
+                }
+            }, 60L); // 3 second delay
                 
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
