@@ -66,9 +66,6 @@ public class ChunkBorderManager {
     private boolean restoreOriginalBlocks;
     private boolean debugLogging;
     private Material borderMaterial;
-    private boolean skipValuableOres;
-    private boolean skipFluids;
-    private boolean skipImportantBlocks;
     private int borderUpdateDelayTicks = 2;
     private int maxBorderUpdatesPerTick = 10;
 
@@ -145,9 +142,6 @@ public class ChunkBorderManager {
         restoreOriginalBlocks = cfg.restoreOriginalBlocks;
         debugLogging = cfg.debugLogging;
         borderMaterial = cfg.borderMaterial;
-        skipValuableOres = cfg.skipValuableOres;
-        skipFluids = cfg.skipFluids;
-        skipImportantBlocks = cfg.skipImportantBlocks;
         borderUpdateDelayTicks = cfg.borderUpdateDelayTicks;
         maxBorderUpdatesPerTick = cfg.maxBorderUpdatesPerTick;
         
@@ -669,9 +663,6 @@ public class ChunkBorderManager {
         cfg.restoreOriginalBlocks = restoreOriginalBlocks;
         cfg.debugLogging = debugLogging;
         cfg.borderMaterial = borderMaterial;
-        cfg.skipValuableOres = skipValuableOres;
-        cfg.skipFluids = skipFluids;
-        cfg.skipImportantBlocks = skipImportantBlocks;
         cfg.borderUpdateDelayTicks = borderUpdateDelayTicks;
         cfg.maxBorderUpdatesPerTick = maxBorderUpdatesPerTick;
         return cfg;
@@ -704,10 +695,7 @@ public class ChunkBorderManager {
             "restoreOriginalBlocks", restoreOriginalBlocks,
             "updateCooldown", updateCooldown + "ms",
             "borderUpdateDelayTicks", borderUpdateDelayTicks,
-            "maxBorderUpdatesPerTick", maxBorderUpdatesPerTick,
-            "skipValuableOres", skipValuableOres,
-            "skipFluids", skipFluids,
-            "skipImportantBlocks", skipImportantBlocks
+            "maxBorderUpdatesPerTick", maxBorderUpdatesPerTick
         ));
         
         // NEW: Add world-related border statistics

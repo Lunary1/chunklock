@@ -11,7 +11,7 @@ chunk-values:
     FOREST: 8
     DESERT: 10
     JUNGLE: 20
-    MOUNTAINS: 12
+    WINDSWEPT_HILLS: 12
     OCEAN: 15
     SWAMP: 11
     BADLANDS: 16
@@ -92,7 +92,7 @@ biome-unlocks:
     FLINT: 8
 
   MEADOW:
-    GRASS: 32
+    TALL_GRASS: 32
     DANDELION: 16
     POPPY: 8
 
@@ -152,7 +152,7 @@ biome-unlocks:
     PEONY: 4
 
   RIVER:
-    CLAY: 16
+    CLAY_BALL: 16
     COD: 8
 
   BEACH:
@@ -170,7 +170,7 @@ biome-unlocks:
 
   SAVANNA:
     ACACIA_LOG: 16
-    GRASS: 20
+    TALL_GRASS: 20
 
   SAVANNA_PLATEAU:
     ACACIA_LOG: 24
@@ -237,7 +237,7 @@ biome-unlocks:
     KELP: 24
 
   WARM_OCEAN:
-    CORAL: 16
+    BRAIN_CORAL: 16
     TROPICAL_FISH: 8
 
   COLD_OCEAN:
@@ -352,9 +352,6 @@ glass-borders:
 
   # Block Settings
   border-material: LIGHT_GRAY_STAINED_GLASS # Material to use for borders
-  skip-valuable-ores: true # Don't replace diamond/emerald ore with borders
-  skip-fluids: true # Don't replace water/lava with borders
-  skip-important-blocks: true # Don't replace spawners, portals, etc.
 
 performance:
   border-update-delay: 2

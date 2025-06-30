@@ -16,9 +16,6 @@ public class BorderConfig {
     public boolean restoreOriginalBlocks;
     public boolean debugLogging;
     public Material borderMaterial;
-    public boolean skipValuableOres;
-    public boolean skipFluids;
-    public boolean skipImportantBlocks;
     public int borderUpdateDelayTicks;
     public int maxBorderUpdatesPerTick;
 }

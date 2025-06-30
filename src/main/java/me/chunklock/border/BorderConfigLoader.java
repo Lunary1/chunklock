@@ -27,9 +27,6 @@ public class BorderConfigLoader {
             plugin.getLogger().warning("Invalid border material '" + materialName + "', using LIGHT_GRAY_STAINED_GLASS");
             c.borderMaterial = Material.LIGHT_GRAY_STAINED_GLASS;
         }
-        c.skipValuableOres = config.getBoolean("glass-borders.skip-valuable-ores", true);
-        c.skipFluids = config.getBoolean("glass-borders.skip-fluids", true);
-        c.skipImportantBlocks = config.getBoolean("glass-borders.skip-important-blocks", true);
         if (config.isConfigurationSection("performance")) {
             var perf = config.getConfigurationSection("performance");
             c.borderUpdateDelayTicks = perf.getInt("border-update-delay", 2);

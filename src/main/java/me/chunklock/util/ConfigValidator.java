@@ -48,8 +48,9 @@ public class ConfigValidator {
         plugin.getLogger().info("[ConfigValidator] Checking config.yml for missing entries...");
         
         if (!configFile.exists()) {
-            plugin.getLogger().info("[ConfigValidator] config.yml not found, generating complete default...");
-            generateCompleteDefaultConfig();
+            plugin.getLogger().info("[ConfigValidator] config.yml not found, copying from resources...");
+            // Use the plugin's saveResource to copy the complete config from resources
+            plugin.saveResource("config.yml", false);
             return;
         }
         
@@ -169,14 +170,14 @@ public class ConfigValidator {
                 addMissingIfNotExists(config, "chunk-values.thresholds.hard", 80);
             }
             case "biomes" -> {
-                // Only add minimal biomes if none exist
-                if (!config.contains("chunk-values.biomes.plains")) {
+                // Only add minimal biomes if none exist - USE UPPERCASE
+                if (!config.contains("chunk-values.biomes.PLAINS")) {
                     addMinimalBiomeWeights(config);
                 }
             }
             case "blocks" -> {
-                // Only add minimal blocks if none exist
-                if (!config.contains("chunk-values.blocks.coal_ore")) {
+                // Only add minimal blocks if none exist - USE UPPERCASE
+                if (!config.contains("chunk-values.blocks.COAL_ORE")) {
                     addMinimalBlockWeights(config);
                 }
             }
@@ -184,31 +185,31 @@ public class ConfigValidator {
     }
     
     private void addMinimalBiomeWeights(FileConfiguration config) {
-        // Add only essential biomes to get started
-        config.set("chunk-values.biomes.plains", 5);
-        config.set("chunk-values.biomes.forest", 6);
-        config.set("chunk-values.biomes.desert", 8);
-        config.set("chunk-values.biomes.jungle", 15);
-        config.set("chunk-values.biomes.ocean", 6);
-        config.set("chunk-values.biomes.nether_wastes", 30);
-        config.set("chunk-values.biomes.the_end", 50);
+        // Add only essential biomes to get started - FIXED TO UPPERCASE
+        config.set("chunk-values.biomes.PLAINS", 5);
+        config.set("chunk-values.biomes.FOREST", 6);
+        config.set("chunk-values.biomes.DESERT", 8);
+        config.set("chunk-values.biomes.JUNGLE", 15);
+        config.set("chunk-values.biomes.OCEAN", 6);
+        config.set("chunk-values.biomes.NETHER_WASTES", 30);
+        config.set("chunk-values.biomes.THE_END", 50);
     }
     
     private void addMinimalBlockWeights(FileConfiguration config) {
-        // Add only essential blocks to get started
-        config.set("chunk-values.blocks.coal_ore", 1);
-        config.set("chunk-values.blocks.iron_ore", 2);
-        config.set("chunk-values.blocks.gold_ore", 3);
-        config.set("chunk-values.blocks.diamond_ore", 5);
-        config.set("chunk-values.blocks.spawner", 8);
+        // Add only essential blocks to get started - FIXED TO UPPERCASE
+        config.set("chunk-values.blocks.COAL_ORE", 1);
+        config.set("chunk-values.blocks.IRON_ORE", 2);
+        config.set("chunk-values.blocks.GOLD_ORE", 3);
+        config.set("chunk-values.blocks.DIAMOND_ORE", 5);
+        config.set("chunk-values.blocks.SPAWNER", 8);
     }
     
     private void addDefaultBiomeUnlocks(FileConfiguration config) {
-        // Add only a few essential biome unlocks if none exist
-        if (!config.contains("biome-unlocks.nether_wastes")) {
-            config.set("biome-unlocks.nether_wastes.obsidian", 10);
-            config.set("biome-unlocks.the_end.ender_pearl", 12);
-            config.set("biome-unlocks.jungle.jungle_sapling", 8);
+        // Add only a few essential biome unlocks if none exist - FIXED TO UPPERCASE
+        if (!config.contains("biome-unlocks.NETHER_WASTES")) {
+            config.set("biome-unlocks.NETHER_WASTES.OBSIDIAN", 10);
+            config.set("biome-unlocks.THE_END.ENDER_PEARL", 12);
+            config.set("biome-unlocks.JUNGLE.JUNGLE_SAPLING", 8);
         }
     }
     
@@ -232,9 +233,6 @@ public class ConfigValidator {
         boolean changed = false;
         
         // Only add if they don't exist
-        changed |= addMissingIfNotExists(config, "glass-borders.skip-valuable-ores", true);
-        changed |= addMissingIfNotExists(config, "glass-borders.skip-fluids", true);
-        changed |= addMissingIfNotExists(config, "glass-borders.skip-important-blocks", true);
         changed |= addMissingIfNotExists(config, "glass-borders.show-for-bypass-players", false);
         changed |= addMissingIfNotExists(config, "glass-borders.auto-update-on-movement", true);
         changed |= addMissingIfNotExists(config, "glass-borders.restore-original-blocks", true);
@@ -260,35 +258,6 @@ public class ConfigValidator {
         changed |= addMissingIfNotExists(config, "performance.max-border-updates-per-tick", 10);
         
         return changed;
-    }
-    
-    /**
-     * Generate a complete default config.yml file (only used when no config exists)
-     */
-    private void generateCompleteDefaultConfig() {
-        try {
-            configFile.getParentFile().mkdirs();
-            
-            FileConfiguration config = new YamlConfiguration();
-            
-            // Add all default sections
-            addDefaultTeamSettings(config);
-            addDefaultChunkValues(config);
-            addDefaultBiomeUnlocks(config);
-            addDefaultGlassBorders(config);
-            addDefaultWorlds(config);
-            addDefaultPerformance(config);
-            
-            // Global settings
-            config.set("contested-cost-multiplier", 3.0);
-            config.set("max-contested-claims-per-day", 5);
-            
-            config.save(configFile);
-            plugin.getLogger().info("[ConfigValidator] Generated complete default config.yml");
-            
-        } catch (IOException e) {
-            plugin.getLogger().severe("[ConfigValidator] Failed to generate default config: " + e.getMessage());
-        }
     }
     
     /**
@@ -318,8 +287,7 @@ public class ConfigValidator {
             return false;
         }
         
-        // Check critical individual settings
-        return config.contains("worlds.enabled-worlds") && 
-               config.contains("glass-borders.skip-valuable-ores");
+        // Check critical individual settings - removed glass-borders.skip-valuable-ores since we removed that feature
+        return config.contains("worlds.enabled-worlds");
     }
 }

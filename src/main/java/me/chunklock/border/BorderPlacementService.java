@@ -157,6 +157,8 @@ public class BorderPlacementService {
 
     private boolean shouldSkipBlock(Block block) {
         Material type = block.getType();
+        
+        // Only skip absolutely essential blocks that would break the game
         if (type == Material.BEDROCK ||
             type == Material.SPAWNER ||
             type == Material.END_PORTAL ||
@@ -164,35 +166,12 @@ public class BorderPlacementService {
             type == Material.NETHER_PORTAL) {
             return true;
         }
-        if (config.skipImportantBlocks) {
-            if (type == Material.BEACON ||
-                type == Material.CONDUIT ||
-                type == Material.CHEST ||
-                type == Material.TRAPPED_CHEST ||
-                type == Material.SHULKER_BOX) {
-                return true;
-            }
-        }
-        if (config.skipValuableOres) {
-            if (type == Material.DIAMOND_ORE ||
-                type == Material.EMERALD_ORE ||
-                type == Material.ANCIENT_DEBRIS ||
-                type == Material.DEEPSLATE_DIAMOND_ORE ||
-                type == Material.DEEPSLATE_EMERALD_ORE ||
-                type == Material.GOLD_ORE ||
-                type == Material.DEEPSLATE_GOLD_ORE) {
-                return true;
-            }
-        }
-        if (config.skipFluids) {
-            if (type == Material.WATER || type == Material.LAVA) {
-                return true;
-            }
-        }
-        // CHANGED: Only check for the single border material from config
+        
+        // Skip if it's already a border material
         if (type == config.borderMaterial) {
             return true;
         }
+        
         return false;
     }
 
