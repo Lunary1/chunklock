@@ -20,6 +20,7 @@ import me.chunklock.ui.UnlockGui;
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.managers.ChunkBorderManager;
 import me.chunklock.commands.UnlockCommand;
+import me.chunklock.commands.TeamCommand;
 
 /**
  * Main command executor for the chunklock plugin.
@@ -117,6 +118,14 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
                 plugin.getLogger().info("✓ Registered SpawnCommand with valid dependencies");
             } else {
                 plugin.getLogger().severe("✗ Cannot register SpawnCommand - PlayerDataManager is null");
+            }
+
+            // Team command
+            if (teamCommandHandler != null) {
+                registerSubCommand(new TeamCommand(teamCommandHandler));
+                plugin.getLogger().info("✓ Registered TeamCommand with valid dependencies");
+            } else {
+                plugin.getLogger().severe("✗ Cannot register TeamCommand - BasicTeamCommandHandler is null");
             }
 
             // Bypass command

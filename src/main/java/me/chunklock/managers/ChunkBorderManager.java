@@ -66,8 +66,6 @@ public class ChunkBorderManager {
     private boolean restoreOriginalBlocks;
     private boolean debugLogging;
     private Material borderMaterial;
-    private Material ownBorderMaterial = Material.LIME_STAINED_GLASS;
-    private Material enemyBorderMaterial = Material.RED_STAINED_GLASS;
     private boolean skipValuableOres;
     private boolean skipFluids;
     private boolean skipImportantBlocks;
@@ -349,9 +347,8 @@ public class ChunkBorderManager {
                 if (restoreOriginalBlocks) {
                     try {
                         Block block = location.getBlock();
-                        if (block.getType() == borderMaterial || 
-                            block.getType() == ownBorderMaterial || 
-                            block.getType() == enemyBorderMaterial) {
+                        // CHANGED: Only check for the single border material from config
+                        if (block.getType() == borderMaterial) {
                             block.setBlockData(originalData);
                             restoredCount++;
                         }
@@ -363,9 +360,8 @@ public class ChunkBorderManager {
                     // Just remove the border block without restoring original
                     try {
                         Block block = location.getBlock();
-                        if (block.getType() == borderMaterial || 
-                            block.getType() == ownBorderMaterial || 
-                            block.getType() == enemyBorderMaterial) {
+                        // CHANGED: Only check for the single border material from config
+                        if (block.getType() == borderMaterial) {
                             block.setType(Material.AIR);
                             restoredCount++;
                         }
@@ -470,7 +466,7 @@ public class ChunkBorderManager {
             return;
         }
         Material type = clickedBlock.getType();
-        if (type != borderMaterial && type != ownBorderMaterial && type != enemyBorderMaterial) {
+        if (type != borderMaterial) {
             return;
         }
 
@@ -822,9 +818,9 @@ public class ChunkBorderManager {
             return false;
         }
         
-        return borderState.isBorderBlock(block, borderMaterial, ownBorderMaterial, enemyBorderMaterial);
+        // CHANGED: Only check for the single border material from config
+        return borderState.isBorderBlock(block, borderMaterial, null, null);
     }
-
     /**
      * Gets the chunk this border block protects, regardless of player.
      */

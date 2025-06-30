@@ -1,3 +1,5 @@
+// Update the BorderPlacementService.java file
+
 package me.chunklock.border;
 
 import me.chunklock.managers.ChunkLockManager;
@@ -14,8 +16,6 @@ public class BorderPlacementService {
     private final ChunkLockManager chunkLockManager;
     private final TeamManager teamManager;
     private final BorderConfig config;
-    private final Material ownBorderMaterial = Material.LIME_STAINED_GLASS;
-    private final Material enemyBorderMaterial = Material.RED_STAINED_GLASS;
 
     public BorderPlacementService(ChunkLockManager chunkLockManager, TeamManager teamManager, BorderConfig config) {
         this.chunkLockManager = chunkLockManager;
@@ -38,20 +38,16 @@ public class BorderPlacementService {
                 try {
                     Block block = loc.getBlock();
                     if (shouldSkipBlock(block)) continue;
-                    if (block.getType() == config.borderMaterial || block.getType() == ownBorderMaterial || block.getType() == enemyBorderMaterial) continue;
+                    
+                    // CHANGED: Only check for the single border material from config
+                    if (block.getType() == config.borderMaterial) continue;
 
                     // Use BorderStateManager instead of direct map access
                     borderState.addBorderBlock(id, loc, block.getBlockData().clone(), lockedCoord);
 
-                    Chunk neighbor = chunk.getWorld().getChunkAt(lockedX, lockedZ);
-                    UUID owner = chunkLockManager.getChunkOwner(neighbor);
-                    UUID teamId = teamManager.getTeamLeader(player.getUniqueId());
-                    Material mat = config.borderMaterial;
-                    if (owner != null) {
-                        mat = owner.equals(teamId) ? ownBorderMaterial : enemyBorderMaterial;
-                    }
-
-                    block.setType(mat);
+                    // CHANGED: Always use the same material from config regardless of ownership
+                    block.setType(config.borderMaterial);
+                    
                 } catch (Exception ignored) {
                 }
             }
@@ -73,6 +69,7 @@ public class BorderPlacementService {
                         BlockData data = borderState.removeBorderBlock(id, loc);
                         if (data != null) {
                             Block block = loc.getBlock();
+                            // CHANGED: Only check for the single border material from config
                             if (block.getType() == config.borderMaterial) {
                                 if (config.restoreOriginalBlocks) {
                                     block.setBlockData(data);
@@ -106,70 +103,56 @@ public class BorderPlacementService {
         return sides;
     }
 
-    private List<Location> getBorderLocationsForSide(Chunk chunk, BorderDirection side, Player player) {
+    private List<Location> getBorderLocationsForSide(Chunk chunk, BorderDirection dir, Player player) {
+        List<Location> locations = new ArrayList<>();
         World world = chunk.getWorld();
-        ChunkCoordinate coord = new ChunkCoordinate(chunk.getX(), chunk.getZ(), world.getName());
-        int baseY = getBaseYForBorder(world, coord, player);
-        List<Location> list = new ArrayList<>();
-        int startX = chunk.getX() * 16;
-        int startZ = chunk.getZ() * 16;
-
-        switch (side) {
-            case NORTH -> {
-                for (int x = startX; x <= startX + 15; x++) {
-                    addBorderColumn(list, world, x, baseY, startZ);
-                }
-            }
-            case SOUTH -> {
-                for (int x = startX; x <= startX + 15; x++) {
-                    addBorderColumn(list, world, x, baseY, startZ + 15);
-                }
-            }
-            case WEST -> {
-                for (int z = startZ; z <= startZ + 15; z++) {
-                    addBorderColumn(list, world, startX, baseY, z);
-                }
-            }
-            case EAST -> {
-                for (int z = startZ; z <= startZ + 15; z++) {
-                    addBorderColumn(list, world, startX + 15, baseY, z);
-                }
-            }
+        
+        int chunkX = chunk.getX();
+        int chunkZ = chunk.getZ();
+        int startX = chunkX * 16;
+        int startZ = chunkZ * 16;
+        
+        int xOffset = 0;
+        int zOffset = 0;
+        
+        if (dir == BorderDirection.NORTH) {
+            zOffset = -1;
+        } else if (dir == BorderDirection.SOUTH) {
+            zOffset = 16;
+        } else if (dir == BorderDirection.WEST) {
+            xOffset = -1;
+        } else if (dir == BorderDirection.EAST) {
+            xOffset = 16;
         }
-        return list;
-    }
-
-    private void addBorderColumn(List<Location> locations, World world, int x, int baseY, int z) {
-        if (config.useFullHeight) {
-            int minY = world.getMinHeight();
-            int maxY = world.getMaxHeight();
-            for (int y = minY; y <= maxY; y++) {
-                locations.add(new Location(world, x, y, z));
+        
+        for (int i = 0; i < 16; i++) {
+            int x, z;
+            if (dir == BorderDirection.NORTH || dir == BorderDirection.SOUTH) {
+                x = startX + i;
+                z = startZ + zOffset;
+            } else {
+                x = startX + xOffset;
+                z = startZ + i;
             }
-        } else {
-            int startY = baseY + config.minYOffset;
-            int endY = baseY + config.maxYOffset;
-            int height = Math.max(1, config.borderHeight);
-            for (int i = 0; i < height; i++) {
-                int y = startY + i;
-                if (y >= world.getMinHeight() && y <= world.getMaxHeight()) {
+            
+            if (config.useFullHeight) {
+                int minY = world.getMinHeight();
+                int maxY = world.getMaxHeight() - 1;
+                for (int y = minY; y <= maxY; y++) {
+                    locations.add(new Location(world, x, y, z));
+                }
+            } else {
+                int baseY = (int) player.getLocation().getY();
+                int minY = Math.max(world.getMinHeight(), baseY + config.minYOffset);
+                int maxY = Math.min(world.getMaxHeight() - 1, baseY + config.maxYOffset);
+                
+                for (int y = minY; y <= minY + config.borderHeight - 1 && y <= maxY; y++) {
                     locations.add(new Location(world, x, y, z));
                 }
             }
         }
-    }
-
-    private int getBaseYForBorder(World world, ChunkCoordinate chunkCoord, Player player) {
-        try {
-            int centerX = chunkCoord.x * 16 + 8;
-            int centerZ = chunkCoord.z * 16 + 8;
-            int surfaceY = world.getHighestBlockYAt(centerX, centerZ);
-            int playerY = player.getLocation().getBlockY();
-            int baseY = Math.max(surfaceY, Math.min(playerY, surfaceY + 10));
-            return Math.max(baseY, world.getMinHeight() + 10);
-        } catch (Exception e) {
-            return Math.max(64, world.getMinHeight() + 10);
-        }
+        
+        return locations;
     }
 
     private boolean shouldSkipBlock(Block block) {
@@ -206,6 +189,7 @@ public class BorderPlacementService {
                 return true;
             }
         }
+        // CHANGED: Only check for the single border material from config
         if (type == config.borderMaterial) {
             return true;
         }

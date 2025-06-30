@@ -120,7 +120,8 @@ public class BorderStateManager {
         if (block == null) return false;
         
         Material type = block.getType();
-        if (type != borderMaterial && type != ownBorderMaterial && type != enemyBorderMaterial) {
+        // CHANGED: Only check for the main border material from config
+        if (type != borderMaterial) {
             return false;
         }
         
