@@ -3,11 +3,13 @@ package me.chunklock.commands;
 
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.managers.ChunkBorderManager;
+import me.chunklock.util.ConfigValidator;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import me.chunklock.util.ConfigValidator;
 
 import java.util.Collections;
 import java.util.List;
@@ -66,7 +68,25 @@ public class ReloadCommand extends SubCommand {
                 return;
             }
 
-            // Perform the reload using the plugin's built-in reload method
+            // STEP 1: Validate and fix config BEFORE reloading other systems
+            sender.sendMessage(Component.text("📋 Validating configuration...")
+                .color(NamedTextColor.BLUE));
+            
+            try {
+                ConfigValidator validator = new ConfigValidator(plugin);
+                validator.validateAndEnsureComplete();
+                sender.sendMessage(Component.text("✅ Configuration validated and updated")
+                    .color(NamedTextColor.GREEN));
+            } catch (Exception e) {
+                sender.sendMessage(Component.text("⚠️ Config validation had issues: " + e.getMessage())
+                    .color(NamedTextColor.YELLOW));
+                plugin.getLogger().warning("Config validation error during reload: " + e.getMessage());
+            }
+
+            // STEP 2: Now perform the main plugin reload
+            sender.sendMessage(Component.text("🔄 Reloading plugin systems...")
+                .color(NamedTextColor.BLUE));
+            
             boolean success = plugin.performReload(sender);
             
             long endTime = System.currentTimeMillis();

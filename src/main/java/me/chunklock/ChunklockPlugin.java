@@ -10,6 +10,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import me.chunklock.managers.EnhancedTeamManager;
 import me.chunklock.commands.BasicTeamCommandHandler;
+import me.chunklock.util.ConfigValidator;
 import me.chunklock.util.DataMigrator;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkBorderManager;
@@ -66,6 +67,19 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
+            // CRITICAL: Validate and ensure complete config before anything else
+        ConfigValidator configValidator = new ConfigValidator(this);
+        configValidator.validateAndEnsureComplete();
+        
+        // Reload config after validation to ensure we have the complete version
+        reloadConfig();
+        
+        // Log config status
+        if (configValidator.isConfigComplete()) {
+            getLogger().info("✅ Configuration validation passed - all required sections present");
+        } else {
+            getLogger().severe("❌ Configuration validation failed - plugin may not work correctly");
+        }
     try {
         int pluginId = 19876; // Get this from bStats
         //Metrics metrics = new Metrics(this, pluginId);
@@ -127,6 +141,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         
     } catch (Exception e) {
         getLogger().log(Level.SEVERE, "Critical error during plugin enable", e);
+        e.printStackTrace();
         Bukkit.getPluginManager().disablePlugin(this);
     }
 }
@@ -231,12 +246,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             sender.sendMessage(Component.text("Step 8/8: Validating reload...").color(NamedTextColor.GRAY));
             
             boolean success = validateReload();
-            
-            // Notify all online players
-            Component reloadMessage = Component.text("Chunklock plugin has been reloaded by an admin.").color(NamedTextColor.YELLOW);
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                player.sendMessage(reloadMessage);
-            }
+    
             
             getLogger().info("Plugin reload completed " + (success ? "successfully" : "with warnings"));
             return success;
