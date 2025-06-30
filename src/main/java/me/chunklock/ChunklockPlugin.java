@@ -44,8 +44,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private UnlockGui unlockGui;
     private HologramManager hologramManager;
     private PlayerListener playerListener;
-    private WorldManager worldManager; // NEW: World management
-    private StartingChunkService startingChunkService; // NEW: Starting chunk service
+    private WorldManager worldManager;
+    private StartingChunkService startingChunkService;
     
     // Block protection listener
     private BlockProtectionListener blockProtectionListener;

@@ -11,9 +11,12 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.UUID;
 import java.util.logging.Level;
+import java.util.Set;
+import java.util.HashSet;
 
 /**
  * Handles teleportation between worlds - assigns new starting chunks when players
@@ -24,6 +27,9 @@ public class TeleportListener implements Listener {
     private final WorldManager worldManager;
     private final PlayerDataManager playerDataManager;
     private final StartingChunkService startingChunkService;
+    
+    // NEW: Track players to prevent infinite recursion
+    private final Set<UUID> processingPlayers = new HashSet<>();
     
     public TeleportListener(WorldManager worldManager, 
                            PlayerDataManager playerDataManager,
@@ -45,6 +51,13 @@ public class TeleportListener implements Listener {
             Location to = event.getTo();
             
             if (player == null || from == null || to == null) {
+                return;
+            }
+            
+            UUID playerId = player.getUniqueId();
+            
+            // NEW: Prevent infinite recursion - skip if we're already processing this player
+            if (processingPlayers.contains(playerId)) {
                 return;
             }
             
@@ -81,12 +94,32 @@ public class TeleportListener implements Listener {
         try {
             UUID playerId = player.getUniqueId();
             
+            // Add to processing set to prevent recursion
+            processingPlayers.add(playerId);
+            
             // Check if player already has a starting chunk in this world
             Location existingSpawn = playerDataManager.getChunkSpawn(playerId);
             if (existingSpawn != null && existingSpawn.getWorld().equals(newWorld)) {
-                // Player already has spawn in this world, teleport there
-                player.teleport(existingSpawn);
-                player.sendMessage("§aReturned to your existing chunk in " + newWorld.getName());
+                // Player already has spawn in this world, teleport there SAFELY
+                // Use scheduler to delay teleport and prevent recursion
+                new BukkitRunnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            // Double-check player is still online
+                            if (player.isOnline()) {
+                                player.teleport(existingSpawn);
+                                player.sendMessage("§aReturned to your existing chunk in " + newWorld.getName());
+                            }
+                        } catch (Exception e) {
+                            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                                "Error during delayed teleport for " + player.getName(), e);
+                        } finally {
+                            // Always remove from processing set
+                            processingPlayers.remove(playerId);
+                        }
+                    }
+                }.runTaskLater(ChunklockPlugin.getInstance(), 1L); // 1 tick delay
                 return;
             }
             
@@ -99,6 +132,19 @@ public class TeleportListener implements Listener {
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
                 "Failed to handle world change for player " + player.getName(), e);
+        } finally {
+            // Always remove from processing set
+            processingPlayers.remove(player.getUniqueId());
         }
+    }
+    
+    /**
+     * Cleanup method to remove offline players from processing set
+     */
+    public void cleanupOfflinePlayers() {
+        processingPlayers.removeIf(playerId -> {
+            Player player = ChunklockPlugin.getInstance().getServer().getPlayer(playerId);
+            return player == null || !player.isOnline();
+        });
     }
 }

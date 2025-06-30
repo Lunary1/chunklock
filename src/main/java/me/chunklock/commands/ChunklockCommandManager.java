@@ -3,18 +3,21 @@ package me.chunklock.commands;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import me.chunklock.ChunklockPlugin;
+import me.chunklock.managers.WorldManager;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
  * Main command manager for the chunklock plugin.
- * Routes commands to appropriate subcommand handlers.
+ * Routes commands to appropriate subcommand handlers with enhanced world validation.
  */
 public class ChunklockCommandManager implements CommandExecutor, TabCompleter {
     
@@ -95,7 +98,45 @@ public class ChunklockCommandManager implements CommandExecutor, TabCompleter {
             return true;
         }
         
-        // Execute subcommand with remaining args
+        // ========================================
+        // ENHANCED WORLD VALIDATION WRAPPER
+        // ========================================
+        
+        // Skip world validation for console-friendly and global commands
+        if (!shouldValidateWorld(subCommandName, sender)) {
+            return executeCommand(subCommand, sender, args);
+        }
+        
+        // For player commands, validate the world
+        if (sender instanceof Player) {
+            Player player = (Player) sender;
+            WorldValidationResult validation = validatePlayerWorld(player, subCommandName);
+            
+            switch (validation.getResult()) {
+                case ALLOWED:
+                    // World validation passed, execute command
+                    return executeCommand(subCommand, sender, args);
+                    
+                case BLOCKED:
+                    // Show error and block execution
+                    showWorldValidationError(player, validation);
+                    return true;
+                    
+                case ADMIN_WARNING:
+                    // Admin in disabled world - show warning but allow execution
+                    showAdminWarning(player, validation);
+                    return executeCommand(subCommand, sender, args);
+            }
+        }
+        
+        // Fallback - execute command
+        return executeCommand(subCommand, sender, args);
+    }
+    
+    /**
+     * Execute a subcommand with proper error handling.
+     */
+    private boolean executeCommand(SubCommand subCommand, CommandSender sender, String[] args) {
         String[] subArgs = Arrays.copyOfRange(args, 1, args.length);
         
         try {
@@ -103,10 +144,124 @@ public class ChunklockCommandManager implements CommandExecutor, TabCompleter {
         } catch (Exception e) {
             sender.sendMessage(Component.text("An error occurred while executing the command.")
                 .color(NamedTextColor.RED));
-            // Log the error
+            
+            // Log with more detail for debugging
+            ChunklockPlugin.getInstance().getLogger().warning(
+                "Error executing command '" + subCommand.getName() + "' for " + sender.getName() + ": " + e.getMessage());
             e.printStackTrace();
             return true;
         }
+    }
+    
+    /**
+     * Validate if a player can use commands in their current world.
+     */
+    private WorldValidationResult validatePlayerWorld(Player player, String commandName) {
+        if (player == null || player.getWorld() == null) {
+            return new WorldValidationResult(ValidationResult.BLOCKED, "Invalid player or world", null, null);
+        }
+        
+        try {
+            WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+            String worldName = player.getWorld().getName();
+            boolean worldEnabled = worldManager.isWorldEnabled(player.getWorld());
+            List<String> enabledWorlds = worldManager.getEnabledWorlds();
+            
+            if (worldEnabled) {
+                return new WorldValidationResult(ValidationResult.ALLOWED, null, worldName, enabledWorlds);
+            }
+            
+            // World is disabled - check if player is admin
+            boolean isAdmin = player.hasPermission("chunklock.admin");
+            boolean isAdminCommand = isAdminCommand(commandName);
+            
+            if (isAdmin && isAdminCommand) {
+                // Admin using admin command in disabled world - allow with warning
+                return new WorldValidationResult(ValidationResult.ADMIN_WARNING, 
+                    "Admin override for command '" + commandName + "' in disabled world", worldName, enabledWorlds);
+            }
+            
+            // Regular player or non-admin command in disabled world - block
+            return new WorldValidationResult(ValidationResult.BLOCKED, 
+                "ChunkLock not active in world: " + worldName, worldName, enabledWorlds);
+                
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().warning(
+                "Error during world validation for " + player.getName() + ": " + e.getMessage());
+            
+            return new WorldValidationResult(ValidationResult.BLOCKED, 
+                "Could not verify world status", player.getWorld().getName(), null);
+        }
+    }
+    
+    /**
+     * Show error message when world validation fails.
+     */
+    private void showWorldValidationError(Player player, WorldValidationResult validation) {
+        player.sendMessage(Component.text("❌ " + validation.getMessage())
+            .color(NamedTextColor.RED));
+        
+        List<String> enabledWorlds = validation.getEnabledWorlds();
+        if (enabledWorlds != null && !enabledWorlds.isEmpty()) {
+            player.sendMessage(Component.text("✅ ChunkLock is active in: " + String.join(", ", enabledWorlds))
+                .color(NamedTextColor.GREEN));
+                
+            // Suggest teleportation to first available enabled world
+            String firstEnabledWorld = enabledWorlds.get(0);
+            if (Bukkit.getWorld(firstEnabledWorld) != null) {
+                player.sendMessage(Component.text("💡 Tip: Use /mv tp " + firstEnabledWorld + " to access ChunkLock")
+                    .color(NamedTextColor.YELLOW));
+            }
+        } else {
+            player.sendMessage(Component.text("Contact an administrator - no worlds are configured for ChunkLock")
+                .color(NamedTextColor.GRAY));
+        }
+    }
+    
+    /**
+     * Show warning to admin users when they override world validation.
+     */
+    private void showAdminWarning(Player player, WorldValidationResult validation) {
+        player.sendMessage(Component.text("⚠️ Admin Override: " + validation.getMessage())
+            .color(NamedTextColor.YELLOW));
+        player.sendMessage(Component.text("This command may not work as expected in disabled worlds.")
+            .color(NamedTextColor.GRAY));
+    }
+    
+    /**
+     * Check if a command name represents an admin command.
+     */
+    private boolean isAdminCommand(String commandName) {
+        Set<String> adminCommands = Set.of(
+            "unlock",       // Force unlock chunks
+            "reset",        // Reset player progress
+            "bypass",       // Toggle bypass mode
+            "debug",        // Debug information
+            "reload",       // Reload config
+            "resetall",     // Reset all players
+            "borders",      // Border management
+            "diagnostic"    // Diagnostic info
+        );
+        
+        return adminCommands.contains(commandName);
+    }
+    
+    /**
+     * Determines whether a command should have world validation applied.
+     */
+    private boolean shouldValidateWorld(String subCommandName, CommandSender sender) {
+        // Always skip validation for console commands
+        if (!(sender instanceof Player)) {
+            return false;
+        }
+        
+        // Commands that should work from any world (truly global commands)
+        Set<String> globalCommands = Set.of(
+            "help",         // Help should always be available
+            "reload"        // Reload should work from anywhere (admin override will handle warnings)
+        );
+        
+        return !globalCommands.contains(subCommandName);
     }
     
     @Override
@@ -164,50 +319,94 @@ public class ChunklockCommandManager implements CommandExecutor, TabCompleter {
      * @param sender The command sender
      */
     private void showMainHelp(CommandSender sender) {
-        sender.sendMessage(Component.text("Chunklock Commands:")
+        sender.sendMessage(Component.text("=== ChunkLock Commands ===")
             .color(NamedTextColor.AQUA));
-        
-        // Group commands by permission level
-        List<SubCommand> userCommands = new ArrayList<>();
-        List<SubCommand> adminCommands = new ArrayList<>();
-        
-        for (SubCommand subCommand : subCommands.values()) {
-            if (!subCommand.hasPermission(sender)) continue;
-            if (!subCommand.isValidSender(sender)) continue;
             
-            if (subCommand.getPermission() != null && 
-                subCommand.getPermission().contains("admin")) {
-                adminCommands.add(subCommand);
-            } else {
-                userCommands.add(subCommand);
+        if (sender instanceof Player) {
+            Player player = (Player) sender;
+            
+            // Check if player is in an enabled world and show appropriate message
+            try {
+                WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+                boolean inEnabledWorld = worldManager.isWorldEnabled(player.getWorld());
+                
+                if (!inEnabledWorld) {
+                    sender.sendMessage(Component.text("⚠️ You are currently in a world where ChunkLock is not active")
+                        .color(NamedTextColor.YELLOW));
+                    List<String> enabledWorlds = worldManager.getEnabledWorlds();
+                    if (!enabledWorlds.isEmpty()) {
+                        sender.sendMessage(Component.text("Active worlds: " + String.join(", ", enabledWorlds))
+                            .color(NamedTextColor.GREEN));
+                    }
+                    sender.sendMessage(Component.text(""));
+                }
+            } catch (Exception e) {
+                // Ignore - just show help normally
             }
         }
         
-        // Show user commands
-        if (!userCommands.isEmpty()) {
-            for (SubCommand cmd : userCommands) {
-                sender.sendMessage(Component.text(cmd.getUsage() + " - " + cmd.getDescription())
-                    .color(NamedTextColor.WHITE));
+        sender.sendMessage(Component.text("Available commands:")
+            .color(NamedTextColor.WHITE));
+            
+        // Show commands that the sender has permission for
+        List<String> commandList = new ArrayList<>();
+        for (SubCommand subCommand : subCommands.values()) {
+            if (subCommand.hasPermission(sender) && subCommand.isValidSender(sender)) {
+                commandList.add("/chunklock " + subCommand.getName() + " - " + subCommand.getDescription());
             }
         }
         
-        // Show admin commands if sender has admin permissions
-        if (!adminCommands.isEmpty()) {
-            sender.sendMessage(Component.text("=== Admin Commands ===")
-                .color(NamedTextColor.YELLOW));
-            for (SubCommand cmd : adminCommands) {
-                sender.sendMessage(Component.text(cmd.getUsage() + " - " + cmd.getDescription())
-                    .color(NamedTextColor.GRAY));
-            }
+        Collections.sort(commandList);
+        for (String commandInfo : commandList) {
+            sender.sendMessage(Component.text(commandInfo)
+                .color(NamedTextColor.GRAY));
         }
+        
+        sender.sendMessage(Component.text("Use '/chunklock help <command>' for detailed help")
+            .color(NamedTextColor.YELLOW));
     }
     
     /**
-     * Get all registered subcommands.
+     * Get all registered subcommands (for help system).
      * 
-     * @return Map of subcommand name to SubCommand instance
+     * @return Map of subcommand names to SubCommand objects
      */
     public Map<String, SubCommand> getSubCommands() {
         return Collections.unmodifiableMap(subCommands);
+    }
+    
+    // ========================================
+    // VALIDATION RESULT CLASSES
+    // ========================================
+    
+    /**
+     * Enum for validation results.
+     */
+    private enum ValidationResult {
+        ALLOWED,        // Command allowed to execute
+        BLOCKED,        // Command blocked - show error
+        ADMIN_WARNING   // Admin override - show warning but execute
+    }
+    
+    /**
+     * Result of world validation check.
+     */
+    private static class WorldValidationResult {
+        private final ValidationResult result;
+        private final String message;
+        private final String currentWorld;
+        private final List<String> enabledWorlds;
+        
+        public WorldValidationResult(ValidationResult result, String message, String currentWorld, List<String> enabledWorlds) {
+            this.result = result;
+            this.message = message;
+            this.currentWorld = currentWorld;
+            this.enabledWorlds = enabledWorlds;
+        }
+        
+        public ValidationResult getResult() { return result; }
+        public String getMessage() { return message; }
+        public String getCurrentWorld() { return currentWorld; }
+        public List<String> getEnabledWorlds() { return enabledWorlds; }
     }
 }
