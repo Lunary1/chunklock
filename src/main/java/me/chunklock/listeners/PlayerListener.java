@@ -15,6 +15,7 @@ import me.chunklock.services.StartingChunkService;
 import me.chunklock.managers.HologramManager;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.managers.BiomeUnlockRegistry;
+import me.chunklock.managers.WorldManager;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -73,6 +74,14 @@ public class PlayerListener implements Listener {
                 return;
             }
 
+            // NEW: Check if player is in an enabled world
+            WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+            if (!worldManager.isWorldEnabled(player.getWorld())) {
+                ChunklockPlugin.getInstance().getLogger().fine("Player " + player.getName() + 
+                    " joined in disabled world " + player.getWorld().getName() + " - skipping ChunkLock processing");
+                return;
+            }
+
             UUID playerId = player.getUniqueId();
             
             // Clear any stale data
@@ -88,6 +97,16 @@ public class PlayerListener implements Listener {
                 try {
                     Location savedSpawn = playerDataManager.getChunkSpawn(playerId);
                     if (savedSpawn != null && startingChunkService.isValidLocation(savedSpawn)) {
+                        // NEW: Check if saved spawn is in an enabled world
+                        if (!worldManager.isWorldEnabled(savedSpawn.getWorld())) {
+                            ChunklockPlugin.getInstance().getLogger().info("Player " + player.getName() + 
+                                " has saved spawn in disabled world " + savedSpawn.getWorld().getName() + 
+                                " - reassigning to current world");
+                            newPlayers.add(playerId);
+                            startingChunkService.assignStartingChunk(player);
+                            return;
+                        }
+                        
                         // FIX: Only teleport to center if this is a new player or if they're outside their assigned chunk
                         Chunk savedChunk = savedSpawn.getChunk();
                         Chunk currentChunk = player.getLocation().getChunk();
@@ -125,7 +144,7 @@ public class PlayerListener implements Listener {
             
             // Update glass borders after a delay (allow other systems to initialize first)
             Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
-                if (player.isOnline()) {
+                if (player.isOnline() && worldManager.isWorldEnabled(player.getWorld())) {
                     try {
                         ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
                         if (borderManager != null) {
@@ -151,10 +170,11 @@ public class PlayerListener implements Listener {
         UUID playerId = player.getUniqueId();
         
         try {
-            // Clean up player-specific data to prevent memory leaks
+            // Clean up player-specific data to prevent memory leaks (regardless of world)
             lastWarned.remove(playerId);
             lastUnlockAttempt.remove(playerId);
             lastBorderUpdate.remove(playerId); // Clean up border tracking
+            newPlayers.remove(playerId); // Clean up new player tracking
             
             // Notify HologramManager to cleanup
             HologramManager hologramManager = ChunklockPlugin.getInstance().getHologramManager();
@@ -199,6 +219,17 @@ public class PlayerListener implements Listener {
      * Updates borders when player moves to a different chunk (rate limited)
      */
     private void updateBordersOnChunkChange(Player player) {
+        // NEW: Check if player is in enabled world before updating borders
+        try {
+            WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+            if (!worldManager.isWorldEnabled(player.getWorld())) {
+                return; // Skip border updates in disabled worlds
+            }
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().fine("Could not check world status for border update: " + e.getMessage());
+            return;
+        }
+        
         if (borderRefreshService != null) {
             borderRefreshService.refreshBordersOnMove(player, lastBorderUpdate);
         }
@@ -206,6 +237,14 @@ public class PlayerListener implements Listener {
 
     private void handleChunkChange(PlayerMoveEvent event, Player player, Chunk toChunk) {
         try {
+            // NEW: Check if player is in enabled world before processing chunk change
+            WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+            if (!worldManager.isWorldEnabled(player.getWorld())) {
+                ChunklockPlugin.getInstance().getLogger().fine("Player " + player.getName() + 
+                    " moved in disabled world " + player.getWorld().getName() + " - skipping chunk change processing");
+                return; // Skip chunk change processing in disabled worlds
+            }
+            
             chunkLockManager.initializeChunk(toChunk, player.getUniqueId());
             
             if (chunkLockManager.isBypassing(player)) {
@@ -253,6 +292,19 @@ public class PlayerListener implements Listener {
             Player player = event.getPlayer();
             if (player == null) return;
 
+            // NEW: Early world check - exit immediately if not in enabled world
+            try {
+                WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+                if (!worldManager.isWorldEnabled(player.getWorld())) {
+                    // Player is in disabled world - completely skip all ChunkLock processing
+                    return;
+                }
+            } catch (Exception e) {
+                // If we can't check world status, err on the side of caution and skip processing
+                ChunklockPlugin.getInstance().getLogger().fine("Could not check world status for player movement: " + e.getMessage());
+                return;
+            }
+
             Location from = event.getFrom();
             Location to = event.getTo();
             
@@ -286,6 +338,32 @@ public class PlayerListener implements Listener {
         stats.put("playersWithUnlockCooldown", lastUnlockAttempt.size());
         stats.put("playersWithBorderUpdateTracking", lastBorderUpdate.size());
         stats.put("newPlayersTracked", newPlayers.size());
+        
+        // NEW: Add world-related statistics
+        try {
+            WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+            stats.put("enabledWorlds", worldManager.getEnabledWorlds());
+            stats.put("autoAssignOnWorldChange", worldManager.isAutoAssignOnWorldChangeEnabled());
+            
+            // Count players in enabled vs disabled worlds
+            int playersInEnabledWorlds = 0;
+            int playersInDisabledWorlds = 0;
+            
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (worldManager.isWorldEnabled(player.getWorld())) {
+                    playersInEnabledWorlds++;
+                } else {
+                    playersInDisabledWorlds++;
+                }
+            }
+            
+            stats.put("playersInEnabledWorlds", playersInEnabledWorlds);
+            stats.put("playersInDisabledWorlds", playersInDisabledWorlds);
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().fine("Could not get world statistics: " + e.getMessage());
+        }
+        
         return stats;
     }
 }

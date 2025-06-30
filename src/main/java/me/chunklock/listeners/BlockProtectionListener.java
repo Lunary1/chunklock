@@ -21,6 +21,7 @@ import org.bukkit.event.vehicle.VehicleDestroyEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import me.chunklock.managers.ChunkLockManager;
+import me.chunklock.managers.WorldManager;
 import me.chunklock.ui.UnlockGui;
 import me.chunklock.managers.ChunkBorderManager;
 import me.chunklock.ChunklockPlugin;
@@ -33,6 +34,7 @@ import java.util.logging.Level;
 /**
  * Comprehensive protection system for locked chunks.
  * Prevents all forms of block interaction, building, and destruction in locked chunks.
+ * Now includes world-specific filtering - only protects blocks in enabled worlds.
  */
 public class BlockProtectionListener implements Listener {
 
@@ -51,6 +53,23 @@ public class BlockProtectionListener implements Listener {
     }
 
     /**
+     * Helper method to check if world is enabled for ChunkLock
+     */
+    private boolean isWorldEnabled(Player player) {
+        if (player == null || player.getWorld() == null) {
+            return false;
+        }
+        
+        try {
+            WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+            return worldManager.isWorldEnabled(player.getWorld());
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().fine("Could not check world status for protection: " + e.getMessage());
+            return false; // Err on the side of caution - no protection if can't verify
+        }
+    }
+
+    /**
      * Prevents block breaking in locked chunks
      */
     @EventHandler(priority = EventPriority.HIGH)
@@ -58,6 +77,12 @@ public class BlockProtectionListener implements Listener {
         if (event.isCancelled()) return;
         
         Player player = event.getPlayer();
+        
+        // NEW: Early world check - skip protection in disabled worlds
+        if (!isWorldEnabled(player)) {
+            return; // Allow block breaking in disabled worlds
+        }
+        
         Block block = event.getBlock();
 
         if (chunkBorderManager.isBorderBlock(block)) {
@@ -82,6 +107,12 @@ public class BlockProtectionListener implements Listener {
         if (event.isCancelled()) return;
         
         Player player = event.getPlayer();
+        
+        // NEW: Early world check - skip protection in disabled worlds
+        if (!isWorldEnabled(player)) {
+            return; // Allow block placement in disabled worlds
+        }
+        
         Block block = event.getBlock();
 
         if (chunkBorderManager.isBorderBlock(block)) {
@@ -106,6 +137,12 @@ public class BlockProtectionListener implements Listener {
         if (event.isCancelled()) return;
         
         Player player = event.getPlayer();
+        
+        // NEW: Early world check - skip protection in disabled worlds
+        if (!isWorldEnabled(player)) {
+            return; // Allow interactions in disabled worlds
+        }
+        
         Block block = event.getClickedBlock();
         
         if (block == null) return;
@@ -125,6 +162,12 @@ public class BlockProtectionListener implements Listener {
         if (event.isCancelled()) return;
         
         Player player = event.getPlayer();
+        
+        // NEW: Early world check - skip protection in disabled worlds
+        if (!isWorldEnabled(player)) {
+            return; // Allow bucket usage in disabled worlds
+        }
+        
         Block block = event.getBlock();
         
         if (isBlockProtected(player, block)) {
@@ -141,6 +184,12 @@ public class BlockProtectionListener implements Listener {
         if (event.isCancelled()) return;
         
         Player player = event.getPlayer();
+        
+        // NEW: Early world check - skip protection in disabled worlds
+        if (!isWorldEnabled(player)) {
+            return; // Allow bucket usage in disabled worlds
+        }
+        
         Block block = event.getBlock();
         
         if (isBlockProtected(player, block)) {
@@ -159,6 +208,11 @@ public class BlockProtectionListener implements Listener {
         Player player = event.getPlayer();
         if (player == null) return;
         
+        // NEW: Early world check - skip protection in disabled worlds
+        if (!isWorldEnabled(player)) {
+            return; // Allow hanging entity placement in disabled worlds
+        }
+        
         Chunk chunk = event.getEntity().getLocation().getChunk();
         
         if (isChunkProtected(player, chunk)) {
@@ -176,6 +230,11 @@ public class BlockProtectionListener implements Listener {
         
         if (!(event.getRemover() instanceof Player player)) return;
         
+        // NEW: Early world check - skip protection in disabled worlds
+        if (!isWorldEnabled(player)) {
+            return; // Allow hanging entity breaking in disabled worlds
+        }
+        
         Chunk chunk = event.getEntity().getLocation().getChunk();
         
         if (isChunkProtected(player, chunk)) {
@@ -192,6 +251,11 @@ public class BlockProtectionListener implements Listener {
         if (event.isCancelled()) return;
         
         if (!(event.getDamager() instanceof Player player)) return;
+        
+        // NEW: Early world check - skip protection in disabled worlds
+        if (!isWorldEnabled(player)) {
+            return; // Allow entity damage in disabled worlds
+        }
         
         Chunk chunk = event.getEntity().getLocation().getChunk();
         
@@ -211,6 +275,11 @@ public class BlockProtectionListener implements Listener {
         
         if (!(event.getAttacker() instanceof Player player)) return;
         
+        // NEW: Early world check - skip protection in disabled worlds
+        if (!isWorldEnabled(player)) {
+            return; // Allow vehicle destruction in disabled worlds
+        }
+        
         Chunk chunk = event.getVehicle().getLocation().getChunk();
         
         if (isChunkProtected(player, chunk)) {
@@ -225,6 +294,19 @@ public class BlockProtectionListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onEntityExplode(EntityExplodeEvent event) {
         if (event.isCancelled()) return;
+        
+        // NEW: World check for explosion location
+        if (event.getLocation() != null && event.getLocation().getWorld() != null) {
+            try {
+                WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+                if (!worldManager.isWorldEnabled(event.getLocation().getWorld())) {
+                    return; // Allow explosions in disabled worlds
+                }
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().fine("Could not check world status for explosion: " + e.getMessage());
+                return; // Skip protection if can't verify world status
+            }
+        }
         
         event.blockList().removeIf(block -> {
             Chunk chunk = block.getChunk();
@@ -245,6 +327,19 @@ public class BlockProtectionListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onBlockExplode(BlockExplodeEvent event) {
         if (event.isCancelled()) return;
+        
+        // NEW: World check for explosion location
+        if (event.getBlock() != null && event.getBlock().getWorld() != null) {
+            try {
+                WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+                if (!worldManager.isWorldEnabled(event.getBlock().getWorld())) {
+                    return; // Allow explosions in disabled worlds
+                }
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().fine("Could not check world status for block explosion: " + e.getMessage());
+                return; // Skip protection if can't verify world status
+            }
+        }
         
         event.blockList().removeIf(block -> {
             Chunk chunk = block.getChunk();
@@ -412,6 +507,17 @@ public class BlockProtectionListener implements Listener {
     public Map<String, Object> getProtectionStats() {
         Map<String, Object> stats = new java.util.HashMap<>();
         stats.put("playersWithWarningCooldown", lastProtectionWarning.size());
+        
+        // NEW: Add world-related protection statistics
+        try {
+            WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+            stats.put("enabledWorlds", worldManager.getEnabledWorlds());
+            stats.put("worldCheckingEnabled", true);
+        } catch (Exception e) {
+            stats.put("worldCheckingEnabled", false);
+            stats.put("worldCheckError", e.getMessage());
+        }
+        
         return stats;
     }
 }

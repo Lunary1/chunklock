@@ -14,6 +14,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.BiomeUnlockRegistry;
+import me.chunklock.managers.WorldManager;
 import me.chunklock.models.Difficulty;
 import me.chunklock.util.ChunkUtils;
 import me.chunklock.ChunklockPlugin;
@@ -26,6 +27,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
+/**
+ * Manages floating holograms above locked chunks with world-aware filtering.
+ * Only displays holograms in worlds where ChunkLock is enabled.
+ */
 public class HologramManager {
 
     private final ChunkLockManager chunkLockManager;
@@ -55,11 +60,52 @@ public class HologramManager {
     }
 
     /**
+     * Helper method to check if world is enabled for ChunkLock holograms
+     */
+    private boolean isWorldEnabled(Player player) {
+        if (player == null || player.getWorld() == null) {
+            return false;
+        }
+        
+        try {
+            WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+            return worldManager.isWorldEnabled(player.getWorld());
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().fine("Could not check world status for holograms: " + e.getMessage());
+            return false; // Err on the side of caution - no holograms if can't verify
+        }
+    }
+
+    /**
+     * Helper method to check if world is enabled by World object
+     */
+    private boolean isWorldEnabled(World world) {
+        if (world == null) {
+            return false;
+        }
+        
+        try {
+            WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+            return worldManager.isWorldEnabled(world);
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().fine("Could not check world status for holograms: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Starts hologram display task for a player
      */
     public void startHologramDisplay(Player player) {
         if (player == null || !player.isOnline()) {
             return;
+        }
+        
+        // NEW: Check if player is in an enabled world
+        if (!isWorldEnabled(player)) {
+            ChunklockPlugin.getInstance().getLogger().fine("Player " + player.getName() + 
+                " is in disabled world " + player.getWorld().getName() + " - skipping hologram display");
+            return; // Don't start holograms in disabled worlds
         }
         
         stopHologramDisplay(player); // Clean up any existing task
@@ -68,6 +114,14 @@ public class HologramManager {
             @Override
             public void run() {
                 if (!player.isOnline()) {
+                    cancel();
+                    return;
+                }
+                
+                // NEW: Re-check world status on each update
+                if (!isWorldEnabled(player)) {
+                    // Player moved to disabled world, remove holograms and stop task
+                    removeHologramsForPlayer(player);
                     cancel();
                     return;
                 }
@@ -105,9 +159,16 @@ public class HologramManager {
 
     /**
      * Updates holograms around a player - shows holograms for ALL locked adjacent chunks
+     * Now includes world validation to ensure holograms only appear in enabled worlds
      */
-private void updateHologramsForPlayer(Player player) {
+    private void updateHologramsForPlayer(Player player) {
         try {
+            // Double-check world status (defensive programming)
+            if (!isWorldEnabled(player)) {
+                removeHologramsForPlayer(player);
+                return;
+            }
+            
             if (chunkLockManager.isBypassing(player)) {
                 // Remove all holograms for bypassing players
                 removeHologramsForPlayer(player);
@@ -116,6 +177,12 @@ private void updateHologramsForPlayer(Player player) {
 
             Location playerLoc = player.getLocation();
             Chunk playerChunk = playerLoc.getChunk();
+            
+            // NEW: Verify chunk world is enabled
+            if (!isWorldEnabled(playerChunk.getWorld())) {
+                removeHologramsForPlayer(player);
+                return;
+            }
             
             // Track which chunks should have holograms
             Set<String> chunksWithHolograms = new HashSet<>();
@@ -128,6 +195,11 @@ private void updateHologramsForPlayer(Player player) {
                             playerChunk.getX() + dx, 
                             playerChunk.getZ() + dz
                         );
+                        
+                        // NEW: Skip chunks in disabled worlds (shouldn't happen, but defensive)
+                        if (!isWorldEnabled(checkChunk.getWorld())) {
+                            continue;
+                        }
                         
                         // Initialize chunk if needed
                         chunkLockManager.initializeChunk(checkChunk, player.getUniqueId());
@@ -169,12 +241,24 @@ private void updateHologramsForPlayer(Player player) {
                             int chunkZ = Integer.parseInt(parts[3]);
                             String chunkKey = worldName + ":" + chunkX + ":" + chunkZ;
                             
+                            // NEW: Also check if the hologram's world is still enabled
+                            World hologramWorld = org.bukkit.Bukkit.getWorld(worldName);
+                            if (hologramWorld == null || !isWorldEnabled(hologramWorld)) {
+                                ArmorStand hologram = entry.getValue();
+                                if (hologram != null && hologram.isValid()) {
+                                    hologram.remove();
+                                    ChunklockPlugin.getInstance().getLogger().fine(
+                                        "Cleaned up hologram in disabled world " + worldName + " for player " + player.getName());
+                                }
+                                return true;
+                            }
+                            
                             // If this chunk should not have a hologram, remove it
                             if (!chunksWithHolograms.contains(chunkKey)) {
                                 ArmorStand hologram = entry.getValue();
                                 if (hologram != null && hologram.isValid()) {
                                     hologram.remove();
-                                    ChunklockPlugin.getInstance().getLogger().info(
+                                    ChunklockPlugin.getInstance().getLogger().fine(
                                         "Cleaned up stale hologram for chunk " + chunkX + "," + chunkZ + " for player " + player.getName());
                                 }
                                 return true;
@@ -210,6 +294,11 @@ private void updateHologramsForPlayer(Player player) {
      */
     private boolean isAdjacentToUnlockedChunk(Player player, Chunk lockedChunk) {
         try {
+            // NEW: Skip if chunk world is disabled
+            if (!isWorldEnabled(lockedChunk.getWorld())) {
+                return false;
+            }
+            
             // Check all 8 adjacent chunks (N, S, E, W, NE, NW, SE, SW)
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
@@ -249,6 +338,12 @@ private void updateHologramsForPlayer(Player player) {
     private Map<WallSide, Location> getWallHologramLocations(Player player, Chunk chunk) {
         Map<WallSide, Location> map = new HashMap<>();
         World world = chunk.getWorld();
+        
+        // NEW: Skip if world is disabled
+        if (!isWorldEnabled(world)) {
+            return map; // Return empty map for disabled worlds
+        }
+        
         int startX = chunk.getX() * 16;
         int startZ = chunk.getZ() * 16;
 
@@ -287,6 +382,11 @@ private void updateHologramsForPlayer(Player player) {
      * Finds the highest solid block at the given coordinates, ignoring glass or barrier blocks.
      */
     private int getHighestSolidY(World world, int x, int z) {
+        // NEW: Skip if world is disabled
+        if (!isWorldEnabled(world)) {
+            return world.getMinHeight();
+        }
+        
         int y = world.getHighestBlockYAt(x, z);
         if (y > world.getMaxHeight()) y = world.getMaxHeight();
         while (y > world.getMinHeight()) {
@@ -305,6 +405,12 @@ private void updateHologramsForPlayer(Player player) {
      */
     private void showHologramForChunk(Player player, Chunk chunk, ChunkEvaluator.ChunkValueData evaluation, Map<WallSide, Location> locations) {
         if (locations == null || locations.isEmpty()) {
+            return;
+        }
+
+        // NEW: Double-check world status before creating holograms
+        if (!isWorldEnabled(chunk.getWorld())) {
+            ChunklockPlugin.getInstance().getLogger().fine("Skipping hologram creation in disabled world " + chunk.getWorld().getName());
             return;
         }
 
@@ -432,6 +538,12 @@ private void updateHologramsForPlayer(Player player) {
     private Location getHologramLocation(Chunk chunk) {
         try {
             World world = chunk.getWorld();
+            
+            // NEW: Skip if world is disabled
+            if (!isWorldEnabled(world)) {
+                return null;
+            }
+            
             int centerX = ChunkUtils.getChunkCenterX(chunk);
             int centerZ = ChunkUtils.getChunkCenterZ(chunk);
             
@@ -447,9 +559,12 @@ private void updateHologramsForPlayer(Player player) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
                 "Error getting hologram location for chunk " + chunk.getX() + "," + chunk.getZ(), e);
             
-            // Fallback location
+            // Fallback location (only if world is enabled)
             World world = chunk.getWorld();
-            return new Location(world, chunk.getX() * 16 + 8.5, 70, chunk.getZ() * 16 + 8.5);
+            if (isWorldEnabled(world)) {
+                return new Location(world, chunk.getX() * 16 + 8.5, 70, chunk.getZ() * 16 + 8.5);
+            }
+            return null;
         }
     }
 
@@ -506,6 +621,29 @@ private void updateHologramsForPlayer(Player player) {
         stats.put("activeHolograms", activeHolograms.size());
         stats.put("activeTasks", playerHologramTasks.size());
         stats.put("onlinePlayers", playerHologramTasks.keySet().size());
+        
+        // NEW: Add world-related hologram statistics
+        try {
+            WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+            stats.put("enabledWorlds", worldManager.getEnabledWorlds());
+            stats.put("worldCheckingEnabled", true);
+            
+            // Count holograms by world
+            Map<String, Integer> hologramsByWorld = new HashMap<>();
+            for (String hologramKey : activeHolograms.keySet()) {
+                String[] parts = hologramKey.split("_");
+                if (parts.length >= 2) {
+                    String worldName = parts[1];
+                    hologramsByWorld.put(worldName, hologramsByWorld.getOrDefault(worldName, 0) + 1);
+                }
+            }
+            stats.put("hologramsByWorld", hologramsByWorld);
+            
+        } catch (Exception e) {
+            stats.put("worldCheckingEnabled", false);
+            stats.put("worldCheckError", e.getMessage());
+        }
+        
         return stats;
     }
 
@@ -514,6 +652,14 @@ private void updateHologramsForPlayer(Player player) {
      */
     public void refreshHologramsForPlayer(Player player) {
         if (player == null || !player.isOnline()) return;
+        
+        // NEW: Check if player is in enabled world before refreshing
+        if (!isWorldEnabled(player)) {
+            ChunklockPlugin.getInstance().getLogger().fine("Player " + player.getName() + 
+                " is in disabled world " + player.getWorld().getName() + " - removing holograms instead of refreshing");
+            removeHologramsForPlayer(player);
+            return;
+        }
         
         try {
             // Remove existing holograms

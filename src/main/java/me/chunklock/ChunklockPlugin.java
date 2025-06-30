@@ -20,8 +20,11 @@ import me.chunklock.managers.HologramManager;
 import me.chunklock.managers.PlayerDataManager;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.managers.TeamManager;
+import me.chunklock.managers.WorldManager;
 import me.chunklock.listeners.BlockProtectionListener;
 import me.chunklock.listeners.PlayerListener;
+import me.chunklock.listeners.TeleportListener;
+import me.chunklock.services.StartingChunkService;
 import me.chunklock.ui.UnlockGui;
 import java.util.logging.Level;
 
@@ -41,6 +44,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private UnlockGui unlockGui;
     private HologramManager hologramManager;
     private PlayerListener playerListener;
+    private WorldManager worldManager; // NEW: World management
+    private StartingChunkService startingChunkService; // NEW: Starting chunk service
     
     // Block protection listener
     private BlockProtectionListener blockProtectionListener;
@@ -51,6 +56,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private me.chunklock.listeners.PlayerJoinQuitListener joinQuitListener;
     private me.chunklock.ui.UnlockGuiListener unlockGuiListener;
     private me.chunklock.border.BorderRefreshService borderRefreshService;
+
+    // NEW: Teleport listener for world changes
+    private TeleportListener teleportListener;
 
     // Enhanced team system components
     private EnhancedTeamManager enhancedTeamManager;
@@ -110,7 +118,12 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         }
         
         getLogger().info("=== Chunklock Plugin Initialization Complete ===");
-        getLogger().info("Plugin enabled successfully with enhanced team system, protection, and glass borders!");
+        getLogger().info("Plugin enabled successfully with enhanced team system, protection, glass borders, and world management!");
+        
+        // Log enabled worlds for admin reference
+        if (worldManager != null) {
+            getLogger().info("ChunkLock is active in worlds: " + worldManager.getEnabledWorlds());
+        }
         
     } catch (Exception e) {
         getLogger().log(Level.SEVERE, "Critical error during plugin enable", e);
@@ -262,7 +275,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                            blockProtectionListener != null &&
                            chunkBorderManager != null &&
                            enhancedTeamManager != null &&
-                           teamCommandHandler != null;
+                           teamCommandHandler != null &&
+                           worldManager != null && // NEW: Include world manager in validation
+                           startingChunkService != null; // NEW: Include starting chunk service
             
             if (!valid) {
                 getLogger().warning("Reload validation failed: Some components are null");
@@ -275,7 +290,11 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             // Test team system
             int totalTeams = enhancedTeamManager.getAllTeams().size();
             
-            getLogger().info("Reload validation passed. Total unlocked chunks: " + totalChunks + ", Teams: " + totalTeams);
+            // Test world manager
+            int enabledWorlds = worldManager.getEnabledWorlds().size();
+            
+            getLogger().info("Reload validation passed. Total unlocked chunks: " + totalChunks + 
+                           ", Teams: " + totalTeams + ", Enabled worlds: " + enabledWorlds);
             
             return true;
         } catch (Exception e) {
@@ -289,52 +308,60 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         getLogger().info("=== Starting Component Initialization ===");
         
         // Initialize in dependency order with detailed logging
-        getLogger().info("Step 1: Initializing ChunkValueRegistry...");
+        getLogger().info("Step 1: Initializing WorldManager...");
+        this.worldManager = new WorldManager(this);
+        getLogger().info("✓ WorldManager initialized: " + (worldManager != null));
+        
+        getLogger().info("Step 2: Initializing ChunkValueRegistry...");
         this.chunkValueRegistry = new ChunkValueRegistry(this);
         getLogger().info("✓ ChunkValueRegistry initialized: " + (chunkValueRegistry != null));
         
-        getLogger().info("Step 2: Initializing EnhancedTeamManager...");
+        getLogger().info("Step 3: Initializing EnhancedTeamManager...");
         this.enhancedTeamManager = new EnhancedTeamManager(this);
         this.teamCommandHandler = new BasicTeamCommandHandler(enhancedTeamManager);
         getLogger().info("✓ Enhanced team system initialized: " + (enhancedTeamManager != null));
         
-        getLogger().info("Step 3: Initializing TeamManager (legacy)...");
+        getLogger().info("Step 4: Initializing TeamManager (legacy)...");
         this.teamManager = new TeamManager(this);
         getLogger().info("✓ TeamManager initialized: " + (teamManager != null));
         
-        getLogger().info("Step 4: Initializing PlayerProgressTracker...");
+        getLogger().info("Step 5: Initializing PlayerProgressTracker...");
         this.progressTracker = new PlayerProgressTracker(this, teamManager);
         getLogger().info("✓ PlayerProgressTracker initialized: " + (progressTracker != null));
         
-        getLogger().info("Step 5: Initializing PlayerDataManager...");
+        getLogger().info("Step 6: Initializing PlayerDataManager...");
         this.playerDataManager = new PlayerDataManager(this);
         getLogger().info("✓ PlayerDataManager initialized: " + (playerDataManager != null));
         
-        getLogger().info("Step 6: Initializing BiomeUnlockRegistry...");
+        getLogger().info("Step 7: Initializing BiomeUnlockRegistry...");
         this.biomeUnlockRegistry = new BiomeUnlockRegistry(this, progressTracker);
         getLogger().info("✓ BiomeUnlockRegistry initialized: " + (biomeUnlockRegistry != null));
         
-        getLogger().info("Step 7: Initializing ChunkEvaluator...");
+        getLogger().info("Step 8: Initializing ChunkEvaluator...");
         this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry);
         getLogger().info("✓ ChunkEvaluator initialized: " + (chunkEvaluator != null));
         
-        getLogger().info("Step 8: Initializing ChunkLockManager...");
+        getLogger().info("Step 9: Initializing ChunkLockManager...");
         this.chunkLockManager = new ChunkLockManager(chunkEvaluator, this, teamManager);
         getLogger().info("✓ ChunkLockManager initialized: " + (chunkLockManager != null));
         
-        getLogger().info("Step 9: Initializing UnlockGui...");
+        getLogger().info("Step 10: Initializing StartingChunkService...");
+        this.startingChunkService = new StartingChunkService(chunkLockManager, playerDataManager);
+        getLogger().info("✓ StartingChunkService initialized: " + (startingChunkService != null));
+        
+        getLogger().info("Step 11: Initializing UnlockGui...");
         this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker, teamManager);
         getLogger().info("✓ UnlockGui initialized: " + (unlockGui != null));
         
-        getLogger().info("Step 10: Initializing HologramManager...");
+        getLogger().info("Step 12: Initializing HologramManager...");
         this.hologramManager = new HologramManager(chunkLockManager, biomeUnlockRegistry);
         getLogger().info("✓ HologramManager initialized: " + (hologramManager != null));
         
-        getLogger().info("Step 11: Initializing PlayerListener...");
+        getLogger().info("Step 13: Initializing PlayerListener...");
         this.playerListener = new PlayerListener(chunkLockManager, progressTracker, playerDataManager, unlockGui);
         getLogger().info("✓ PlayerListener initialized: " + (playerListener != null));
 
-        getLogger().info("Step 12: Initializing ChunkBorderManager...");
+        getLogger().info("Step 14: Initializing ChunkBorderManager...");
         this.chunkBorderManager = new ChunkBorderManager(chunkLockManager, unlockGui, teamManager, progressTracker);
         getLogger().info("✓ ChunkBorderManager initialized: " + (chunkBorderManager != null));
 
@@ -344,15 +371,17 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         this.unlockGuiListener = new me.chunklock.ui.UnlockGuiListener(unlockGui);
         this.borderListener = new me.chunklock.listeners.BorderListener(chunkBorderManager);
 
-        getLogger().info("Step 13: Initializing BlockProtectionListener...");
+        getLogger().info("Step 15: Initializing BlockProtectionListener...");
         this.blockProtectionListener = new BlockProtectionListener(chunkLockManager, unlockGui, chunkBorderManager);
         getLogger().info("✓ BlockProtectionListener initialized: " + (blockProtectionListener != null));
 
-
+        getLogger().info("Step 16: Initializing TeleportListener...");
+        this.teleportListener = new TeleportListener(worldManager, playerDataManager, startingChunkService);
+        getLogger().info("✓ TeleportListener initialized: " + (teleportListener != null));
         
         // Set up team integration in BiomeUnlockRegistry
         try {
-            getLogger().info("Step 14: Setting up team integration...");
+            getLogger().info("Step 17: Setting up team integration...");
             biomeUnlockRegistry.setEnhancedTeamManager(enhancedTeamManager);
             getLogger().info("✓ Team integration enabled in BiomeUnlockRegistry");
         } catch (Exception e) {
@@ -360,6 +389,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         }
         
         getLogger().info("=== Component Initialization Summary ===");
+        getLogger().info("worldManager: " + (worldManager != null ? "OK" : "NULL"));
         getLogger().info("progressTracker: " + (progressTracker != null ? "OK" : "NULL"));
         getLogger().info("chunkLockManager: " + (chunkLockManager != null ? "OK" : "NULL"));
         getLogger().info("unlockGui: " + (unlockGui != null ? "OK" : "NULL"));
@@ -367,6 +397,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         getLogger().info("biomeUnlockRegistry: " + (biomeUnlockRegistry != null ? "OK" : "NULL"));
         getLogger().info("playerDataManager: " + (playerDataManager != null ? "OK" : "NULL"));
         getLogger().info("teamCommandHandler: " + (teamCommandHandler != null ? "OK" : "NULL"));
+        getLogger().info("startingChunkService: " + (startingChunkService != null ? "OK" : "NULL"));
+        getLogger().info("teleportListener: " + (teleportListener != null ? "OK" : "NULL"));
         
         getLogger().info("All core components initialized successfully");
         return true;
@@ -390,10 +422,13 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             // Register the glass border listener
             Bukkit.getPluginManager().registerEvents(borderListener, this);
             
+            // NEW: Register the teleport listener for world changes
+            Bukkit.getPluginManager().registerEvents(teleportListener, this);
+            
             // Register main plugin events (join/quit handlers)
             Bukkit.getPluginManager().registerEvents(this, this);
             
-            getLogger().info("Event listeners registered successfully (including enhanced team, block protection, and glass borders)");
+            getLogger().info("Event listeners registered successfully (including enhanced team, block protection, glass borders, and world management)");
             return true;
             
         } catch (Exception e) {
@@ -502,6 +537,11 @@ private boolean registerCommands() {
     // Enhanced hologram management events
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
+        // NEW: Check if player is in an enabled world before processing
+        if (!worldManager.isWorldEnabled(event.getPlayer().getWorld())) {
+            return; // Skip ChunkLock processing for disabled worlds
+        }
+        
         // Start holograms for joining player after a short delay
         Bukkit.getScheduler().runTaskLater(this, () -> {
             try {
@@ -516,7 +556,7 @@ private boolean registerCommands() {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        // Clean up holograms for leaving player
+        // Clean up holograms for leaving player (regardless of world)
         try {
             if (hologramManager != null) {
                 hologramManager.stopHologramDisplay(event.getPlayer());
@@ -698,6 +738,24 @@ private boolean registerCommands() {
         return chunkBorderManager;
     }
 
+    // NEW: WorldManager getter
+    public WorldManager getWorldManager() {
+        if (worldManager == null) {
+            getLogger().warning("WorldManager accessed before initialization");
+            throw new IllegalStateException("WorldManager not initialized");
+        }
+        return worldManager;
+    }
+
+    // NEW: StartingChunkService getter
+    public StartingChunkService getStartingChunkService() {
+        if (startingChunkService == null) {
+            getLogger().warning("StartingChunkService accessed before initialization");
+            throw new IllegalStateException("StartingChunkService not initialized");
+        }
+        return startingChunkService;
+    }
+
     // Enhanced team system getters
     public EnhancedTeamManager getEnhancedTeamManager() {
         if (enhancedTeamManager == null) {
@@ -735,6 +793,13 @@ private boolean registerCommands() {
                 int totalTeamChunks = allTeams.stream().mapToInt(team -> team.getTotalChunksUnlocked()).sum();
                 stats.append("Total team members: ").append(totalTeamMembers).append("\n");
                 stats.append("Total team chunks unlocked: ").append(totalTeamChunks).append("\n");
+            }
+            
+            // NEW: World management statistics
+            if (worldManager != null) {
+                var enabledWorlds = worldManager.getEnabledWorlds();
+                stats.append("Enabled worlds: ").append(enabledWorlds).append("\n");
+                stats.append("Auto-assign on world change: ").append(worldManager.isAutoAssignOnWorldChangeEnabled()).append("\n");
             }
             
             if (playerListener != null) {
