@@ -3,6 +3,7 @@ package me.chunklock.listeners;
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.managers.WorldManager;
 import me.chunklock.managers.PlayerDataManager;
+import me.chunklock.managers.HologramManager;
 import me.chunklock.services.StartingChunkService;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -22,6 +23,8 @@ import java.util.HashSet;
 /**
  * Handles teleportation between worlds - assigns new starting chunks when players
  * teleport to different worlds where ChunkLock is active
+ * 
+ * FIXED: Now properly restarts holograms when teleporting back to enabled worlds
  */
 public class TeleportListener implements Listener {
     
@@ -29,7 +32,7 @@ public class TeleportListener implements Listener {
     private final PlayerDataManager playerDataManager;
     private final StartingChunkService startingChunkService;
     
-    // NEW: Track players to prevent infinite recursion
+    // Track players to prevent infinite recursion
     private final Set<UUID> processingPlayers = new HashSet<>();
     
     public TeleportListener(WorldManager worldManager, 
@@ -57,7 +60,7 @@ public class TeleportListener implements Listener {
             
             UUID playerId = player.getUniqueId();
             
-            // NEW: Prevent infinite recursion - skip if we're already processing this player
+            // Prevent infinite recursion - skip if we're already processing this player
             if (processingPlayers.contains(playerId)) {
                 return;
             }
@@ -70,17 +73,27 @@ public class TeleportListener implements Listener {
                 return;
             }
             
-            // Check if destination world has ChunkLock enabled
-            if (!worldManager.isWorldEnabled(toWorld)) {
-                return;
+            // FIXED: Handle both directions of world changes
+            boolean fromEnabled = worldManager.isWorldEnabled(fromWorld);
+            boolean toEnabled = worldManager.isWorldEnabled(toWorld);
+            
+            ChunklockPlugin.getInstance().getLogger().fine("Player " + player.getName() + 
+                " teleporting from " + fromWorld.getName() + " (enabled: " + fromEnabled + ") to " + 
+                toWorld.getName() + " (enabled: " + toEnabled + ") via " + event.getCause());
+            
+            // Case 1: Player teleporting TO an enabled world (regardless of where they came from)
+            if (toEnabled) {
+                handleTeleportToEnabledWorld(player, toWorld);
             }
             
-            // Check if auto-assignment is enabled
-            if (!worldManager.isAutoAssignOnWorldChangeEnabled()) {
-                return;
+            // Case 2: Only override teleport destination for automatic world changes (not commands/plugins)
+            // FIXED: Don't override intentional teleports like /mv tp
+            if (fromEnabled && toEnabled && worldManager.isAutoAssignOnWorldChangeEnabled()) {
+                // Only handle automatic world changes, not intentional teleports
+                if (isAutomaticWorldChange(event)) {
+                    handleWorldChange(player, toWorld);
+                }
             }
-            
-            handleWorldChange(player, toWorld);
             
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
@@ -89,7 +102,82 @@ public class TeleportListener implements Listener {
     }
     
     /**
-     * Handle player changing to a ChunkLock-enabled world
+     * FIXED: Determines if a teleport is an automatic world change vs intentional teleport
+     * Automatic: portals, commands that don't specify location, falling into void
+     * Intentional: /tp, /mv tp, plugin teleports with specific coordinates
+     */
+    private boolean isAutomaticWorldChange(PlayerTeleportEvent event) {
+        PlayerTeleportEvent.TeleportCause cause = event.getCause();
+        
+        // These are considered automatic world changes that should trigger chunk assignment
+        switch (cause) {
+            case NETHER_PORTAL:
+            case END_PORTAL:
+            case END_GATEWAY:
+            case CHORUS_FRUIT:
+                return true;
+                
+            case PLUGIN:
+            case COMMAND:
+                // For plugins/commands, check if destination seems intentional
+                // If the teleport destination is close to spawn, it might be automatic
+                // If it's to a specific coordinate, it's likely intentional
+                Location to = event.getTo();
+                World toWorld = to.getWorld();
+                if (toWorld != null) {
+                    Location worldSpawn = toWorld.getSpawnLocation();
+                    double distanceFromSpawn = to.distance(worldSpawn);
+                    
+                    // If teleporting near world spawn (within 100 blocks), consider it automatic
+                    // If teleporting to specific coordinates far from spawn, consider it intentional
+                    return distanceFromSpawn < 100;
+                }
+                return false;
+                
+            case UNKNOWN:
+                // Unknown cause - be conservative and don't override
+                return false;
+                
+            default:
+                // Most other causes (SPECTATE, ENDER_PEARL, etc.) are intentional
+                return false;
+        }
+    }
+    
+    private void handleTeleportToEnabledWorld(Player player, World enabledWorld) {
+        try {
+            ChunklockPlugin.getInstance().getLogger().fine("Handling teleport to enabled world for " + player.getName());
+            
+            // Restart holograms with a short delay to ensure the teleport is complete
+            Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
+                try {
+                    if (player.isOnline() && player.getWorld().equals(enabledWorld)) {
+                        HologramManager hologramManager = ChunklockPlugin.getInstance().getHologramManager();
+                        if (hologramManager != null) {
+                            // Stop any existing hologram task (cleanup)
+                            hologramManager.stopHologramDisplay(player);
+                            
+                            // Start fresh hologram display
+                            hologramManager.startHologramDisplay(player);
+                            
+                            ChunklockPlugin.getInstance().getLogger().fine(
+                                "Restarted holograms for " + player.getName() + " after teleporting to enabled world " + enabledWorld.getName());
+                        }
+                    }
+                } catch (Exception e) {
+                    ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                        "Error restarting holograms after teleport for " + player.getName(), e);
+                }
+            }, 20L); // 1 second delay to ensure teleport is complete
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                "Error in handleTeleportToEnabledWorld for " + player.getName(), e);
+        }
+    }
+    
+    /**
+     * Handle player changing to a ChunkLock-enabled world (original functionality)
      */
     private void handleWorldChange(Player player, World newWorld) {
         try {
@@ -102,78 +190,38 @@ public class TeleportListener implements Listener {
             Location existingSpawn = playerDataManager.getChunkSpawn(playerId);
             if (existingSpawn != null && existingSpawn.getWorld().equals(newWorld)) {
                 // Player already has spawn in this world, teleport there SAFELY
-                // Use scheduler to delay teleport and prevent recursion
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            // Double-check player is still online
-                            if (player.isOnline()) {
-                                player.teleport(existingSpawn);
-                                player.sendMessage("§aReturned to your existing chunk in " + newWorld.getName());
-
-                                // Schedule a border update after teleport
-                                Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
-                                    if (player.isOnline()) {
-                                        try {
-                                            var borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
-                                            if (borderManager != null) {
-                                                borderManager.scheduleBorderUpdate(player);
-                                            }
-                                        } catch (Exception e) {
-                                            ChunklockPlugin.getInstance().getLogger().warning("Error updating borders for " + player.getName() + ": " + e.getMessage());
-                                        }
-                                    }
-                                }, 60L); // 3 second delay
-                            }
-                        } catch (Exception e) {
-                            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING,
-                                "Error during delayed teleport for " + player.getName(), e);
-                        } finally {
-                            // Always remove from processing set
-                            processingPlayers.remove(playerId);
+                // Use scheduler to prevent recursion in the teleport event
+                Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
+                    try {
+                        if (player.isOnline()) {
+                            Location centerSpawn = me.chunklock.util.ChunkUtils.getChunkCenter(existingSpawn.getChunk());
+                            player.teleport(centerSpawn);
+                            player.setRespawnLocation(centerSpawn, true);
+                            player.sendMessage("§aReturned to your starting chunk in " + newWorld.getName());
                         }
+                    } finally {
+                        processingPlayers.remove(playerId);
                     }
-                }.runTaskLater(ChunklockPlugin.getInstance(), 1L); // 1 tick delay
+                }, 1L);
                 return;
             }
             
-            // Assign new starting chunk in the new world
-            startingChunkService.assignStartingChunk(player);
-
-            ChunklockPlugin.getInstance().getLogger().info(
-                "Assigned new starting chunk to " + player.getName() + " in world " + newWorld.getName());
-
-            // Schedule border update for the player after spawn assignment
+            // Player doesn't have a starting chunk in this world, assign one
             Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
-                if (player.isOnline()) {
-                    try {
-                        var borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
-                        if (borderManager != null) {
-                            borderManager.scheduleBorderUpdate(player);
-                        }
-                    } catch (Exception e) {
-                        ChunklockPlugin.getInstance().getLogger().warning("Error updating borders for " + player.getName() + ": " + e.getMessage());
+                try {
+                    if (player.isOnline()) {
+                        startingChunkService.assignStartingChunk(player);
+                        player.sendMessage("§aWelcome to " + newWorld.getName() + "! You've been assigned a starting chunk.");
                     }
+                } finally {
+                    processingPlayers.remove(playerId);
                 }
-            }, 60L); // 3 second delay
-                
+            }, 1L);
+            
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
-                "Failed to handle world change for player " + player.getName(), e);
-        } finally {
-            // Always remove from processing set
+                "Error handling world change for " + player.getName(), e);
             processingPlayers.remove(player.getUniqueId());
         }
-    }
-    
-    /**
-     * Cleanup method to remove offline players from processing set
-     */
-    public void cleanupOfflinePlayers() {
-        processingPlayers.removeIf(playerId -> {
-            Player player = ChunklockPlugin.getInstance().getServer().getPlayer(playerId);
-            return player == null || !player.isOnline();
-        });
     }
 }
