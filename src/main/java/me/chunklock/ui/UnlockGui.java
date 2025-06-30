@@ -2,9 +2,12 @@ package me.chunklock.ui;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+
+import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.World;
 import org.bukkit.block.Biome;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -19,6 +22,9 @@ import me.chunklock.ui.UnlockGuiBuilder;
 import me.chunklock.ui.UnlockGuiStateManager;
 import me.chunklock.ui.UnlockGuiStateManager.PendingUnlock;
 import me.chunklock.ChunklockPlugin;
+import org.bukkit.Bukkit;
+import org.bukkit.World;
+import java.util.logging.Level;
 
 import java.util.UUID;
 import java.util.logging.Level;
@@ -329,10 +335,58 @@ public class UnlockGui {
      */
     private void notifyUnlockSystems(Player player, Chunk chunk) {
         try {
-            // Update borders
+            // Update borders with comprehensive approach
             var borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
             if (borderManager != null) {
-                borderManager.onChunkUnlocked(player, chunk);
+                ChunklockPlugin.getInstance().getLogger().fine("Updating borders after chunk unlock for " + player.getName() + 
+                    " at chunk " + chunk.getX() + "," + chunk.getZ());
+                
+                // Use a delay to ensure the chunk unlock is fully processed first
+                Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
+                    if (player.isOnline()) {
+                        try {
+                            // FIXED: Comprehensive border update approach
+                            // 1. Call the original method to handle immediate cleanup
+                            borderManager.onChunkUnlocked(player, chunk);
+                            
+                            // 2. Force a border update for all neighboring unlocked chunks
+                            // This will remove borders that were pointing TO the now-unlocked chunk
+                            World world = chunk.getWorld();
+                            
+                            for (int dx = -1; dx <= 1; dx++) {
+                                for (int dz = -1; dz <= 1; dz++) {
+                                    if (dx == 0 && dz == 0) continue; // Skip the center chunk
+                                    
+                                    try {
+                                        Chunk neighbor = world.getChunkAt(chunk.getX() + dx, chunk.getZ() + dz);
+                                        
+                                        // Initialize neighbor to ensure we have current lock status
+                                        ChunklockPlugin plugin = ChunklockPlugin.getInstance();
+                                        plugin.getChunkLockManager().initializeChunk(neighbor, player.getUniqueId());
+                                        
+                                        // If neighbor is unlocked, refresh its borders
+                                        // This will remove borders that were pointing to the newly unlocked chunk
+                                        if (!plugin.getChunkLockManager().isLocked(neighbor)) {
+                                            // Schedule a border update for this neighboring chunk
+                                            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                                                if (player.isOnline()) {
+                                                    borderManager.scheduleBorderUpdate(player);
+                                                }
+                                            }, (dx + 1) * 3 + (dz + 1)); // Stagger updates to prevent overlap
+                                        }
+                                    } catch (Exception e) {
+                                        ChunklockPlugin.getInstance().getLogger().fine("Error updating neighbor borders: " + e.getMessage());
+                                    }
+                                }
+                            }
+                            
+                            ChunklockPlugin.getInstance().getLogger().fine("Completed comprehensive border update after unlock for " + player.getName());
+                        } catch (Exception e) {
+                            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                                "Error during post-unlock border update for " + player.getName(), e);
+                        }
+                    }
+                }, 10L); // 0.5 second delay to ensure unlock is processed
             }
             
             // Update holograms - check if method exists and is accessible
