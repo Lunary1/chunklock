@@ -363,3 +363,13 @@ worlds:
     - "world_nether"
     - "world_the_end"
   auto-assign-on-world-change: true
+
+# Hologram Configuration
+holograms:
+  enabled: true
+  provider: "FancyHolograms" # Force FancyHolograms only - ignore any other hologram plugins
+  update-interval: 20 # ticks (1 second)
+  view-distance: 48 # blocks (3 chunks)
+  height-offset: 3.0 # blocks above ground
+  wall-facing: true # Make holograms face toward the center of the chunk
+  debug-logging: true # Enable debug logging for hologram system

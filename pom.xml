@@ -33,6 +33,12 @@
       <id>CodeMC</id>
       <url>https://repo.codemc.org/repository/maven-public</url>
     </repository>
+    <!-- FancyHolograms repository -->
+    <repository>
+      <id>fancyinnovations-releases</id>
+      <name>FancyInnovations Repository</name>
+      <url>https://repo.fancyinnovations.com/releases</url>
+    </repository>
   </repositories>
 
   <dependencies>
@@ -49,6 +55,14 @@
       <artifactId>bstats-bukkit</artifactId>
       <version>3.0.2</version>
       <scope>compile</scope>
+    </dependency>
+  
+    <!-- FancyHolograms API -->
+    <dependency>
+      <groupId>de.oliver</groupId>
+      <artifactId>FancyHolograms</artifactId>
+      <version>2.4.2</version>
+      <scope>provided</scope>
     </dependency>
   
     <dependency>

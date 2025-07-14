@@ -2,6 +2,7 @@ package me.chunklock.ui;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
@@ -24,6 +25,8 @@ import me.chunklock.ui.UnlockGuiStateManager.PendingUnlock;
 import me.chunklock.ChunklockPlugin;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
+import org.bukkit.Particle;
+import org.bukkit.Location;
 import java.util.logging.Level;
 
 import java.util.UUID;
@@ -45,8 +48,10 @@ public class UnlockGui {
     private final UnlockGuiBuilder builder;
     private final UnlockGuiStateManager stateManager;
     
-    // Constants
-    public static final String GUI_TITLE = "ChunkLock Unlock GUI";
+    // Constants - Updated for new GUI
+    public static final String GUI_TITLE_PREFIX = "🔓 Unlock Chunk";
+    private static final int UNLOCK_BUTTON_SLOT = 31; // Updated slot for new layout
+    private static final int[] CLICKABLE_SLOTS = {31, 49}; // Unlock button and help book
     
     public UnlockGui(ChunkLockManager chunkLockManager,
                      BiomeUnlockRegistry biomeUnlockRegistry,
@@ -82,7 +87,15 @@ public class UnlockGui {
             double multiplier = chunkLockManager.getContestedCostMultiplier();
             int adjustedAmount = (int) Math.ceil(requirement.amount() * multiplier);
             requirement = new BiomeUnlockRegistry.UnlockRequirement(requirement.material(), adjustedAmount);
-            player.sendMessage("§cContested chunk! Cost x" + multiplier);
+            
+            // Enhanced contested notification
+            player.sendMessage(Component.text("⚔ ").color(NamedTextColor.RED)
+                .append(Component.text("Contested Chunk! ").color(NamedTextColor.GOLD))
+                .append(Component.text("Cost multiplied by ").color(NamedTextColor.YELLOW))
+                .append(Component.text("x" + multiplier).color(NamedTextColor.RED)));
+            
+            // Play warning sound
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
         }
 
         // Build and open the GUI
@@ -93,12 +106,33 @@ public class UnlockGui {
         stateManager.setPendingUnlock(playerId, pendingUnlock);
         stateManager.setActiveGui(playerId, inventory);
         
+        // Enhanced visual feedback on open
+        playGuiOpenEffects(player);
+        
         // Debug logging
         ChunklockPlugin.getInstance().getLogger().info("Opening unlock GUI for " + player.getName() + 
             " - chunk " + chunk.getX() + "," + chunk.getZ() + 
-            " - required: " + requirement.amount() + "x " + requirement.material());
+            " - required: " + requirement.amount() + "x " + requirement.material() +
+            (contested ? " [CONTESTED]" : ""));
         
         player.openInventory(inventory);
+    }
+    
+    /**
+     * Play effects when GUI opens
+     */
+    private void playGuiOpenEffects(Player player) {
+        // Play open sound
+        player.playSound(player.getLocation(), Sound.BLOCK_ENDER_CHEST_OPEN, 0.8f, 1.2f);
+        
+        // Spawn some particles around the player
+        player.getWorld().spawnParticle(
+            Particle.END_ROD,
+            player.getLocation().add(0, 1, 0),
+            10,
+            0.5, 0.5, 0.5,
+            0.05
+        );
     }
     
     /**
@@ -109,26 +143,66 @@ public class UnlockGui {
         
         UUID playerId = player.getUniqueId();
         
-        // Check if this is our GUI - be more specific about which inventory
+        // Check if this is our GUI
         if (!isOurGui(playerId, event.getClickedInventory())) {
-            return; // Not our GUI, don't interfere
+            return;
         }
 
         event.setCancelled(true);
         
-        // Debug logging
-        ChunklockPlugin.getInstance().getLogger().info("Player " + player.getName() + 
-            " clicked slot " + event.getRawSlot() + " in unlock GUI. Pending state exists: " + 
-            stateManager.hasPendingUnlock(playerId));
+        int clickedSlot = event.getRawSlot();
         
-        // Only the unlock button (slot 22) should be clickable
-        if (event.getRawSlot() != 22) {
-            ChunklockPlugin.getInstance().getLogger().fine("Click was not on unlock button (slot 22)");
-            return;
+        // Debug logging
+        ChunklockPlugin.getInstance().getLogger().fine("Player " + player.getName() + 
+            " clicked slot " + clickedSlot + " in unlock GUI");
+        
+        // Handle different slot clicks
+        switch (clickedSlot) {
+            case UNLOCK_BUTTON_SLOT -> processUnlockAttempt(player);
+            case 49 -> { // Help book slot
+                player.playSound(player.getLocation(), Sound.ITEM_BOOK_PAGE_TURN, 1.0f, 1.0f);
+                sendHelpMessage(player);
+            }
+            default -> {
+                // Play a subtle click sound for non-interactive slots
+                if (clickedSlot >= 0 && clickedSlot < 54) {
+                    player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.3f, 2.0f);
+                }
+            }
         }
-
-        // Process the unlock attempt
-        processUnlockAttempt(player);
+    }
+    
+    /**
+     * Send help information to the player
+     */
+    private void sendHelpMessage(Player player) {
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("═══════════════════════════════════").color(NamedTextColor.DARK_GRAY));
+        player.sendMessage(Component.text("   📖 CHUNKLOCK HELP").color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
+        player.sendMessage(Component.text("═══════════════════════════════════").color(NamedTextColor.DARK_GRAY));
+        player.sendMessage(Component.empty());
+        
+        player.sendMessage(Component.text("🔓 How to Unlock Chunks:").color(NamedTextColor.YELLOW));
+        player.sendMessage(Component.text("  1. ").color(NamedTextColor.GRAY)
+            .append(Component.text("Gather the required materials").color(NamedTextColor.WHITE)));
+        player.sendMessage(Component.text("  2. ").color(NamedTextColor.GRAY)
+            .append(Component.text("Right-click glass borders around locked chunks").color(NamedTextColor.WHITE)));
+        player.sendMessage(Component.text("  3. ").color(NamedTextColor.GRAY)
+            .append(Component.text("Click the green emerald button when ready").color(NamedTextColor.WHITE)));
+        
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("💡 Tips:").color(NamedTextColor.AQUA));
+        player.sendMessage(Component.text("  • ").color(NamedTextColor.GRAY)
+            .append(Component.text("Different biomes require different materials").color(NamedTextColor.WHITE)));
+        player.sendMessage(Component.text("  • ").color(NamedTextColor.GRAY)
+            .append(Component.text("Harder chunks (higher score) cost more").color(NamedTextColor.WHITE)));
+        player.sendMessage(Component.text("  • ").color(NamedTextColor.GRAY)
+            .append(Component.text("Team members share all unlocked chunks").color(NamedTextColor.WHITE)));
+        player.sendMessage(Component.text("  • ").color(NamedTextColor.GRAY)
+            .append(Component.text("Contested chunks cost 2x resources!").color(NamedTextColor.RED)));
+        
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("═══════════════════════════════════").color(NamedTextColor.DARK_GRAY));
     }
     
     /**
@@ -144,8 +218,8 @@ public class UnlockGui {
             ChunklockPlugin.getInstance().getLogger().fine("Cleaning up GUI state for " + player.getName());
             stateManager.clearActiveGui(playerId);
             
-            // Optionally clean up pending unlock after a delay to allow reopening
-            // For now, we'll keep the pending state in case they reopen quickly
+            // Play close sound
+            player.playSound(player.getLocation(), Sound.BLOCK_ENDER_CHEST_CLOSE, 0.6f, 1.0f);
         }
     }
     
@@ -153,31 +227,27 @@ public class UnlockGui {
      * Check if an inventory belongs to our GUI system.
      */
     private boolean isOurGui(UUID playerId, Inventory clickedInventory) {
-        // First check: if the clicked inventory is null or the player's own inventory, it's not our GUI
         if (clickedInventory == null) {
             return false;
         }
         
-        // Check if this is the player's inventory (not our GUI)
-        Player player = org.bukkit.Bukkit.getPlayer(playerId);
+        // Check if this is the player's inventory
+        Player player = Bukkit.getPlayer(playerId);
         if (player != null && clickedInventory.equals(player.getInventory())) {
-            return false; // This is the player's inventory, not our GUI
+            return false;
         }
         
-        // Method 1: Check if we have an active GUI for this player that matches
+        // Check if we have an active GUI for this player
         if (stateManager.isPlayerGui(playerId, clickedInventory)) {
-            ChunklockPlugin.getInstance().getLogger().fine("GUI identified by active GUI tracking");
             return true;
         }
         
-        // Method 2: Check if player has pending unlock state AND they have a GUI open
+        // Check by title pattern
         if (stateManager.hasPendingUnlock(playerId) && player != null && player.getOpenInventory() != null) {
-            // Check if the title matches our GUI title
             try {
                 String inventoryTitle = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
                     .serialize(player.getOpenInventory().title());
-                if (GUI_TITLE.equals(inventoryTitle)) {
-                    ChunklockPlugin.getInstance().getLogger().fine("GUI identified by pending state and title match");
+                if (inventoryTitle.startsWith(GUI_TITLE_PREFIX)) {
                     return true;
                 }
             } catch (Exception e) {
@@ -223,6 +293,7 @@ public class UnlockGui {
         if (!chunkLockManager.isLocked(state.chunk)) {
             player.sendMessage(Component.text("✅ Chunk already unlocked!")
                 .color(NamedTextColor.GREEN));
+            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_YES, 1.0f, 1.0f);
             player.closeInventory();
             stateManager.cleanupPlayer(playerId);
             return;
@@ -231,7 +302,11 @@ public class UnlockGui {
         try {
             // Validate contested chunk claims
             if (state.contested && !progressTracker.canClaimContested(teamId, chunkLockManager.getMaxContestedClaimsPerDay())) {
-                player.sendMessage(Component.text("❌ Contested claim limit reached for today.").color(NamedTextColor.RED));
+                player.sendMessage(Component.text("❌ Contested claim limit reached for today.")
+                    .color(NamedTextColor.RED));
+                player.sendMessage(Component.text("💡 You can claim more contested chunks tomorrow!")
+                    .color(NamedTextColor.YELLOW));
+                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
                 return;
             }
             
@@ -254,6 +329,7 @@ public class UnlockGui {
             ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Error processing unlock for " + player.getName(), e);
             player.sendMessage(Component.text("❌ An error occurred while unlocking the chunk.")
                 .color(NamedTextColor.RED));
+            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_HURT, 1.0f, 1.0f);
         }
     }
     
@@ -262,15 +338,28 @@ public class UnlockGui {
      */
     private void handleInsufficientItems(Player player, int playerHas, int required, Material material) {
         // Play error sound
-        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
+        player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
         
         int needed = required - playerHas;
         
-        player.sendMessage(Component.text("❌ Missing required items!")
-            .color(NamedTextColor.RED));
-        player.sendMessage(Component.text("Need " + needed + " more " + 
-            formatMaterialName(material))
-            .color(NamedTextColor.YELLOW));
+        // Send formatted message
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━").color(NamedTextColor.DARK_RED));
+        player.sendMessage(Component.text("   ❌ INSUFFICIENT RESOURCES").color(NamedTextColor.RED).decorate(TextDecoration.BOLD));
+        player.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━").color(NamedTextColor.DARK_RED));
+        player.sendMessage(Component.empty());
+        
+        player.sendMessage(Component.text("📦 Required: ").color(NamedTextColor.GRAY)
+            .append(Component.text(required + "x " + formatMaterialName(material)).color(NamedTextColor.WHITE)));
+        player.sendMessage(Component.text("🎒 You have: ").color(NamedTextColor.GRAY)
+            .append(Component.text(playerHas + "x").color(NamedTextColor.RED)));
+        player.sendMessage(Component.text("❗ Missing: ").color(NamedTextColor.GRAY)
+            .append(Component.text(needed + "x").color(NamedTextColor.YELLOW)));
+        
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("💡 Tip: ").color(NamedTextColor.AQUA)
+            .append(Component.text("Find more " + formatMaterialName(material) + " and try again!").color(NamedTextColor.WHITE)));
+        player.sendMessage(Component.empty());
         
         ChunklockPlugin.getInstance().getLogger().info("Player " + player.getName() + 
             " missing items: has " + playerHas + ", needs " + required);
@@ -281,6 +370,9 @@ public class UnlockGui {
      */
     private void executeUnlock(Player player, PendingUnlock state, UUID teamId) {
         try {
+            // Pre-unlock effects
+            player.playSound(player.getLocation(), Sound.BLOCK_SMITHING_TABLE_USE, 1.0f, 1.0f);
+            
             // Get current evaluation (might have changed)
             var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), state.chunk);
             
@@ -317,10 +409,11 @@ public class UnlockGui {
             ChunklockPlugin.getInstance().getLogger().fine("Team statistics recording failed: " + e.getMessage());
         }
 
-        // Play success sound and effects
-        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 2.0f);
-        player.sendMessage(Component.text("🎉 Chunk unlocked successfully!")
-            .color(NamedTextColor.GREEN));
+        // Play success effects
+        playUnlockSuccessEffects(player, state.chunk);
+
+        // Send success message
+        sendUnlockSuccessMessage(player, state);
 
         // Clean up and close GUI
         player.closeInventory();
@@ -328,6 +421,80 @@ public class UnlockGui {
 
         // Trigger related systems
         notifyUnlockSystems(player, state.chunk);
+    }
+    
+    /**
+     * Play visual and audio effects for successful unlock
+     */
+    private void playUnlockSuccessEffects(Player player, Chunk chunk) {
+        // Success sound
+        player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
+        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.5f);
+        
+        // Firework-style particles at chunk center
+        Location chunkCenter = new Location(
+            chunk.getWorld(),
+            chunk.getX() * 16 + 8,
+            player.getLocation().getY() + 2,
+            chunk.getZ() * 16 + 8
+        );
+        
+        // Multiple particle bursts
+        Bukkit.getScheduler().runTaskTimer(ChunklockPlugin.getInstance(), new Runnable() {
+            int count = 0;
+            
+            @Override
+            public void run() {
+                if (count >= 3) {
+                    return;
+                }
+                
+                player.getWorld().spawnParticle(
+                    Particle.FIREWORK,
+                    chunkCenter,
+                    30,
+                    4, 2, 4,
+                    0.1
+                );
+                
+                player.getWorld().spawnParticle(
+                    Particle.HAPPY_VILLAGER,
+                    player.getLocation().add(0, 1, 0),
+                    20,
+                    1, 1, 1,
+                    0
+                );
+                
+                count++;
+            }
+        }, 0L, 10L);
+    }
+    
+    /**
+     * Send formatted success message
+     */
+    private void sendUnlockSuccessMessage(Player player, PendingUnlock state) {
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("═══════════════════════════════════").color(NamedTextColor.GREEN));
+        player.sendMessage(Component.text("   🎉 CHUNK UNLOCKED!").color(NamedTextColor.GREEN).decorate(TextDecoration.BOLD));
+        player.sendMessage(Component.text("═══════════════════════════════════").color(NamedTextColor.GREEN));
+        player.sendMessage(Component.empty());
+        
+        player.sendMessage(Component.text("📍 Location: ").color(NamedTextColor.GRAY)
+            .append(Component.text(state.chunk.getX() + ", " + state.chunk.getZ()).color(NamedTextColor.WHITE)));
+        player.sendMessage(Component.text("🌿 Biome: ").color(NamedTextColor.GRAY)
+            .append(Component.text(BiomeUnlockRegistry.getBiomeDisplayName(state.biome)).color(NamedTextColor.YELLOW)));
+        player.sendMessage(Component.text("📦 Consumed: ").color(NamedTextColor.GRAY)
+            .append(Component.text(state.requirement.amount() + "x " + formatMaterialName(state.requirement.material())).color(NamedTextColor.AQUA)));
+        
+        if (state.contested) {
+            player.sendMessage(Component.empty());
+            player.sendMessage(Component.text("⚔ Contested chunk claimed!").color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
+        }
+        
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("✨ You can now build and explore in this chunk!").color(NamedTextColor.GREEN));
+        player.sendMessage(Component.empty());
     }
     
     /**
@@ -345,17 +512,15 @@ public class UnlockGui {
                 Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
                     if (player.isOnline()) {
                         try {
-                            // FIXED: Comprehensive border update approach
-                            // 1. Call the original method to handle immediate cleanup
+                            // Comprehensive border update approach
                             borderManager.onChunkUnlocked(player, chunk);
                             
-                            // 2. Force a border update for all neighboring unlocked chunks
-                            // This will remove borders that were pointing TO the now-unlocked chunk
+                            // Force a border update for all neighboring unlocked chunks
                             World world = chunk.getWorld();
                             
                             for (int dx = -1; dx <= 1; dx++) {
                                 for (int dz = -1; dz <= 1; dz++) {
-                                    if (dx == 0 && dz == 0) continue; // Skip the center chunk
+                                    if (dx == 0 && dz == 0) continue;
                                     
                                     try {
                                         Chunk neighbor = world.getChunkAt(chunk.getX() + dx, chunk.getZ() + dz);
@@ -365,14 +530,12 @@ public class UnlockGui {
                                         plugin.getChunkLockManager().initializeChunk(neighbor, player.getUniqueId());
                                         
                                         // If neighbor is unlocked, refresh its borders
-                                        // This will remove borders that were pointing to the newly unlocked chunk
                                         if (!plugin.getChunkLockManager().isLocked(neighbor)) {
-                                            // Schedule a border update for this neighboring chunk
                                             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                                                 if (player.isOnline()) {
                                                     borderManager.scheduleBorderUpdate(player);
                                                 }
-                                            }, (dx + 1) * 3 + (dz + 1)); // Stagger updates to prevent overlap
+                                            }, (dx + 1) * 3 + (dz + 1));
                                         }
                                     } catch (Exception e) {
                                         ChunklockPlugin.getInstance().getLogger().fine("Error updating neighbor borders: " + e.getMessage());
@@ -386,21 +549,20 @@ public class UnlockGui {
                                 "Error during post-unlock border update for " + player.getName(), e);
                         }
                     }
-                }, 10L); // 0.5 second delay to ensure unlock is processed
+                }, 10L); // 0.5 second delay
             }
             
-            // Update holograms - check if method exists and is accessible
+            // Update holograms
             try {
                 var hologramManager = ChunklockPlugin.getInstance().getHologramManager();
                 if (hologramManager != null) {
-                    // Try to call the method if it exists
                     hologramManager.getClass().getMethod("updateHologramsForPlayer", Player.class).invoke(hologramManager, player);
                 }
             } catch (Exception e) {
                 ChunklockPlugin.getInstance().getLogger().fine("Hologram update not available or failed: " + e.getMessage());
             }
             
-            // Trigger unlock effects - check if manager exists
+            // Trigger unlock effects
             try {
                 Object effectsManager = null;
                 try {
@@ -437,7 +599,16 @@ public class UnlockGui {
      * Format material name for display.
      */
     private String formatMaterialName(Material material) {
-        return material.name().toLowerCase().replace("_", " ");
+        String name = material.name().toLowerCase().replace("_", " ");
+        String[] words = name.split(" ");
+        StringBuilder formatted = new StringBuilder();
+        
+        for (String word : words) {
+            if (formatted.length() > 0) formatted.append(" ");
+            formatted.append(word.substring(0, 1).toUpperCase()).append(word.substring(1));
+        }
+        
+        return formatted.toString();
     }
     
     /**

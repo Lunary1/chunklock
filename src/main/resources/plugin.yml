@@ -4,6 +4,7 @@ main: me.chunklock.ChunklockPlugin
 api-version: 1.20
 author: LunaryCraft Dev Team
 description: Advanced chunk-locking system with visual effects, glass borders and strategic progression
+softdepend: [FancyHolograms]
 
 commands:
   chunklock:

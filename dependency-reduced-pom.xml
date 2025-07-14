@@ -69,12 +69,23 @@
       <id>CodeMC</id>
       <url>https://repo.codemc.org/repository/maven-public</url>
     </repository>
+    <repository>
+      <id>fancyinnovations-releases</id>
+      <name>FancyInnovations Repository</name>
+      <url>https://repo.fancyinnovations.com/releases</url>
+    </repository>
   </repositories>
   <dependencies>
     <dependency>
       <groupId>io.papermc.paper</groupId>
       <artifactId>paper-api</artifactId>
       <version>1.21.4-R0.1-SNAPSHOT</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>de.oliver</groupId>
+      <artifactId>FancyHolograms</artifactId>
+      <version>2.4.2</version>
       <scope>provided</scope>
     </dependency>
   </dependencies>
