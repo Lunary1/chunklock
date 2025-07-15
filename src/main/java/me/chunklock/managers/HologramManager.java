@@ -2,13 +2,13 @@ package me.chunklock.managers;
 
 import org.bukkit.Chunk;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import me.chunklock.ChunklockPlugin;
-import me.chunklock.models.Difficulty;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Constructor;
@@ -30,6 +30,7 @@ public class HologramManager {
     private final ChunkLockManager chunkLockManager;
     private final BiomeUnlockRegistry biomeUnlockRegistry;
     private final Map<String, Object> activeHolograms = new ConcurrentHashMap<>();
+    private final Map<String, HologramState> hologramStates = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> playerHologramTasks = new HashMap<>();
     
     // FancyHolograms integration
@@ -45,7 +46,7 @@ public class HologramManager {
     private final Constructor<?> textHologramDataConstructor;
 
     private static final int HOLOGRAM_UPDATE_INTERVAL = 20; // 1 second
-    private static final int HOLOGRAM_VIEW_DISTANCE = 48; // blocks (3 chunks)
+    // View distance is now configurable
 
     private enum WallSide {
         NORTH(0, -1), EAST(1, 0), SOUTH(0, 1), WEST(-1, 0);
@@ -252,9 +253,6 @@ public class HologramManager {
                 }
                 
                 try {
-                    if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                        ChunklockPlugin.getInstance().getLogger().info("🔄 Updating holograms for player " + player.getName());
-                    }
                     updateHologramsForPlayer(player);
                 } catch (Exception e) {
                     ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
@@ -288,6 +286,7 @@ public class HologramManager {
     /**
      * Updates holograms around a player - shows holograms for ALL locked adjacent chunks
      * Now includes world validation to ensure holograms only appear in enabled worlds
+     * FIXED: No longer causes flashing by avoiding unnecessary hologram recreation
      */
     private void updateHologramsForPlayer(Player player) {
         try {
@@ -306,14 +305,14 @@ public class HologramManager {
             Location playerLoc = player.getLocation();
             Chunk playerChunk = playerLoc.getChunk();
             
-            // NEW: Verify chunk world is enabled
+            // Verify chunk world is enabled
             if (!isWorldEnabled(playerChunk.getWorld())) {
                 removeHologramsForPlayer(player);
                 return;
             }
             
             // Track which chunks should have holograms
-            Set<String> chunksWithHolograms = new HashSet<>();
+            Set<String> validChunkKeys = new HashSet<>();
             
             // Check all chunks in a 3x3 grid around the player
             for (int dx = -1; dx <= 1; dx++) {
@@ -324,7 +323,7 @@ public class HologramManager {
                             playerChunk.getZ() + dz
                         );
                         
-                        // NEW: Skip chunks in disabled worlds (shouldn't happen, but defensive)
+                        // Skip chunks in disabled worlds
                         if (!isWorldEnabled(checkChunk.getWorld())) {
                             continue;
                         }
@@ -335,23 +334,17 @@ public class HologramManager {
                         String chunkKey = getChunkKey(checkChunk);
 
                         if (chunkLockManager.isLocked(checkChunk)) {
-                            if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                                ChunklockPlugin.getInstance().getLogger().info("📍 Found locked chunk " + checkChunk.getX() + "," + checkChunk.getZ() + " - checking for wall holograms");
-                            }
-                            
                             Map<WallSide, Location> locs = getWallHologramLocations(player, checkChunk);
                             if (!locs.isEmpty()) {
                                 var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), checkChunk);
-                                showHologramForChunk(player, checkChunk, evaluation, locs);
-                                chunksWithHolograms.add(chunkKey);
+                                updateHologramForChunk(player, checkChunk, evaluation, locs);
+                                validChunkKeys.add(chunkKey);
                             } else {
                                 removeHologramForChunk(player, checkChunk);
                             }
                         } else {
-                            // Chunk is unlocked - definitely remove any hologram
+                            // Chunk is unlocked - remove any hologram
                             removeHologramForChunk(player, checkChunk);
-                            ChunklockPlugin.getInstance().getLogger().fine(
-                                "Removed hologram for unlocked chunk " + checkChunk.getX() + "," + checkChunk.getZ() + " for player " + player.getName());
                         }
                     } catch (Exception e) {
                         ChunklockPlugin.getInstance().getLogger().log(Level.FINE, 
@@ -360,75 +353,72 @@ public class HologramManager {
                 }
             }
             
-            // FIX: Additional cleanup - remove any remaining holograms that shouldn't exist
-            String playerPrefix = player.getUniqueId().toString() + "_";
-            activeHolograms.entrySet().removeIf(entry -> {
-                if (entry.getKey().startsWith(playerPrefix)) {
-                    // Extract chunk coordinates from hologram key (format: playerUUID_world_x_z)
-                    String[] parts = entry.getKey().split("_");
-                    if (parts.length >= 4) {
-                        try {
-                            String worldName = parts[1];
-                            int chunkX = Integer.parseInt(parts[2]);
-                            int chunkZ = Integer.parseInt(parts[3]);
-                            String chunkKey = worldName + ":" + chunkX + ":" + chunkZ;
-                            
-                            // NEW: Also check if the hologram's world is still enabled
-                            World hologramWorld = org.bukkit.Bukkit.getWorld(worldName);
-                            if (hologramWorld == null || !isWorldEnabled(hologramWorld)) {
-                                Object hologram = entry.getValue();
-                                if (hologram != null && fancyHologramsAvailable) {
-                                    try {
-                                        // Remove using hologram object
-                                        removeHologramMethod.invoke(hologramManager, hologram);
-                                    } catch (Exception e) {
-                                        ChunklockPlugin.getInstance().getLogger().log(Level.FINE, 
-                                            "Error removing FancyHologram: " + e.getMessage());
-                                    }
-                                    ChunklockPlugin.getInstance().getLogger().fine(
-                                        "Cleaned up hologram in disabled world " + worldName + " for player " + player.getName());
-                                }
-                                return true;
-                            }
-                            
-                            // If this chunk should not have a hologram, remove it
-                            if (!chunksWithHolograms.contains(chunkKey)) {
-                                Object hologram = entry.getValue();
-                                if (hologram != null && fancyHologramsAvailable) {
-                                    try {
-                                        // Remove using hologram object
-                                        removeHologramMethod.invoke(hologramManager, hologram);
-                                    } catch (Exception e) {
-                                        ChunklockPlugin.getInstance().getLogger().log(Level.FINE, 
-                                            "Error removing FancyHologram: " + e.getMessage());
-                                    }
-                                    ChunklockPlugin.getInstance().getLogger().fine(
-                                        "Cleaned up stale hologram for chunk " + chunkX + "," + chunkZ + " for player " + player.getName());
-                                }
-                                return true;
-                            }
-                        } catch (NumberFormatException e) {
-                            // Invalid hologram key format, remove it
-                            Object hologram = entry.getValue();
-                            if (hologram != null && fancyHologramsAvailable) {
-                                try {
-                                    // Remove using hologram object
-                                    removeHologramMethod.invoke(hologramManager, hologram);
-                                } catch (Exception ex) {
-                                    ChunklockPlugin.getInstance().getLogger().log(Level.FINE, 
-                                        "Error removing FancyHologram: " + ex.getMessage());
-                                }
-                            }
-                            return true;
-                        }
-                    }
-                }
-                return false;
-            });
+            // Clean up holograms that should no longer exist
+            cleanupInvalidHolograms(player, validChunkKeys);
             
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
                 "Error updating holograms for " + player.getName(), e);
+        }
+    }
+
+    /**
+     * Clean up holograms that are no longer valid (separated for clarity)
+     */
+    private void cleanupInvalidHolograms(Player player, Set<String> validChunkKeys) {
+        String playerPrefix = player.getUniqueId().toString() + "_";
+        
+        activeHolograms.entrySet().removeIf(entry -> {
+            String hologramKey = entry.getKey();
+            if (!hologramKey.startsWith(playerPrefix)) {
+                return false; // Not this player's hologram
+            }
+            
+            // Extract chunk coordinates from hologram key (format: playerUUID_world_x_z_wallside)
+            String[] parts = hologramKey.split("_");
+            if (parts.length >= 4) {
+                try {
+                    String worldName = parts[1];
+                    int chunkX = Integer.parseInt(parts[2]);
+                    int chunkZ = Integer.parseInt(parts[3]);
+                    String chunkKey = worldName + ":" + chunkX + ":" + chunkZ;
+                    
+                    // Check if the hologram's world is still enabled
+                    World hologramWorld = org.bukkit.Bukkit.getWorld(worldName);
+                    if (hologramWorld == null || !isWorldEnabled(hologramWorld)) {
+                        removeHologramObject(entry.getValue());
+                        hologramStates.remove(hologramKey);
+                        return true;
+                    }
+                    
+                    // If this chunk should not have a hologram, remove it
+                    if (!validChunkKeys.contains(chunkKey)) {
+                        removeHologramObject(entry.getValue());
+                        hologramStates.remove(hologramKey);
+                        return true;
+                    }
+                } catch (NumberFormatException e) {
+                    // Invalid hologram key format, remove it
+                    removeHologramObject(entry.getValue());
+                    hologramStates.remove(hologramKey);
+                    return true;
+                }
+            }
+            return false;
+        });
+    }
+
+    /**
+     * Helper method to safely remove a hologram object
+     */
+    private void removeHologramObject(Object hologram) {
+        if (hologram != null && fancyHologramsAvailable) {
+            try {
+                removeHologramMethod.invoke(hologramManager, hologram);
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().log(Level.FINE, 
+                    "Error removing FancyHologram: " + e.getMessage());
+            }
         }
     }
 
@@ -463,44 +453,53 @@ public class HologramManager {
                 chunkLockManager.initializeChunk(neighbor, player.getUniqueId());
                 
                 boolean neighborLocked = chunkLockManager.isLocked(neighbor);
-                if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                    ChunklockPlugin.getInstance().getLogger().info("🔍 Checking " + side + " wall: neighbor chunk " + 
-                        neighbor.getX() + "," + neighbor.getZ() + " is " + (neighborLocked ? "LOCKED" : "UNLOCKED"));
-                }
                 
                 if (neighborLocked) {
                     continue; // neighbor also locked, no hologram needed
                 }
 
-                // Calculate hologram position centered on the wall
+                // Calculate hologram position centered on the wall - OUTSIDE chunk boundaries
                 double x, z;
+                double wallOffset = ChunklockPlugin.getInstance().getConfig().getDouble("holograms.positioning.wall-offset", 0.5);
+                double centerOffset = ChunklockPlugin.getInstance().getConfig().getDouble("holograms.positioning.center-offset", 8.0);
                 
                 if (side == WallSide.NORTH) {
-                    // North wall - center horizontally, position at north edge
-                    x = startX + 8.0; // Center of chunk horizontally
-                    z = startZ + 0.5; // Just inside the north edge
+                    // North wall - center horizontally, position OUTSIDE the north edge
+                    x = startX + centerOffset; // Center of chunk horizontally
+                    z = startZ - wallOffset; // Just OUTSIDE the north edge (into neighbor chunk)
                 } else if (side == WallSide.SOUTH) {
-                    // South wall - center horizontally, position at south edge  
-                    x = startX + 8.0; // Center of chunk horizontally
-                    z = startZ + 15.5; // Just inside the south edge
+                    // South wall - center horizontally, position OUTSIDE the south edge  
+                    x = startX + centerOffset; // Center of chunk horizontally
+                    z = startZ + 16 + wallOffset; // Just OUTSIDE the south edge (into neighbor chunk)
                 } else if (side == WallSide.EAST) {
-                    // East wall - center vertically, position at east edge
-                    x = startX + 15.5; // Just inside the east edge
-                    z = startZ + 8.0; // Center of chunk vertically
+                    // East wall - center vertically, position OUTSIDE the east edge
+                    x = startX + 16 + wallOffset; // Just OUTSIDE the east edge (into neighbor chunk)
+                    z = startZ + centerOffset; // Center of chunk vertically
                 } else { // WEST
-                    // West wall - center vertically, position at west edge
-                    x = startX + 0.5; // Just inside the west edge
-                    z = startZ + 8.0; // Center of chunk vertically
+                    // West wall - center vertically, position OUTSIDE the west edge
+                    x = startX - wallOffset; // Just OUTSIDE the west edge (into neighbor chunk)
+                    z = startZ + centerOffset; // Center of chunk vertically
                 }
 
-                int y = getHighestSolidY(world, (int)x, (int)z) + 2;
-                if (y < 64) y = 64;
+                double groundClearance = ChunklockPlugin.getInstance().getConfig().getDouble("holograms.positioning.ground-clearance", 2.5);
+                int y = getHighestSolidY(world, (int)x, (int)z) + (int)groundClearance;
+                int minHeight = ChunklockPlugin.getInstance().getConfig().getInt("holograms.positioning.min-height", 64);
+                if (y < minHeight) y = minHeight;
 
+                // Create location with proper yaw rotation to face parallel to chunk wall
                 Location hologramLoc = new Location(world, x, y, z);
+                
+                // Apply rotation based on wall direction to face parallel to the chunk wall
+                float yaw = getWallFacingYaw(side);
+                hologramLoc.setYaw(yaw);
+                
+                // Also set pitch to 0 for horizontal orientation
+                hologramLoc.setPitch(0.0f);
+                
                 map.put(side, hologramLoc);
                 
                 ChunklockPlugin.getInstance().getLogger().fine("Added " + side + " wall hologram at " + 
-                    String.format("%.1f,%.1f,%.1f", x, (double)y, z));
+                    String.format("%.1f,%.1f,%.1f", x, (double)y, z) + " with yaw=" + yaw + "°");
             } catch (Exception e) {
                 ChunklockPlugin.getInstance().getLogger().fine("Error checking " + side + " wall: " + e.getMessage());
             }
@@ -532,267 +531,129 @@ public class HologramManager {
     }
 
     /**
-     * Shows hologram for a specific chunk using FancyHolograms API
+     * Updates hologram for a specific chunk (only if needed to prevent flashing)
+     * FIXED: No longer recreates holograms unnecessarily
      */
-    private void showHologramForChunk(Player player, Chunk chunk, ChunkEvaluator.ChunkValueData evaluation, Map<WallSide, Location> locations) {
+    private void updateHologramForChunk(Player player, Chunk chunk, ChunkEvaluator.ChunkValueData evaluation, Map<WallSide, Location> locations) {
         if (locations == null || locations.isEmpty() || !fancyHologramsAvailable) {
             return;
         }
 
-        // Double-check world status before creating holograms
+        // Double-check world status before creating/updating holograms
         if (!isWorldEnabled(chunk.getWorld())) {
-            ChunklockPlugin.getInstance().getLogger().fine("Skipping hologram creation in disabled world " + chunk.getWorld().getName());
             return;
         }
 
         try {
             var requirement = biomeUnlockRegistry.calculateRequirement(player, evaluation.biome, evaluation.score);
-            String biomeName = BiomeUnlockRegistry.getBiomeDisplayName(evaluation.biome);
             boolean hasItems = biomeUnlockRegistry.hasRequiredItems(player, evaluation.biome, evaluation.score);
+            int playerItemCount = countPlayerItems(player, requirement.material());
+            String materialName = formatMaterialName(requirement.material());
 
-            ChunklockPlugin.getInstance().getLogger().fine("Creating holograms for chunk " + chunk.getX() + "," + chunk.getZ() + 
-                " with " + locations.size() + " wall locations");
-
-            if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                ChunklockPlugin.getInstance().getLogger().info("🏗️ Creating holograms for chunk " + chunk.getX() + "," + chunk.getZ() + 
-                    " with " + locations.size() + " wall locations");
-            }
-
-            // Create hologram text as clean separate lines
-            java.util.List<String> textLines = new java.util.ArrayList<>();
-            if (hasItems) {
-                textLines.add("§a§l🔓 UNLOCKABLE");
-                textLines.add("§e" + biomeName);
-                textLines.add("§fRequired: " + requirement.amount() + "x");
-                textLines.add("§b" + requirement.material().name().replace("_", " "));
-                textLines.add("§a✓ Items available!");
-            } else {
-                textLines.add("§c§l🔒 LOCKED");
-                textLines.add("§e" + biomeName);
-                textLines.add("§" + getDifficultyColorCode(evaluation.difficulty) + "Difficulty: " + evaluation.difficulty);
-                textLines.add("§7Need: " + requirement.amount() + "x");
-                textLines.add("§7" + requirement.material().name().replace("_", " "));
-            }
+            // Create hologram text
+            String statusColor = hasItems ? "§a" : "§c";
+            String statusSymbol = hasItems ? "✓" : "✗";
+            
+            // Create text lines with simplified format (no 3D items)
+            java.util.List<String> lines = new java.util.ArrayList<>();
+            lines.add("§c§l LOCKED CHUNK"); // Red and bold text for locked chunk
+            lines.add(""); // empty line
+            lines.add("§7" + materialName); // material as text only
+            lines.add(""); // empty line
+            lines.add(statusColor + statusSymbol + " §a§l" + playerItemCount + "§7/" + "§l" + requirement.amount()); // Bold green numbers
+            lines.add("§a§l RIGHT-CLICK TO UNLOCK"); // Bold green text
+            
+            String hologramText = String.join("\n", lines);
 
             for (Map.Entry<WallSide, Location> entry : locations.entrySet()) {
                 String hologramKey = getHologramKey(player, chunk, entry.getKey().name());
-
-                if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                    ChunklockPlugin.getInstance().getLogger().info("🔧 Processing " + entry.getKey() + " wall for chunk " + chunk.getX() + "," + chunk.getZ());
-                }
-
-                if (activeHolograms.containsKey(hologramKey)) {
-                    if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                        ChunklockPlugin.getInstance().getLogger().info("⚠️ Skipping existing hologram for " + entry.getKey() + " wall (key: " + hologramKey + ")");
-                    }
-                    continue;
-                }
-
                 Location hologramLocation = entry.getValue();
+                
+                // Check view distance
                 double distance = player.getLocation().distance(hologramLocation);
-                if (distance > HOLOGRAM_VIEW_DISTANCE) {
-                    if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                        ChunklockPlugin.getInstance().getLogger().info("📏 Skipping hologram on " + entry.getKey() + " wall - too far: " + distance);
-                    }
+                int viewDistance = ChunklockPlugin.getInstance().getConfig().getInt("holograms.view-distance", 64);
+                if (distance > viewDistance) {
+                    // Remove if out of range
+                    removeHologramByKey(hologramKey);
                     continue;
                 }
 
-                if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                    ChunklockPlugin.getInstance().getLogger().info("✨ Creating hologram for " + entry.getKey() + " wall at " + 
-                        hologramLocation.getX() + "," + hologramLocation.getY() + "," + hologramLocation.getZ() + " (distance: " + distance + ")");
-                }
-
-                // Create FancyHologram using the correct API
-                Object hologramData;
-                try {
-                    hologramData = textHologramDataConstructor.newInstance(hologramKey, hologramLocation);
-                } catch (Exception e) {
-                    ChunklockPlugin.getInstance().getLogger().warning("Failed to create TextHologramData for " + entry.getKey() + " wall: " + e.getMessage());
+                // Check if hologram needs update
+                HologramState currentState = hologramStates.get(hologramKey);
+                if (currentState != null && !currentState.needsUpdate(hologramText, hologramLocation, materialName, playerItemCount, requirement.amount(), hasItems)) {
+                    // No update needed, hologram is current
                     continue;
                 }
-                
-                // Set the text using List of lines directly
-                try {
-                    Method setTextMethod = textHologramDataClass.getMethod("setText", java.util.List.class);
-                    setTextMethod.invoke(hologramData, textLines);
-                    
-                    ChunklockPlugin.getInstance().getLogger().fine("Set hologram text with " + textLines.size() + " lines for " + entry.getKey() + " wall");
-                } catch (Exception e) {
-                    ChunklockPlugin.getInstance().getLogger().warning("Could not set hologram text for " + entry.getKey() + " wall: " + e.getMessage());
-                    continue;
-                }
-                
-                // Set view distance - use setVisibilityDistance from the available methods
-                try {
-                    Method setVisibilityDistanceMethod = textHologramDataClass.getMethod("setVisibilityDistance", int.class);
-                    setVisibilityDistanceMethod.invoke(hologramData, HOLOGRAM_VIEW_DISTANCE);
-                } catch (Exception e) {
-                    // View distance setting failed, continue without it
-                    ChunklockPlugin.getInstance().getLogger().fine("Could not set view distance: " + e.getMessage());
-                }
-                
-                // Set billboard and explore available rotation methods
-                try {
-                    // Use FIXED billboard for custom rotation (no player following)
-                    Class<?> billboardClass = Class.forName("org.bukkit.entity.Display$Billboard");
-                    Object billboard = billboardClass.getField("FIXED").get(null);
-                    
-                    Method setBillboardMethod = textHologramDataClass.getMethod("setBillboard", billboardClass);
-                    setBillboardMethod.invoke(hologramData, billboard);
-                    
-                    if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                        ChunklockPlugin.getInstance().getLogger().info("📺 Set billboard to FIXED for " + entry.getKey() + " wall");
-                    }
-                    
-                    // Set rotation based on wall side to face chunk center
-                    WallSide wallSide = entry.getKey();
-                    float yaw = getWallFacingYaw(wallSide);
-                    
-                    if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                        ChunklockPlugin.getInstance().getLogger().info("🧭 Setting rotation for " + wallSide + " wall: " + yaw + "° yaw");
-                    }
-                    
-                    // Try various rotation approaches in order of preference
-                    boolean rotationSet = false;
-                    
-                    // Method 1: Try setTransformation with Bukkit's Transformation class
-                    if (!rotationSet) {
-                        try {
-                            Class<?> transformationClass = Class.forName("org.bukkit.util.Transformation");
-                            Class<?> vector3fClass = Class.forName("org.joml.Vector3f");
-                            Class<?> quaternionfClass = Class.forName("org.joml.Quaternionf");
-                            
-                            // Create transformation components
-                            Object translation = vector3fClass.getConstructor(float.class, float.class, float.class).newInstance(0f, 0f, 0f);
-                            Object scale = vector3fClass.getConstructor(float.class, float.class, float.class).newInstance(1f, 1f, 1f);
-                            
-                            // Create rotation quaternion from yaw
-                            Object leftRotation = quaternionfClass.getConstructor().newInstance();
-                            Method rotateYMethod = quaternionfClass.getMethod("rotateY", float.class);
-                            rotateYMethod.invoke(leftRotation, (float) Math.toRadians(yaw));
-                            
-                            Object rightRotation = quaternionfClass.getConstructor().newInstance();
-                            
-                            // Create transformation
-                            Object transformation = transformationClass.getConstructor(vector3fClass, quaternionfClass, vector3fClass, quaternionfClass)
-                                .newInstance(translation, leftRotation, scale, rightRotation);
-                            
-                            Method setTransformationMethod = textHologramDataClass.getMethod("setTransformation", transformationClass);
-                            setTransformationMethod.invoke(hologramData, transformation);
-                            
-                            rotationSet = true;
-                            if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                                ChunklockPlugin.getInstance().getLogger().info("✅ Set rotation using setTransformation: " + yaw + "° for " + wallSide + " wall");
-                            }
-                        } catch (Exception transformException) {
-                            if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                                ChunklockPlugin.getInstance().getLogger().info("❌ setTransformation failed: " + transformException.getMessage());
-                            }
-                        }
-                    }
-                    
-                    // Method 2: Try setRotation method
-                    if (!rotationSet) {
-                        try {
-                            Method setRotationMethod = textHologramDataClass.getMethod("setRotation", float.class, float.class);
-                            setRotationMethod.invoke(hologramData, yaw, 0.0f); // yaw, pitch
-                            
-                            rotationSet = true;
-                            if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                                ChunklockPlugin.getInstance().getLogger().info("✅ Set rotation using setRotation: " + yaw + "° for " + wallSide + " wall");
-                            }
-                        } catch (Exception rotationException) {
-                            if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                                ChunklockPlugin.getInstance().getLogger().info("❌ setRotation method failed: " + rotationException.getMessage());
-                            }
-                        }
-                    }
-                    
-                    // Method 3: Try alternative rotation methods
-                    if (!rotationSet) {
-                        try {
-                            Method setYawMethod = textHologramDataClass.getMethod("setYaw", float.class);
-                            setYawMethod.invoke(hologramData, yaw);
-                            rotationSet = true;
-                            if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                                ChunklockPlugin.getInstance().getLogger().info("✅ Set rotation using setYaw: " + yaw + "° for " + wallSide + " wall");
-                            }
-                        } catch (Exception yawException) {
-                            if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                                ChunklockPlugin.getInstance().getLogger().info("❌ setYaw method failed: " + yawException.getMessage());
-                            }
-                        }
-                    }
-                    
-                    // Method 4: List available methods for debugging
-                    if (!rotationSet) {
-                        if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                            ChunklockPlugin.getInstance().getLogger().info("🔍 Available methods in TextHologramData:");
-                            Method[] methods = textHologramDataClass.getMethods();
-                            for (Method method : methods) {
-                                String methodName = method.getName();
-                                if (methodName.toLowerCase().contains("rotat") || methodName.toLowerCase().contains("transform") || 
-                                    methodName.toLowerCase().contains("yaw") || methodName.toLowerCase().contains("pitch")) {
-                                    ChunklockPlugin.getInstance().getLogger().info("  - " + methodName + "(" + 
-                                        java.util.Arrays.toString(method.getParameterTypes()) + ")");
-                                }
-                            }
-                            ChunklockPlugin.getInstance().getLogger().info("⚠️ No rotation method worked - hologram will use default orientation");
-                        }
-                    }
-                    
-                } catch (Exception e) {
-                    // Billboard setting failed, continue without it
-                    if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                        ChunklockPlugin.getInstance().getLogger().info("❌ Could not set billboard orientation: " + e.getMessage());
-                    }
-                }
-                
-                // Create the hologram
-                Object hologram = createHologramMethod.invoke(hologramManager, hologramData);
-                
-                if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                    ChunklockPlugin.getInstance().getLogger().info("🎯 Created hologram object for " + entry.getKey() + " wall");
-                }
-                
-                // Set persistence to false (don't save to disk) - use setPersistent method
-                try {
-                    Method setPersistentMethod = hologramClass.getMethod("setPersistent", boolean.class);
-                    setPersistentMethod.invoke(hologram, false);
-                } catch (Exception e) {
-                    // Persistence setting failed, continue without it
-                    ChunklockPlugin.getInstance().getLogger().fine("Could not set persistence: " + e.getMessage());
-                }
-                
-                // Add hologram to manager
-                addHologramMethod.invoke(hologramManager, hologram);
 
-                activeHolograms.put(hologramKey, hologram);
+                // Remove existing hologram if it exists
+                removeHologramByKey(hologramKey);
 
-                if (ChunklockPlugin.getInstance().getConfig().getBoolean("holograms.debug-logging", false)) {
-                    ChunklockPlugin.getInstance().getLogger().info("✅ Successfully registered hologram for chunk " +
-                        chunk.getX() + "," + chunk.getZ() + " (" + entry.getKey() + ") for player " + player.getName() + " (key: " + hologramKey + ")");
-                }
+                // Create new hologram
+                createNewHologram(hologramKey, hologramLocation, lines, entry.getKey(), viewDistance, hologramText, materialName, playerItemCount, requirement.amount(), hasItems);
             }
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING,
-                "Error creating FancyHologram for chunk " + chunk.getX() + "," + chunk.getZ() +
+                "Error updating hologram for chunk " + chunk.getX() + "," + chunk.getZ() +
                 " for player " + player.getName(), e);
         }
     }
 
+    /**
+     * Creates a new hologram with proper state tracking
+     */
+    private void createNewHologram(String hologramKey, Location hologramLocation, java.util.List<String> lines, WallSide wallSide, int viewDistance, String hologramText, String materialName, int itemCount, int requiredCount, boolean hasItems) {
+        try {
+            // Create text hologram data
+            Object textHologramData = textHologramDataConstructor.newInstance(hologramKey, hologramLocation);
+            
+            // Set the text content
+            Method setTextMethod = textHologramDataClass.getMethod("setText", java.util.List.class);
+            setTextMethod.invoke(textHologramData, lines);
+            
+            // Apply hologram settings (rotation, view distance, etc.)
+            applyHologramSettings(textHologramData, textHologramDataClass, hologramLocation, wallSide, viewDistance);
+            
+            // Create the hologram
+            Object textHologram = createHologramMethod.invoke(hologramManager, textHologramData);
+            
+            // Set persistence to false
+            try {
+                Method setPersistentMethod = hologramClass.getMethod("setPersistent", boolean.class);
+                setPersistentMethod.invoke(textHologram, false);
+            } catch (Exception e) {
+                // Not critical if this fails
+            }
+            
+            // Add hologram to manager
+            addHologramMethod.invoke(hologramManager, textHologram);
 
+            // Store hologram in our tracking maps
+            activeHolograms.put(hologramKey, textHologram);
+            hologramStates.put(hologramKey, new HologramState(hologramText, hologramLocation, materialName, itemCount, requiredCount, hasItems));
+
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                "Error creating hologram: " + hologramKey, e);
+        }
+    }
 
     /**
-     * Get color code for difficulty level
+     * Remove hologram by key (helper method)
      */
-    private String getDifficultyColorCode(Difficulty difficulty) {
-        return switch (difficulty) {
-            case EASY -> "a";      // Green
-            case NORMAL -> "e";    // Yellow
-            case HARD -> "c";      // Red
-            case IMPOSSIBLE -> "5"; // Dark Purple
-        };
+    private void removeHologramByKey(String hologramKey) {
+        Object existingHologram = activeHolograms.remove(hologramKey);
+        if (existingHologram != null) {
+            removeHologramObject(existingHologram);
+        }
+        hologramStates.remove(hologramKey);
+        
+        // Also remove any legacy item holograms
+        String itemKey = hologramKey + "_item";
+        Object existingItemHologram = activeHolograms.remove(itemKey);
+        if (existingItemHologram != null) {
+            removeHologramObject(existingItemHologram);
+        }
+        hologramStates.remove(itemKey);
     }
 
 
@@ -804,22 +665,19 @@ public class HologramManager {
         if (!fancyHologramsAvailable) return;
         
         String prefix = getHologramKey(player, chunk);
-        activeHolograms.entrySet().removeIf(entry -> {
-            if (entry.getKey().startsWith(prefix)) {
-                Object hologram = entry.getValue();
-                if (hologram != null) {
-                    try {
-                        // Remove using hologram object
-                        removeHologramMethod.invoke(hologramManager, hologram);
-                    } catch (Exception e) {
-                        ChunklockPlugin.getInstance().getLogger().log(Level.FINE, 
-                            "Error removing FancyHologram: " + e.getMessage());
-                    }
-                }
-                return true;
+        
+        // Collect all keys to remove (to avoid concurrent modification)
+        java.util.List<String> keysToRemove = new java.util.ArrayList<>();
+        for (String key : activeHolograms.keySet()) {
+            if (key.startsWith(prefix)) {
+                keysToRemove.add(key);
             }
-            return false;
-        });
+        }
+        
+        // Remove all collected holograms
+        for (String key : keysToRemove) {
+            removeHologramByKey(key);
+        }
     }
 
     /**
@@ -830,24 +688,20 @@ public class HologramManager {
         
         String playerPrefix = player.getUniqueId().toString() + "_";
         
-        activeHolograms.entrySet().removeIf(entry -> {
-            if (entry.getKey().startsWith(playerPrefix)) {
-                Object hologram = entry.getValue();
-                if (hologram != null) {
-                    try {
-                        // Remove using hologram object
-                        removeHologramMethod.invoke(hologramManager, hologram);
-                    } catch (Exception e) {
-                        ChunklockPlugin.getInstance().getLogger().log(Level.FINE, 
-                            "Error removing FancyHologram: " + e.getMessage());
-                    }
-                }
-                return true;
+        // Collect all keys to remove (to avoid concurrent modification)
+        java.util.List<String> keysToRemove = new java.util.ArrayList<>();
+        for (String key : activeHolograms.keySet()) {
+            if (key.startsWith(playerPrefix)) {
+                keysToRemove.add(key);
             }
-            return false;
-        });
+        }
         
-        ChunklockPlugin.getInstance().getLogger().fine("Removed all FancyHolograms for player " + player.getName());
+        // Remove all collected holograms
+        for (String key : keysToRemove) {
+            removeHologramByKey(key);
+        }
+        
+        ChunklockPlugin.getInstance().getLogger().fine("Removed " + keysToRemove.size() + " holograms for player " + player.getName());
     }
 
 
@@ -887,7 +741,6 @@ public class HologramManager {
                 for (Object hologram : activeHolograms.values()) {
                     if (hologram != null) {
                         try {
-                            // Remove using hologram object
                             removeHologramMethod.invoke(hologramManager, hologram);
                         } catch (Exception e) {
                             ChunklockPlugin.getInstance().getLogger().log(Level.FINE, 
@@ -897,6 +750,7 @@ public class HologramManager {
                 }
             }
             activeHolograms.clear();
+            hologramStates.clear(); // Clear state tracking
             
             ChunklockPlugin.getInstance().getLogger().info("HologramManager cleanup completed");
             
@@ -911,6 +765,7 @@ public class HologramManager {
     public Map<String, Object> getHologramStats() {
         Map<String, Object> stats = new HashMap<>();
         stats.put("activeHolograms", activeHolograms.size());
+        stats.put("trackedStates", hologramStates.size());
         stats.put("activeTasks", playerHologramTasks.size());
         stats.put("onlinePlayers", playerHologramTasks.keySet().size());
         stats.put("fancyHologramsAvailable", fancyHologramsAvailable);
@@ -939,7 +794,7 @@ public class HologramManager {
             }
         }
         
-        // NEW: Add world-related hologram statistics
+        // Add world-related hologram statistics
         try {
             WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
             stats.put("enabledWorlds", worldManager.getEnabledWorlds());
@@ -970,7 +825,7 @@ public class HologramManager {
     public void refreshHologramsForPlayer(Player player) {
         if (player == null || !player.isOnline()) return;
         
-        // NEW: Check if player is in enabled world before refreshing
+        // Check if player is in enabled world before refreshing
         if (!isWorldEnabled(player)) {
             ChunklockPlugin.getInstance().getLogger().fine("Player " + player.getName() + 
                 " is in disabled world " + player.getWorld().getName() + " - removing holograms instead of refreshing");
@@ -979,7 +834,7 @@ public class HologramManager {
         }
         
         try {
-            // Remove existing holograms
+            // Remove existing holograms and their state
             removeHologramsForPlayer(player);
             
             // Update holograms immediately
@@ -1003,5 +858,197 @@ public class HologramManager {
             case EAST -> 270.0f;   // East wall: face west (toward chunk center)
             case WEST -> 90.0f;    // West wall: face east (toward chunk center)
         };
+    }
+
+    /**
+     * Get rotation angle in radians for hologram to face toward the chunk center
+     */
+    private float getWallFacingYawRadians(WallSide wallSide) {
+        return (float) Math.toRadians(getWallFacingYaw(wallSide));
+    }
+
+    /**
+     * Count how many of a specific material the player has in their inventory
+     */
+    private int countPlayerItems(Player player, Material material) {
+        int count = 0;
+        for (org.bukkit.inventory.ItemStack item : player.getInventory().getContents()) {
+            if (item != null && item.getType() == material) {
+                count += item.getAmount();
+            }
+        }
+        // Also check off-hand
+        org.bukkit.inventory.ItemStack offHand = player.getInventory().getItemInOffHand();
+        if (offHand != null && offHand.getType() == material) {
+            count += offHand.getAmount();
+        }
+        return count;
+    }
+
+    /**
+     * Apply common settings to hologram data (view distance, billboard, rotation)
+     */
+    private void applyHologramSettings(Object hologramData, Class<?> hologramDataClass, Location location, WallSide wallSide, int viewDistance) {
+        try {
+            // Set view distance
+            try {
+                Method setVisibilityDistanceMethod = hologramDataClass.getMethod("setVisibilityDistance", int.class);
+                setVisibilityDistanceMethod.invoke(hologramData, viewDistance);
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().fine("Could not set view distance: " + e.getMessage());
+            }
+            
+            // Try to update location with rotation if the API supports it
+            try {
+                Method setLocationMethod = hologramDataClass.getMethod("setLocation", org.bukkit.Location.class);
+                setLocationMethod.invoke(hologramData, location);
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().fine("setLocation method not available, using initial location");
+            }
+            
+            // Set billboard and rotation
+            try {
+                // Use FIXED billboard for custom rotation (no player following)
+                Class<?> billboardClass = Class.forName("org.bukkit.entity.Display$Billboard");
+                Object billboard = billboardClass.getField("FIXED").get(null);
+                
+                Method setBillboardMethod = hologramDataClass.getMethod("setBillboard", billboardClass);
+                setBillboardMethod.invoke(hologramData, billboard);
+                
+                // Set rotation based on wall side to face chunk center
+                boolean rotationSet = false;
+                
+                // Method 1: Try Quaternion rotation (most precise)
+                if (!rotationSet) {
+                    try {
+                        Class<?> quaternionClass = Class.forName("org.joml.Quaternionf");
+                        Constructor<?> quaternionConstructor = quaternionClass.getConstructor();
+                        Method rotateYMethod = quaternionClass.getMethod("rotateY", float.class);
+                        Method setRotationMethod = hologramDataClass.getMethod("setRotation", quaternionClass);
+                        
+                        Object quaternion = quaternionConstructor.newInstance();
+                        float yRotation = getWallFacingYawRadians(wallSide);
+                        rotateYMethod.invoke(quaternion, yRotation);
+                        setRotationMethod.invoke(hologramData, quaternion);
+                        
+                        rotationSet = true;
+                    } catch (Exception quaternionException) {
+                        // Quaternion rotation failed, try next method
+                    }
+                }
+                
+                // Method 2: Try setTransformation with Bukkit's Transformation class
+                if (!rotationSet) {
+                    try {
+                        Class<?> transformationClass = Class.forName("org.bukkit.util.Transformation");
+                        Class<?> vector3fClass = Class.forName("org.joml.Vector3f");
+                        Class<?> quaternionfClass = Class.forName("org.joml.Quaternionf");
+                        
+                        // Create transformation components
+                        Object translation = vector3fClass.getConstructor(float.class, float.class, float.class).newInstance(0f, 0f, 0f);
+                        Object scale = vector3fClass.getConstructor(float.class, float.class, float.class).newInstance(1f, 1f, 1f);
+                        
+                        // Create rotation quaternion from yaw
+                        Object leftRotation = quaternionfClass.getConstructor().newInstance();
+                        Method rotateYMethod = quaternionfClass.getMethod("rotateY", float.class);
+                        float yawRadians = getWallFacingYawRadians(wallSide);
+                        rotateYMethod.invoke(leftRotation, yawRadians);
+                        
+                        Object rightRotation = quaternionfClass.getConstructor().newInstance();
+                        
+                        // Create transformation
+                        Object transformation = transformationClass.getConstructor(vector3fClass, quaternionfClass, vector3fClass, quaternionfClass)
+                            .newInstance(translation, leftRotation, scale, rightRotation);
+                        
+                        Method setTransformationMethod = hologramDataClass.getMethod("setTransformation", transformationClass);
+                        setTransformationMethod.invoke(hologramData, transformation);
+                        
+                        rotationSet = true;
+                    } catch (Exception transformException) {
+                        // setTransformation failed, try next method
+                    }
+                }
+                
+                // Method 3: Try legacy setRotation method with yaw/pitch
+                if (!rotationSet) {
+                    try {
+                        Method setRotationMethod = hologramDataClass.getMethod("setRotation", float.class, float.class);
+                        float yaw = getWallFacingYaw(wallSide);
+                        setRotationMethod.invoke(hologramData, yaw, 0.0f); // yaw, pitch
+                        
+                        rotationSet = true;
+                    } catch (Exception rotationException) {
+                        // setRotation method failed
+                    }
+                }
+                
+                // Method 4: Final fallback - rotation methods not available
+                // Hologram will use default orientation
+                
+            } catch (Exception e) {
+                // Billboard setting failed, continue without it
+                ChunklockPlugin.getInstance().getLogger().fine("Could not set billboard orientation: " + e.getMessage());
+            }
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().fine("Error applying hologram settings: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Format material name for display in holograms
+     */
+    private String formatMaterialName(Material material) {
+        if (material == null) return "Unknown Item";
+        
+        // Convert material name to a more readable format
+        // e.g., OAK_LOG -> Oak Log, IRON_INGOT -> Iron Ingot
+        String name = material.name().toLowerCase().replace('_', ' ');
+        StringBuilder formatted = new StringBuilder();
+        
+        boolean capitalizeNext = true;
+        for (char c : name.toCharArray()) {
+            if (capitalizeNext) {
+                formatted.append(Character.toUpperCase(c));
+                capitalizeNext = false;
+            } else if (c == ' ') {
+                formatted.append(c);
+                capitalizeNext = true;
+            } else {
+                formatted.append(c);
+            }
+        }
+        
+        return formatted.toString();
+    }
+
+    /**
+     * Helper class to track hologram state and prevent unnecessary recreations
+     */
+    private static class HologramState {
+        final String text;
+        final Location location;
+        final String materialName;
+        final int itemCount;
+        final int requiredCount;
+        final boolean hasItems;
+        
+        HologramState(String text, Location location, String materialName, int itemCount, int requiredCount, boolean hasItems) {
+            this.text = text;
+            this.location = location.clone();
+            this.materialName = materialName;
+            this.itemCount = itemCount;
+            this.requiredCount = requiredCount;
+            this.hasItems = hasItems;
+        }
+        
+        boolean needsUpdate(String newText, Location newLocation, String newMaterialName, int newItemCount, int newRequiredCount, boolean newHasItems) {
+            return !text.equals(newText) || 
+                   !location.equals(newLocation) ||
+                   !materialName.equals(newMaterialName) ||
+                   itemCount != newItemCount ||
+                   requiredCount != newRequiredCount ||
+                   hasItems != newHasItems;
+        }
     }
 }
