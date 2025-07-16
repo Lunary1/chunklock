@@ -410,11 +410,29 @@ public class HologramManager {
 
     /**
      * Helper method to safely remove a hologram object
+     * ENHANCED: More robust removal with verification
      */
     private void removeHologramObject(Object hologram) {
         if (hologram != null && fancyHologramsAvailable) {
             try {
+                // First, try to set visibility to false to hide it immediately
+                try {
+                    Method setVisibilityMethod = hologramClass.getMethod("setVisibility", boolean.class);
+                    setVisibilityMethod.invoke(hologram, false);
+                } catch (Exception e) {
+                    // Not critical if visibility setting fails
+                }
+                
+                // Then remove the hologram from the manager
                 removeHologramMethod.invoke(hologramManager, hologram);
+                
+                // Add a tiny delay to ensure FancyHolograms processes the removal
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                
             } catch (Exception e) {
                 ChunklockPlugin.getInstance().getLogger().log(Level.FINE, 
                     "Error removing FancyHologram: " + e.getMessage());
@@ -585,8 +603,19 @@ public class HologramManager {
                     continue;
                 }
 
-                // Remove existing hologram if it exists
-                removeHologramByKey(hologramKey);
+                // Remove existing hologram if it exists - with enhanced cleanup
+                boolean hadExistingHologram = activeHolograms.containsKey(hologramKey);
+                if (hadExistingHologram) {
+                    removeHologramByKey(hologramKey);
+                    
+                    // Give FancyHolograms a moment to fully process the removal
+                    // This prevents overlapping holograms when updating quickly
+                    try {
+                        Thread.sleep(50); // 50ms delay to ensure clean removal
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
 
                 // Create new hologram
                 createNewHologram(hologramKey, hologramLocation, lines, entry.getKey(), viewDistance, hologramText, materialName, playerItemCount, requirement.amount(), hasItems);
@@ -639,11 +668,14 @@ public class HologramManager {
 
     /**
      * Remove hologram by key (helper method)
+     * ENHANCED: More thorough cleanup and verification
      */
     private void removeHologramByKey(String hologramKey) {
+        // Remove main hologram
         Object existingHologram = activeHolograms.remove(hologramKey);
         if (existingHologram != null) {
             removeHologramObject(existingHologram);
+            ChunklockPlugin.getInstance().getLogger().fine("Removed hologram: " + hologramKey);
         }
         hologramStates.remove(hologramKey);
         
@@ -652,14 +684,28 @@ public class HologramManager {
         Object existingItemHologram = activeHolograms.remove(itemKey);
         if (existingItemHologram != null) {
             removeHologramObject(existingItemHologram);
+            ChunklockPlugin.getInstance().getLogger().fine("Removed legacy item hologram: " + itemKey);
         }
         hologramStates.remove(itemKey);
+        
+        // Additional safety: Remove any holograms with similar keys (in case of key conflicts)
+        activeHolograms.entrySet().removeIf(entry -> {
+            String key = entry.getKey();
+            if (key.startsWith(hologramKey + "_") || key.equals(hologramKey)) {
+                removeHologramObject(entry.getValue());
+                hologramStates.remove(key);
+                ChunklockPlugin.getInstance().getLogger().fine("Removed conflicting hologram: " + key);
+                return true;
+            }
+            return false;
+        });
     }
 
 
 
     /**
      * Removes hologram for a specific chunk
+     * FIXED: Enhanced cleanup with better logging and verification
      */
     private void removeHologramForChunk(Player player, Chunk chunk) {
         if (!fancyHologramsAvailable) return;
@@ -677,6 +723,37 @@ public class HologramManager {
         // Remove all collected holograms
         for (String key : keysToRemove) {
             removeHologramByKey(key);
+        }
+        
+        // ENHANCED: Also force cleanup of any state tracking for this chunk
+        String chunkKey = getChunkKey(chunk);
+        String playerPrefix = player.getUniqueId().toString() + "_";
+        
+        // Additional cleanup - remove any remaining state entries for this chunk
+        hologramStates.entrySet().removeIf(entry -> {
+            String stateKey = entry.getKey();
+            if (stateKey.startsWith(playerPrefix)) {
+                // Extract chunk coordinates from state key
+                String[] parts = stateKey.split("_");
+                if (parts.length >= 4) {
+                    try {
+                        String worldName = parts[1];
+                        int chunkX = Integer.parseInt(parts[2]);
+                        int chunkZ = Integer.parseInt(parts[3]);
+                        String extractedChunkKey = worldName + ":" + chunkX + ":" + chunkZ;
+                        return extractedChunkKey.equals(chunkKey);
+                    } catch (NumberFormatException e) {
+                        // Invalid key format, remove it
+                        return true;
+                    }
+                }
+            }
+            return false;
+        });
+        
+        if (keysToRemove.size() > 0) {
+            ChunklockPlugin.getInstance().getLogger().fine("Removed " + keysToRemove.size() + 
+                " holograms for chunk " + chunk.getX() + "," + chunk.getZ() + " for player " + player.getName());
         }
     }
 
@@ -817,6 +894,24 @@ public class HologramManager {
         }
         
         return stats;
+    }
+
+    /**
+     * Force immediate cleanup of holograms for a specific chunk (called when chunk is unlocked)
+     */
+    public void forceCleanupChunk(Player player, Chunk chunk) {
+        if (player == null || chunk == null || !fancyHologramsAvailable) return;
+        
+        try {
+            // Force immediate removal of holograms for this specific chunk
+            removeHologramForChunk(player, chunk);
+            
+            ChunklockPlugin.getInstance().getLogger().fine("Force cleaned up holograms for chunk " + 
+                chunk.getX() + "," + chunk.getZ() + " for player " + player.getName());
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                "Error during force cleanup of chunk holograms", e);
+        }
     }
 
     /**

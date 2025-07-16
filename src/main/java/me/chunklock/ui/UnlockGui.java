@@ -552,14 +552,28 @@ public class UnlockGui {
                 }, 10L); // 0.5 second delay
             }
             
-            // Update holograms
+            // Update holograms - ENHANCED: Force immediate cleanup for unlocked chunk
             try {
                 var hologramManager = ChunklockPlugin.getInstance().getHologramManager();
                 if (hologramManager != null) {
-                    hologramManager.getClass().getMethod("updateHologramsForPlayer", Player.class).invoke(hologramManager, player);
+                    // Force immediate cleanup of the unlocked chunk's holograms
+                    hologramManager.forceCleanupChunk(player, chunk);
+                    
+                    // Schedule additional cleanup with a small delay to catch any race conditions
+                    Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
+                        if (player.isOnline()) {
+                            // Force cleanup again and refresh all holograms
+                            hologramManager.forceCleanupChunk(player, chunk);
+                            hologramManager.refreshHologramsForPlayer(player);
+                        }
+                    }, 5L); // 0.25 second delay
+                    
+                    ChunklockPlugin.getInstance().getLogger().fine("Cleaned up and scheduled refresh of holograms after chunk unlock for " + player.getName() + 
+                        " at chunk " + chunk.getX() + "," + chunk.getZ());
                 }
             } catch (Exception e) {
-                ChunklockPlugin.getInstance().getLogger().fine("Hologram update not available or failed: " + e.getMessage());
+                ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                    "Error refreshing holograms after chunk unlock: " + e.getMessage());
             }
             
             // Trigger unlock effects

@@ -23,6 +23,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import me.chunklock.services.StartingChunkService;
 
 import java.util.*;
@@ -197,6 +198,75 @@ public class PlayerListener implements Listener {
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
                 "Error cleaning up data for leaving player " + player.getName(), e);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onPlayerRespawn(PlayerRespawnEvent event) {
+        Player player = event.getPlayer();
+        if (player == null) return;
+        
+        try {
+            // Check if player is in an enabled world
+            WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+            if (!worldManager.isWorldEnabled(player.getWorld())) {
+                ChunklockPlugin.getInstance().getLogger().fine("Player " + player.getName() + 
+                    " respawning in disabled world " + player.getWorld().getName() + " - skipping ChunkLock respawn handling");
+                return;
+            }
+            
+            UUID playerId = player.getUniqueId();
+            
+            // Get player's chunk spawn location
+            Location savedSpawn = playerDataManager.getChunkSpawn(playerId);
+            if (savedSpawn != null && startingChunkService.isValidLocation(savedSpawn)) {
+                // Check if saved spawn is in an enabled world
+                if (!worldManager.isWorldEnabled(savedSpawn.getWorld())) {
+                    ChunklockPlugin.getInstance().getLogger().warning("Player " + player.getName() + 
+                        " has saved spawn in disabled world " + savedSpawn.getWorld().getName() + 
+                        " - respawning at world spawn instead");
+                    return; // Let default respawn behavior handle this
+                }
+                
+                // Set respawn location to the center of player's chunk
+                Chunk savedChunk = savedSpawn.getChunk();
+                Location centerSpawn = ChunkUtils.getChunkCenter(savedChunk);
+                
+                // Set the respawn location for the event
+                event.setRespawnLocation(centerSpawn);
+                
+                // Also update the player's respawn location for future deaths
+                // Schedule this for the next tick since the player might not be fully loaded yet
+                Bukkit.getScheduler().runTask(ChunklockPlugin.getInstance(), () -> {
+                    if (player.isOnline()) {
+                        player.setRespawnLocation(centerSpawn, true);
+                        player.sendMessage("§aYou have respawned at your starting chunk.");
+                        
+                        // Update borders after respawn
+                        ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();
+                        if (borderManager != null) {
+                            borderManager.scheduleBorderUpdate(player);
+                        }
+                        
+                        // Update holograms after respawn
+                        HologramManager hologramManager = ChunklockPlugin.getInstance().getHologramManager();
+                        if (hologramManager != null) {
+                            hologramManager.startHologramDisplay(player);
+                        }
+                    }
+                });
+                
+                ChunklockPlugin.getInstance().getLogger().fine("Set respawn location for " + player.getName() + 
+                    " to chunk center at " + centerSpawn.getBlockX() + "," + centerSpawn.getBlockY() + "," + centerSpawn.getBlockZ());
+                    
+            } else {
+                ChunklockPlugin.getInstance().getLogger().warning("No valid chunk spawn found for " + player.getName() + 
+                    " on respawn - using default respawn behavior");
+            }
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                "Error handling respawn for player " + player.getName(), e);
         }
     }
 
