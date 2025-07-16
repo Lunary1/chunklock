@@ -129,6 +129,10 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         try {
             getLogger().info("Initializing core components...");
             
+            // Log compatibility information
+            getLogger().info("🔧 Server Compatibility Check:");
+            getLogger().info("  " + me.chunklock.util.ServerCompatibility.getCompatibilitySummary().replace("\n", "\n  "));
+            
             // Initialize in dependency order
             this.worldManager = new WorldManager(this);
             this.chunkValueRegistry = new ChunkValueRegistry(this);

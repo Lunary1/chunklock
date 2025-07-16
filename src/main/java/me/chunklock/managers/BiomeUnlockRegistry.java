@@ -100,20 +100,7 @@ public class BiomeUnlockRegistry {
     }
 
     private Biome getBiomeFromString(String biomeKey) {
-        try {
-            // First try direct enum name match
-            return Biome.valueOf(biomeKey.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            // Try matching by key
-            for (Biome biome : Biome.values()) {
-                NamespacedKey key = biome.getKey();
-                if (key.getKey().equalsIgnoreCase(biomeKey) || 
-                    key.toString().equalsIgnoreCase(biomeKey)) {
-                    return biome;
-                }
-            }
-            return null;
-        }
+        return me.chunklock.util.BiomeUtil.getBiomeFromString(biomeKey);
     }
 
     public UnlockRequirement calculateRequirement(Player player, Biome biome, int score) {

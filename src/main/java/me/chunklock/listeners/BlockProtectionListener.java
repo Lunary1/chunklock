@@ -5,6 +5,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Chunk;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -464,13 +465,25 @@ public class BlockProtectionListener implements Listener {
      * Determines which entities should be protected
      */
     private boolean shouldProtectEntity(org.bukkit.entity.Entity entity) {
-        return switch (entity.getType()) {
-            case ARMOR_STAND, ITEM_FRAME, GLOW_ITEM_FRAME, PAINTING -> true;
-            case MINECART, CHEST_MINECART, FURNACE_MINECART, TNT_MINECART,
-                 HOPPER_MINECART, SPAWNER_MINECART, COMMAND_BLOCK_MINECART -> true;
-            //case BOAT, CHEST_BOAT -> true;
-            default -> false;
-        };
+        EntityType entityType = entity.getType();
+        
+        // Check common protected entity types
+        switch (entityType) {
+            case ARMOR_STAND:
+            case ITEM_FRAME:
+            case GLOW_ITEM_FRAME:
+            case PAINTING:
+                return true;
+            case MINECART:
+                return true;
+            default:
+                // Check if it's any type of minecart by name
+                String typeName = entityType.name();
+                if (typeName.contains("MINECART")) {
+                    return true;
+                }
+                return false;
+        }
     }
 
     /**

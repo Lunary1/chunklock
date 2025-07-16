@@ -9,7 +9,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Color;
 import org.bukkit.Location;
-import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -113,15 +112,13 @@ public class UnlockEffectsManager {
 
     private static void spawnParticleBurst(Location center) {
         // Firework-like burst
-        center.getWorld().spawnParticle(Particle.FIREWORK, center, 30, 2, 2, 2, 0.1);
+        me.chunklock.util.ParticleUtil.spawnFireworkParticles(center, 30, 2, 2, 2, 0.1);
         
         // Golden sparkles
-        center.getWorld().spawnParticle(Particle.DUST, center, 20, 1.5, 1.5, 1.5, 0, 
-            new Particle.DustOptions(Color.YELLOW, 2.0f));
+        me.chunklock.util.ParticleUtil.spawnDustParticles(center, 20, 1.5, 1.5, 1.5, Color.YELLOW, 2.0f);
         
         // Green success particles
-        center.getWorld().spawnParticle(Particle.DUST, center, 15, 1, 1, 1, 0,
-            new Particle.DustOptions(Color.LIME, 2.0f));
+        me.chunklock.util.ParticleUtil.spawnDustParticles(center, 15, 1, 1, 1, Color.LIME, 2.0f);
     }
 
     private static void spawnSpiralParticles(Location center, int tick) {
@@ -138,8 +135,7 @@ public class UnlockEffectsManager {
             
             // Rotating colored particles
             Color spiralColor = tick % 20 < 10 ? Color.YELLOW : Color.LIME;
-            center.getWorld().spawnParticle(Particle.DUST, particleLoc, 1, 0, 0, 0, 0,
-                new Particle.DustOptions(spiralColor, 1.5f));
+            me.chunklock.util.ParticleUtil.spawnDustParticles(particleLoc, 1, 0, 0, 0, spiralColor, 1.5f);
         }
     }
 

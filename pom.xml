@@ -13,7 +13,7 @@
 
   <properties>
     <java.version>17</java.version>
-    <paper.version>1.21.4-R0.1-SNAPSHOT</paper.version>
+    <paper.version>1.20.4-R0.1-SNAPSHOT</paper.version>
     <maven.compiler.source>17</maven.compiler.source>
     <maven.compiler.target>17</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -42,6 +42,7 @@
   </repositories>
 
   <dependencies>
+    <!-- Paper API targeting 1.20.4 for Pufferfish compatibility -->
     <dependency>
       <groupId>io.papermc.paper</groupId>
       <artifactId>paper-api</artifactId>

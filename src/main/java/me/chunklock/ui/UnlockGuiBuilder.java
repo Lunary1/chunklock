@@ -3,6 +3,7 @@ package me.chunklock.ui;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.models.Difficulty;
+import me.chunklock.util.EnchantmentUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -199,8 +200,11 @@ public class UnlockGuiBuilder {
             .decoration(TextDecoration.BOLD, true));
             
         if (hasEnough) {
-            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
-            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            Enchantment unbreaking = EnchantmentUtil.getUnbreaking();
+            if (unbreaking != null) {
+                meta.addEnchant(unbreaking, 1, true);
+                meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            }
         }
         
         List<Component> lore = new ArrayList<>();
@@ -295,8 +299,11 @@ public class UnlockGuiBuilder {
                 .decoration(TextDecoration.ITALIC, false)
                 .decoration(TextDecoration.BOLD, true));
                 
-            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
-            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            Enchantment unbreaking = EnchantmentUtil.getUnbreaking();
+            if (unbreaking != null) {
+                meta.addEnchant(unbreaking, 1, true);
+                meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            }
             
             List<Component> lore = new ArrayList<>();
             lore.add(Component.empty());

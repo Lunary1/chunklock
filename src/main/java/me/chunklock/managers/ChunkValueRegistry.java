@@ -239,29 +239,7 @@ public class ChunkValueRegistry {
     }
 
     private Biome getBiomeFromString(String biomeKey) {
-        if (biomeKey == null || biomeKey.trim().isEmpty()) {
-            return null;
-        }
-        
-        try {
-            // First try direct enum name match
-            return Biome.valueOf(biomeKey.toUpperCase().trim());
-        } catch (IllegalArgumentException e) {
-            // Try matching by key
-            for (Biome biome : Biome.values()) {
-                try {
-                    NamespacedKey key = biome.getKey();
-                    if (key.getKey().equalsIgnoreCase(biomeKey.trim()) || 
-                        key.toString().equalsIgnoreCase(biomeKey.trim())) {
-                        return biome;
-                    }
-                } catch (Exception ex) {
-                    // Skip biomes that can't be processed
-                    continue;
-                }
-            }
-            return null;
-        }
+        return me.chunklock.util.BiomeUtil.getBiomeFromString(biomeKey);
     }
 
     public int getBiomeWeight(Biome biome) {

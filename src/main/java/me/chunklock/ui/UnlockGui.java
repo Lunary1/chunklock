@@ -449,16 +449,14 @@ public class UnlockGui {
                     return;
                 }
                 
-                player.getWorld().spawnParticle(
-                    Particle.FIREWORK,
+                me.chunklock.util.ParticleUtil.spawnFireworkParticles(
                     chunkCenter,
                     30,
                     4, 2, 4,
                     0.1
                 );
                 
-                player.getWorld().spawnParticle(
-                    Particle.HAPPY_VILLAGER,
+                me.chunklock.util.ParticleUtil.spawnHappyVillagerParticles(
                     player.getLocation().add(0, 1, 0),
                     20,
                     1, 1, 1,
@@ -500,6 +498,7 @@ public class UnlockGui {
     /**
      * Notify other systems that a chunk was unlocked.
      */
+    @SuppressWarnings("deprecation") // Using deprecated wrapper methods temporarily
     private void notifyUnlockSystems(Player player, Chunk chunk) {
         try {
             // Update borders with comprehensive approach
