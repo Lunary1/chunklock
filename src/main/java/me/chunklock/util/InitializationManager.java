@@ -27,7 +27,7 @@ public class InitializationManager {
     public boolean initialize() {
         long startTime = System.currentTimeMillis();
         
-        plugin.getLogger().info("=== Starting Chunklock v" + plugin.getDescription().getVersion() + " ===");
+        plugin.getLogger().info("=== Starting Chunklock v" + plugin.getPluginMeta().getVersion() + " ===");
         
         try {
             // Phase 1: Configuration

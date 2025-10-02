@@ -10,7 +10,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -132,20 +131,17 @@ public class DebugCommand extends SubCommand {
                         chunkLockManager.initializeChunk(chunk, player.getUniqueId());
                         
                         String symbol;
-                        NamedTextColor color;
                         
                         if (dx == 0 && dz == 0) {
                             symbol = "◉"; // Player position
-                            color = NamedTextColor.BLUE;
                         } else if (chunkLockManager.isLocked(chunk)) {
                             symbol = "▉"; // Locked
-                            color = NamedTextColor.RED;
                         } else {
                             symbol = "□"; // Unlocked
-                            color = NamedTextColor.GREEN;
                         }
                         
                         if (row.length() > 0) row.append(" ");
+                        // Note: Color information is available but not used in text-based display
                         row.append(symbol);
                     } catch (Exception e) {
                         row.append("?");

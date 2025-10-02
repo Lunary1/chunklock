@@ -1,5 +1,5 @@
 name: Chunklock
-version: 1.2.5
+version: 1.2.7
 main: me.chunklock.ChunklockPlugin
 api-version: 1.20
 author: LunaryCraft Dev Team
@@ -8,8 +8,8 @@ softdepend: [FancyHolograms]
 
 commands:
   chunklock:
-    description: Chunklock main command with full functionality including glass borders
-    usage: /chunklock [status|reset <player>|bypass [player]|unlock|spawn|team <player>|reload|debug|resetall|borders <refresh|info|clear>|help]
+    description: Chunklock main command with full functionality including glass borders and per-player worlds
+    usage: /chunklock [status|start|reset <player>|bypass [player]|unlock|spawn|team <player>|reload|debug|resetall|borders <refresh|info|clear>|help]
     permission: chunklock.use
     aliases: [cl]
 
@@ -19,6 +19,7 @@ permissions:
     default: true
     children:
       chunklock.status: true
+      chunklock.start: true
       chunklock.unlock: true
       chunklock.spawn: true
       chunklock.team: true

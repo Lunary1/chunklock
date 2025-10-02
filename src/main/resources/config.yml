@@ -1,7 +1,7 @@
 chunk-values:
   # Thresholds for score → difficulty mapping
   thresholds:
-    easy: 25 # Lower threshold for easier progression
+    easy: 30 # Slightly higher threshold for easier starting chunks in new worlds
     normal: 50
     hard: 80
 
@@ -364,6 +364,22 @@ worlds:
     - "world_the_end"
   auto-assign-on-world-change: true
 
+  # Per-Player World System
+  # Simple, clean implementation with symbolic link organization
+  per-player:
+    enabled: true # Enable per-player worlds feature
+    unload-delay-minutes: 5 # Minutes to wait before unloading unused worlds
+    max-worlds: 100 # Maximum number of player worlds allowed
+    cleanup-inactive-days: 30 # Cleanup worlds inactive for X days (future feature)
+    enable-symbolic-links: true # Create symbolic links in chunklock_worlds/ for organization
+
+    # World generation settings
+    world-type: "NORMAL" # World type for new player worlds
+    generate-structures: true # Generate villages, dungeons, etc.
+    difficulty: "NORMAL" # Default difficulty for player worlds
+    pvp: false # PvP enabled in player worlds
+    world-border-size: 2000 # World border size (radius in blocks)
+
 # Hologram Configuration
 holograms:
   enabled: true
@@ -384,6 +400,12 @@ holograms:
     scan-range: 3 # Range to scan for chunks (3x3 around player)
     max-holograms-per-player: 16 # Maximum holograms per player to prevent lag
     cleanup-interval: 100 # ticks between hologram cleanup cycles
+
+    # New performance settings for centralized system
+    debounce-delay-ticks: 3 # Delay between rapid hologram updates to prevent spam
+    max-active-per-player: 100 # Maximum active holograms per player for distance culling
+    max-view-distance: 128.0 # Maximum view distance for holograms in blocks
+    culling-sweep-period: 60 # Ticks between distance culling sweeps (3 seconds)
 
   # Display Settings
   display:

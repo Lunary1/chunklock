@@ -1,7 +1,7 @@
 package me.chunklock.hologram.api;
 
 import org.bukkit.Location;
-import me.chunklock.hologram.display.HologramData;
+import me.chunklock.hologram.core.HologramData;
 
 import java.util.List;
 import java.util.Optional;

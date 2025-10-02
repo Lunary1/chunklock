@@ -2,15 +2,6 @@
 package me.chunklock.commands;
 
 import me.chunklock.commands.BasicTeamCommandHandler;
-import me.chunklock.commands.BorderCommand;
-import me.chunklock.commands.BypassCommand;
-import me.chunklock.commands.DebugCommand;
-import me.chunklock.commands.DiagnosticCommand;
-import me.chunklock.commands.HelpCommand;
-import me.chunklock.commands.ReloadCommand;
-import me.chunklock.commands.ResetCommand;
-import me.chunklock.commands.SpawnCommand;
-import me.chunklock.commands.StatusCommand;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.PlayerDataManager;
@@ -19,8 +10,6 @@ import me.chunklock.managers.TeamManager;
 import me.chunklock.ui.UnlockGui;
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.managers.ChunkBorderManager;
-import me.chunklock.commands.UnlockCommand;
-import me.chunklock.commands.TeamCommand;
 
 /**
  * Main command executor for the chunklock plugin.
@@ -118,6 +107,23 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
                 plugin.getLogger().info("✓ Registered SpawnCommand with valid dependencies");
             } else {
                 plugin.getLogger().severe("✗ Cannot register SpawnCommand - PlayerDataManager is null");
+            }
+
+            // Start command (per-player worlds)
+            try {
+                me.chunklock.managers.WorldManager worldManager = plugin.getWorldManager();
+                if (worldManager != null) {
+                    registerSubCommand(new me.chunklock.commands.StartCommand(worldManager));
+                    plugin.getLogger().info("✓ Registered StartCommand with WorldManager");
+                    
+                    // Also register WorldInfoCommand for admins
+                    registerSubCommand(new me.chunklock.commands.WorldInfoCommand(worldManager));
+                    plugin.getLogger().info("✓ Registered WorldInfoCommand with WorldManager");
+                } else {
+                    plugin.getLogger().warning("✗ Cannot register StartCommand/WorldInfoCommand - WorldManager is null");
+                }
+            } catch (Exception e) {
+                plugin.getLogger().warning("✗ Cannot register StartCommand/WorldInfoCommand - WorldManager error: " + e.getMessage());
             }
 
             // Team command

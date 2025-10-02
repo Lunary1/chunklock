@@ -19,8 +19,6 @@ import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.managers.TeamManager;
-import me.chunklock.ui.UnlockGuiBuilder;
-import me.chunklock.ui.UnlockGuiStateManager;
 import me.chunklock.ui.UnlockGuiStateManager.PendingUnlock;
 import me.chunklock.ChunklockPlugin;
 import org.bukkit.Bukkit;
@@ -51,7 +49,6 @@ public class UnlockGui {
     // Constants - Updated for new GUI
     public static final String GUI_TITLE_PREFIX = "🔓 Unlock Chunk";
     private static final int UNLOCK_BUTTON_SLOT = 31; // Updated slot for new layout
-    private static final int[] CLICKABLE_SLOTS = {31, 49}; // Unlock button and help book
     
     public UnlockGui(ChunkLockManager chunkLockManager,
                      BiomeUnlockRegistry biomeUnlockRegistry,
@@ -498,7 +495,6 @@ public class UnlockGui {
     /**
      * Notify other systems that a chunk was unlocked.
      */
-    @SuppressWarnings("deprecation") // Using deprecated wrapper methods temporarily
     private void notifyUnlockSystems(Player player, Chunk chunk) {
         try {
             // Update borders with comprehensive approach
@@ -551,23 +547,24 @@ public class UnlockGui {
                 }, 10L); // 0.5 second delay
             }
             
-            // Update holograms - ENHANCED: Force immediate cleanup for unlocked chunk
+            // Update holograms - ENHANCED: Clean up chunk holograms and refresh active set
             try {
-                var hologramManager = ChunklockPlugin.getInstance().getHologramManager();
-                if (hologramManager != null) {
-                    // Force immediate cleanup of the unlocked chunk's holograms
-                    hologramManager.forceCleanupChunk(player, chunk);
+                var hologramService = ChunklockPlugin.getInstance().getHologramService();
+                if (hologramService != null) {
+                    // Immediately despawn all holograms for this specific chunk
+                    hologramService.despawnChunkHolograms(player, chunk);
                     
-                    // Schedule additional cleanup with a small delay to catch any race conditions
+                    // Schedule refresh of active holograms to update the visible set
                     Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
                         if (player.isOnline()) {
-                            // Force cleanup again and refresh all holograms
-                            hologramManager.forceCleanupChunk(player, chunk);
-                            hologramManager.refreshHologramsForPlayer(player);
+                            // Update active hologram set to reflect new unlocked chunk
+                            hologramService.updateActiveHologramsForPlayer(player);
+                            ChunklockPlugin.getInstance().getLogger().fine("Updated active holograms for " + player.getName() + 
+                                " after unlocking chunk " + chunk.getX() + "," + chunk.getZ());
                         }
                     }, 5L); // 0.25 second delay
                     
-                    ChunklockPlugin.getInstance().getLogger().fine("Cleaned up and scheduled refresh of holograms after chunk unlock for " + player.getName() + 
+                    ChunklockPlugin.getInstance().getLogger().fine("Stopped hologram updates and scheduled restart after chunk unlock for " + player.getName() + 
                         " at chunk " + chunk.getX() + "," + chunk.getZ());
                 }
             } catch (Exception e) {

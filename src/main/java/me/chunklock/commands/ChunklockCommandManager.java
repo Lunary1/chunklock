@@ -258,7 +258,8 @@ public class ChunklockCommandManager implements CommandExecutor, TabCompleter {
         // Commands that should work from any world (truly global commands)
         Set<String> globalCommands = Set.of(
             "help",         // Help should always be available
-            "reload"        // Reload should work from anywhere (admin override will handle warnings)
+            "reload",       // Reload should work from anywhere (admin override will handle warnings)
+            "start"         // Start command creates/loads player world - should work from any world
         );
         
         return !globalCommands.contains(subCommandName);

@@ -9,8 +9,6 @@ import java.util.regex.Pattern;
 public final class ColorUtil {
     
     private static final Pattern HEX_PATTERN = Pattern.compile("&#[a-fA-F0-9]{6}");
-    private static final Pattern LEGACY_PATTERN = Pattern.compile("&[0-9a-fk-or]");
-    private static final Pattern COLOR_PATTERN = Pattern.compile("§[0-9a-fk-or]");
     
     private ColorUtil() {}
     

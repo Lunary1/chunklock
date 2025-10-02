@@ -4,8 +4,8 @@ import org.bukkit.Location;
 import java.util.Objects;
 
 /**
- * Immutable state tracking for holograms to prevent unnecessary updates.
- * Used to determine if a hologram needs to be recreated or can be left as-is.
+ * Immutable state tracking for holograms with progress tracking capabilities.
+ * Used by the display service to track material requirements and player progress.
  */
 public final class HologramState {
 

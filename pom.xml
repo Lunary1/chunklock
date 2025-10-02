@@ -6,10 +6,10 @@
 
   <groupId>me.chunklock</groupId>
   <artifactId>chunklock</artifactId>
-  <version>1.2.5</version>
+  <version>1.2.7</version>
   <packaging>jar</packaging>
 
-  <name>Chunklock-1.2.5</name>
+  <name>Chunklock-1.2.7</name>
 
   <properties>
     <java.version>17</java.version>
@@ -80,9 +80,9 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.11.0</version>
         <configuration>
-          <source>${java.version}</source>
-          <target>${java.version}</target>
+          <release>${java.version}</release>
           <encoding>UTF-8</encoding>
+          <proc>none</proc>
         </configuration>
       </plugin>
 

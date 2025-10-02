@@ -15,7 +15,6 @@ import me.chunklock.util.DataMigrator;
 import me.chunklock.listeners.*;
 import me.chunklock.services.StartingChunkService;
 import me.chunklock.ui.UnlockGui;
-import me.chunklock.util.InitializationManager;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -36,13 +35,15 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     
     // UI and services
     private UnlockGui unlockGui;
-    private HologramManager hologramManager;
+    private me.chunklock.hologram.HologramService hologramService;
     private StartingChunkService startingChunkService;
+    private me.chunklock.services.ProgressionValidationService progressionValidationService;
     
     // Listeners
     private PlayerListener playerListener;
     private BlockProtectionListener blockProtectionListener;
     private TeleportListener teleportListener;
+    private me.chunklock.listeners.InventoryChangeListener inventoryChangeListener;
     
     // Border system
     private ChunkBorderManager chunkBorderManager;
@@ -60,7 +61,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         try {
             instance = this;
             
-            getLogger().info("=== Starting Chunklock v" + getDescription().getVersion() + " ===");
+            getLogger().info("=== Starting Chunklock v" + getPluginMeta().getVersion() + " ===");
             
             // CRITICAL: Validate and ensure complete config before anything else
             ConfigValidator configValidator = new ConfigValidator(this);
@@ -75,7 +76,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             
             // Analytics (optional)
             try {
-                int pluginId = 19876;
+                // Metrics disabled for now
+                //int pluginId = 19876;
                 //Metrics metrics = new Metrics(this, pluginId);
                 getLogger().info("Analytics initialized successfully");
             } catch (Exception e) {
@@ -145,8 +147,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry);
             this.chunkLockManager = new ChunkLockManager(chunkEvaluator, this, teamManager);
             this.startingChunkService = new StartingChunkService(chunkLockManager, playerDataManager);
+            this.progressionValidationService = new me.chunklock.services.ProgressionValidationService(this);
             this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker, teamManager);
-            this.hologramManager = new HologramManager(chunkLockManager, biomeUnlockRegistry);
+            this.hologramService = me.chunklock.hologram.HologramService.create(chunkLockManager, biomeUnlockRegistry, worldManager);
             this.playerListener = new PlayerListener(chunkLockManager, progressTracker, playerDataManager, unlockGui);
             this.chunkBorderManager = new ChunkBorderManager(chunkLockManager, unlockGui, teamManager, progressTracker);
             this.borderRefreshService = new me.chunklock.border.BorderRefreshService(chunkBorderManager);
@@ -156,9 +159,13 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.borderListener = new me.chunklock.listeners.BorderListener(chunkBorderManager);
             this.blockProtectionListener = new BlockProtectionListener(chunkLockManager, unlockGui, chunkBorderManager);
             this.teleportListener = new TeleportListener(worldManager, playerDataManager, startingChunkService);
+            this.inventoryChangeListener = new me.chunklock.listeners.InventoryChangeListener(this);
             
             // Set up team integration
             biomeUnlockRegistry.setEnhancedTeamManager(enhancedTeamManager);
+            
+            // Start progression validation task for player worlds
+            startProgressionValidationTask();
             
             getLogger().info("✅ All components initialized successfully");
             return true;
@@ -182,6 +189,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             Bukkit.getPluginManager().registerEvents(blockProtectionListener, this);
             Bukkit.getPluginManager().registerEvents(borderListener, this);
             Bukkit.getPluginManager().registerEvents(teleportListener, this);
+            Bukkit.getPluginManager().registerEvents(inventoryChangeListener, this);
             Bukkit.getPluginManager().registerEvents(this, this);
             
             getLogger().info("✅ Event listeners registered successfully");
@@ -232,7 +240,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             sender.sendMessage(Component.text("🔄 Reloading Chunklock...").color(NamedTextColor.YELLOW));
             
             // Cleanup existing systems
-            if (hologramManager != null) hologramManager.cleanup();
+            if (hologramService != null) hologramService.cleanup();
             if (chunkBorderManager != null) chunkBorderManager.cleanup();
             
             // Save all data
@@ -265,10 +273,10 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     }
 
     private void restartVisualEffects() {
-        if (hologramManager != null) {
+        if (hologramService != null) {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 Bukkit.getScheduler().runTaskLater(this, () -> {
-                    hologramManager.startHologramDisplay(player);
+                    hologramService.updateActiveHologramsForPlayer(player);
                 }, 20L);
             }
         }
@@ -282,8 +290,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         
         Bukkit.getScheduler().runTaskLater(this, () -> {
             try {
-                if (event.getPlayer().isOnline() && hologramManager != null) {
-                    hologramManager.startHologramDisplay(event.getPlayer());
+                if (event.getPlayer().isOnline() && hologramService != null) {
+                    hologramService.updateActiveHologramsForPlayer(event.getPlayer());
                 }
             } catch (Exception e) {
                 getLogger().log(Level.WARNING, "Error starting holograms for " + event.getPlayer().getName(), e);
@@ -294,8 +302,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         try {
-            if (hologramManager != null) {
-                hologramManager.stopHologramDisplay(event.getPlayer());
+            if (hologramService != null) {
+                hologramService.despawnPlayerHolograms(event.getPlayer());
             }
             if (blockProtectionListener != null) {
                 blockProtectionListener.cleanupPlayer(event.getPlayer().getUniqueId());
@@ -310,7 +318,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         try {
             getLogger().info("Disabling Chunklock plugin...");
             
-            if (hologramManager != null) hologramManager.cleanup();
+            if (hologramService != null) hologramService.cleanup();
             if (chunkBorderManager != null) chunkBorderManager.cleanup();
             
             saveAllData();
@@ -380,9 +388,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         return teamManager;
     }
 
-    public HologramManager getHologramManager() {
-        if (hologramManager == null) throw new IllegalStateException("HologramManager not initialized");
-        return hologramManager;
+    public me.chunklock.hologram.HologramService getHologramService() {
+        if (hologramService == null) throw new IllegalStateException("HologramService not initialized");
+        return hologramService;
     }
 
     public PlayerListener getPlayerListener() {
@@ -418,6 +426,43 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     public BasicTeamCommandHandler getTeamCommandHandler() {
         if (teamCommandHandler == null) throw new IllegalStateException("BasicTeamCommandHandler not initialized");
         return teamCommandHandler;
+    }
+
+    public BiomeUnlockRegistry getBiomeUnlockRegistry() {
+        if (biomeUnlockRegistry == null) throw new IllegalStateException("BiomeUnlockRegistry not initialized");
+        return biomeUnlockRegistry;
+    }
+
+    public me.chunklock.services.ProgressionValidationService getProgressionValidationService() {
+        if (progressionValidationService == null) throw new IllegalStateException("ProgressionValidationService not initialized");
+        return progressionValidationService;
+    }
+
+    /**
+     * Start the progression validation task for player worlds
+     */
+    private void startProgressionValidationTask() {
+        if (progressionValidationService != null && worldManager != null && worldManager.isPerPlayerWorldsEnabled()) {
+            Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
+                try {
+                    // Check all online players in player worlds
+                    for (Player player : Bukkit.getOnlinePlayers()) {
+                        if (worldManager.isPlayerWorld(player.getWorld().getName())) {
+                            if (!progressionValidationService.validatePlayerProgression(player)) {
+                                // Player is stuck, provide emergency assistance
+                                Bukkit.getScheduler().runTask(this, () -> {
+                                    progressionValidationService.provideEmergencyAssistance(player);
+                                });
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    getLogger().log(Level.WARNING, "Error during progression validation", e);
+                }
+            }, 20L * 60L * 5L, 20L * 60L * 5L); // Check every 5 minutes
+            
+            getLogger().info("✅ Progression validation task started (checks every 5 minutes)");
+        }
     }
 
     /**

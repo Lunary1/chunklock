@@ -3,7 +3,6 @@ package me.chunklock.listeners;
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.managers.WorldManager;
 import me.chunklock.managers.PlayerDataManager;
-import me.chunklock.managers.HologramManager;
 import me.chunklock.services.StartingChunkService;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -13,7 +12,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerTeleportEvent;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.UUID;
 import java.util.logging.Level;
@@ -152,21 +150,18 @@ public class TeleportListener implements Listener {
             Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
                 try {
                     if (player.isOnline() && player.getWorld().equals(enabledWorld)) {
-                        HologramManager hologramManager = ChunklockPlugin.getInstance().getHologramManager();
-                        if (hologramManager != null) {
-                            // Stop any existing hologram task (cleanup)
-                            hologramManager.stopHologramDisplay(player);
-                            
-                            // Start fresh hologram display
-                            hologramManager.startHologramDisplay(player);
+                        var hologramService = ChunklockPlugin.getInstance().getHologramService();
+                        if (hologramService != null) {
+                            // Update active hologram set for new world/location
+                            hologramService.updateActiveHologramsForPlayer(player);
                             
                             ChunklockPlugin.getInstance().getLogger().fine(
-                                "Restarted holograms for " + player.getName() + " after teleporting to enabled world " + enabledWorld.getName());
+                                "Updated active holograms for " + player.getName() + " after teleporting to enabled world " + enabledWorld.getName());
                         }
                     }
                 } catch (Exception e) {
                     ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
-                        "Error restarting holograms after teleport for " + player.getName(), e);
+                        "Error updating holograms after teleport for " + player.getName(), e);
                 }
             }, 20L); // 1 second delay to ensure teleport is complete
             
