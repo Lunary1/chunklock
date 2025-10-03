@@ -1,7 +1,6 @@
 // src/main/java/me/chunklock/commands/ChunklockCommandExecutor.java
 package me.chunklock.commands;
 
-import me.chunklock.commands.BasicTeamCommandHandler;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.PlayerDataManager;
@@ -9,7 +8,6 @@ import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.managers.TeamManager;
 import me.chunklock.ui.UnlockGui;
 import me.chunklock.ChunklockPlugin;
-import me.chunklock.managers.ChunkBorderManager;
 
 /**
  * Main command executor for the chunklock plugin.
@@ -26,6 +24,7 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
     private final BasicTeamCommandHandler teamCommandHandler;
     private final BiomeUnlockRegistry biomeUnlockRegistry;
     private final PlayerDataManager playerDataManager;
+    private final me.chunklock.managers.SingleWorldManager singleWorldManager;
     
     public ChunklockCommandExecutor(PlayerProgressTracker progressTracker,
                                    ChunkLockManager chunkLockManager,
@@ -33,7 +32,8 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
                                    TeamManager teamManager,
                                    BasicTeamCommandHandler teamCommandHandler,
                                    BiomeUnlockRegistry biomeUnlockRegistry,
-                                   PlayerDataManager playerDataManager) {
+                                   PlayerDataManager playerDataManager,
+                                   me.chunklock.managers.SingleWorldManager singleWorldManager) {
         super();
         
         // Validate dependencies
@@ -58,6 +58,9 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
         if (teamCommandHandler == null) {
             throw new IllegalArgumentException("BasicTeamCommandHandler cannot be null");
         }
+        if (singleWorldManager == null) {
+            throw new IllegalArgumentException("SingleWorldManager cannot be null");
+        }
         
         // Set all dependencies FIRST
         this.progressTracker = progressTracker;
@@ -67,6 +70,7 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
         this.teamCommandHandler = teamCommandHandler;
         this.biomeUnlockRegistry = biomeUnlockRegistry;
         this.playerDataManager = playerDataManager;
+        this.singleWorldManager = singleWorldManager;
         
         // NOW register subcommands (after all fields are set)
         this.initialize();
@@ -87,9 +91,7 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
             plugin.getLogger().info("  playerDataManager: " + (playerDataManager != null ? "OK" : "NULL"));
             plugin.getLogger().info("  teamCommandHandler: " + (teamCommandHandler != null ? "OK" : "NULL"));
             
-            // Diagnostic command (always first)
-            registerSubCommand(new DiagnosticCommand());
-            plugin.getLogger().info("✓ Registered DiagnosticCommand");
+            // Diagnostic command removed
             
             // Status command
             if (progressTracker != null && chunkLockManager != null) {
@@ -109,21 +111,20 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
                 plugin.getLogger().severe("✗ Cannot register SpawnCommand - PlayerDataManager is null");
             }
 
-            // Start command (per-player worlds)
-            try {
-                me.chunklock.managers.WorldManager worldManager = plugin.getWorldManager();
-                if (worldManager != null) {
-                    registerSubCommand(new me.chunklock.commands.StartCommand(worldManager));
-                    plugin.getLogger().info("✓ Registered StartCommand with WorldManager");
-                    
-                    // Also register WorldInfoCommand for admins
-                    registerSubCommand(new me.chunklock.commands.WorldInfoCommand(worldManager));
-                    plugin.getLogger().info("✓ Registered WorldInfoCommand with WorldManager");
-                } else {
-                    plugin.getLogger().warning("✗ Cannot register StartCommand/WorldInfoCommand - WorldManager is null");
-                }
-            } catch (Exception e) {
-                plugin.getLogger().warning("✗ Cannot register StartCommand/WorldInfoCommand - WorldManager error: " + e.getMessage());
+            // Start command (single world)
+            if (singleWorldManager != null) {
+                registerSubCommand(new me.chunklock.commands.StartCommand(singleWorldManager));
+                plugin.getLogger().info("✓ Registered StartCommand with SingleWorldManager");
+            } else {
+                plugin.getLogger().severe("✗ Cannot register StartCommand - SingleWorldManager is null");
+            }
+
+            // Setup command (admin only - single world)
+            if (singleWorldManager != null) {
+                registerSubCommand(new me.chunklock.commands.SetupCommand(singleWorldManager));
+                plugin.getLogger().info("✓ Registered SetupCommand with SingleWorldManager");
+            } else {
+                plugin.getLogger().severe("✗ Cannot register SetupCommand - SingleWorldManager is null");
             }
 
             // Team command
@@ -161,29 +162,13 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
             registerSubCommand(new ReloadCommand());
             plugin.getLogger().info("✓ Registered ReloadCommand - NO DEPENDENCIES REQUIRED");
 
-            // BORDER COMMAND - NEEDS ChunkBorderManager
-            try {
-                ChunkBorderManager borderManager = plugin.getChunkBorderManager();
-                if (borderManager != null) {
-                    registerSubCommand(new BorderCommand());
-                    plugin.getLogger().info("✓ Registered BorderCommand with ChunkBorderManager");
-                } else {
-                    plugin.getLogger().warning("✗ Cannot register BorderCommand - ChunkBorderManager is null");
-                }
-            } catch (Exception e) {
-                plugin.getLogger().warning("✗ Cannot register BorderCommand - ChunkBorderManager error: " + e.getMessage());
-            }
+            // Debug command (admin-only, no dependencies needed)
+            registerSubCommand(new DebugCommand());
+            plugin.getLogger().info("✓ Registered DebugCommand (admin-only) - NO DEPENDENCIES REQUIRED");
 
-            // Debug command
-            if (chunkLockManager != null && biomeUnlockRegistry != null && unlockGui != null) {
-                registerSubCommand(new DebugCommand(chunkLockManager, biomeUnlockRegistry, unlockGui));
-                plugin.getLogger().info("✓ Registered DebugCommand with valid dependencies");
-            } else {
-                plugin.getLogger().severe("✗ Cannot register DebugCommand - dependencies are null: " +
-                    "chunkLockManager=" + (chunkLockManager != null ? "OK" : "NULL") + 
-                    ", biomeUnlockRegistry=" + (biomeUnlockRegistry != null ? "OK" : "NULL") +
-                    ", unlockGui=" + (unlockGui != null ? "OK" : "NULL"));
-            }
+            // BorderCommand removed
+
+            // DebugCommand removed
 
             // Unlock command (admin-only)
             if (chunkLockManager != null && progressTracker != null && teamManager != null) {

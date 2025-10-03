@@ -3,6 +3,7 @@ package me.chunklock.debug;
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.hologram.HologramService;
 import me.chunklock.managers.ChunkLockManager;
+import me.chunklock.managers.WorldManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
@@ -51,6 +52,10 @@ public final class HologramDebugDemo {
         boolean isUnlocked = !isLocked && playerId.equals(owner);
         logger.info("Current chunk locked: " + isLocked + ", owner: " + owner + ", unlocked for player: " + isUnlocked);
         
+        // Check if player is bypassing (would disable holograms)
+        boolean isBypassing = chunkLockManager.isBypassing(player);
+        logger.info("Player bypassing: " + isBypassing);
+        
         // Simulate the eligibility calculation that happens in findActiveHologramCandidates()
         logger.info("--- Calculating eligible chunks (unlocked + frontier only) ---");
         
@@ -68,13 +73,13 @@ public final class HologramDebugDemo {
                 
                 if (chunkUnlocked) {
                     unlockCount++;
-                    logger.fine("Unlocked chunk found: " + chunk.getX() + ", " + chunk.getZ());
+                    logger.info("Unlocked chunk found: " + chunk.getX() + ", " + chunk.getZ());
                 } else {
                     // Check if it's a frontier chunk (adjacent to an unlocked chunk)
                     boolean isFrontier = isFrontierChunk(chunk, playerId);
                     if (isFrontier) {
                         frontierCount++;
-                        logger.fine("Frontier chunk found: " + chunk.getX() + ", " + chunk.getZ());
+                        logger.info("Frontier chunk found: " + chunk.getX() + ", " + chunk.getZ());
                     }
                 }
             }
@@ -83,12 +88,16 @@ public final class HologramDebugDemo {
         logger.info("Total unlocked chunks in range: " + unlockCount);
         logger.info("Total frontier chunks in range: " + frontierCount);
         logger.info("Total eligible chunks: " + (unlockCount + frontierCount));
-        logger.info("ACCEPTANCE CRITERIA: Player should only see holograms for " + (unlockCount + frontierCount) + " chunks");
         
-        // Trigger actual hologram update to see the real eligibility calculation
-        logger.info("--- Triggering hologram update (see debug logs above) ---");
+        // Force trigger hologram update to see what actually happens
+        logger.info("--- Forcing hologram update (see debug logs) ---");
         hologramService.updateActiveHologramsForPlayer(player);
         
+        // Get hologram statistics
+        java.util.Map<String, Object> stats = hologramService.getStatistics();
+        logger.info("HologramService statistics: " + stats);
+        
+        logger.info("ACCEPTANCE CRITERIA: Player should only see holograms for " + (unlockCount + frontierCount) + " chunks");
         logger.info("=== ISSUE A DEBUG COMPLETE ===");
     }
     
@@ -176,11 +185,77 @@ public final class HologramDebugDemo {
         logger.info("HOLOGRAM REGRESSION FIX DEMONSTRATION");
         logger.info("========================================");
         
+        // First, test world detection
+        demonstrateWorldDetection(player);
+        
         demonstrateEligibilityFix(player);
         
         // Wait 2 seconds between demos
         Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
             demonstrateInventoryUpdateFix(player);
         }, 40L);
+    }
+    
+    /**
+     * Test world detection for hologram service
+     */
+    public void demonstrateWorldDetection(Player player) {
+        logger.info("=== WORLD DETECTION DEBUG ===");
+        
+        String playerWorldName = player.getWorld().getName();
+        logger.info("Player world: " + playerWorldName);
+        
+        // Test WorldManager directly
+        WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+        boolean worldEnabled = worldManager.isWorldEnabled(player.getWorld());
+        logger.info("WorldManager.isWorldEnabled(): " + worldEnabled);
+        logger.info("WorldManager.getEnabledWorlds(): " + worldManager.getEnabledWorlds());
+        
+        // Test SingleWorldManager if available
+        try {
+            me.chunklock.managers.SingleWorldManager singleWorldManager = ChunklockPlugin.getInstance().getSingleWorldManager();
+            String configuredWorldName = singleWorldManager.getChunklockWorldName();
+            logger.info("SingleWorldManager.getChunklockWorldName(): " + configuredWorldName);
+            logger.info("World name match: " + playerWorldName.equals(configuredWorldName));
+        } catch (Exception e) {
+            logger.warning("SingleWorldManager not available: " + e.getMessage());
+        }
+        
+        // Test HologramService availability
+        me.chunklock.hologram.HologramService hologramService = ChunklockPlugin.getInstance().getHologramService();
+        logger.info("HologramService.isAvailable(): " + hologramService.isAvailable());
+        
+        // Debug hologram provider status
+        debugHologramProvider();
+        
+        logger.info("ACCEPTANCE CRITERIA: All world checks should return true for hologram functionality to work");
+        logger.info("=== WORLD DETECTION DEBUG COMPLETE ===");
+    }
+    
+    /**
+     * Debug hologram provider availability
+     */
+    private void debugHologramProvider() {
+        logger.info("--- Hologram Provider Debug ---");
+        
+        // Check if FancyHolograms plugin is installed
+        org.bukkit.plugin.Plugin fancyPlugin = Bukkit.getPluginManager().getPlugin("FancyHolograms");
+        if (fancyPlugin == null) {
+            logger.warning("FancyHolograms plugin is NOT installed!");
+            logger.warning("Please install FancyHolograms plugin from: https://modrinth.com/plugin/fancyholograms");
+            logger.warning("Without FancyHolograms, hologram functionality will be disabled.");
+        } else {
+            logger.info("FancyHolograms plugin found: " + fancyPlugin.getName() + " v" + fancyPlugin.getPluginMeta().getVersion());
+            logger.info("FancyHolograms status: " + (fancyPlugin.isEnabled() ? "ENABLED" : "DISABLED"));
+        }
+        
+        // Check hologram configuration
+        me.chunklock.hologram.config.HologramConfiguration config = 
+            new me.chunklock.hologram.config.HologramConfiguration(ChunklockPlugin.getInstance());
+        logger.info("Hologram config enabled: " + config.isEnabled());
+        logger.info("Hologram config provider: " + config.getProvider());
+        logger.info("Hologram config provider disabled: " + config.isProviderDisabled());
+        
+        logger.info("--- End Hologram Provider Debug ---");
     }
 }

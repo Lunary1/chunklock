@@ -32,11 +32,13 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private ChunkValueRegistry chunkValueRegistry;
     private ChunkEvaluator chunkEvaluator;
     private WorldManager worldManager;
+    private me.chunklock.managers.SingleWorldManager singleWorldManager;
     
     // UI and services
     private UnlockGui unlockGui;
     private me.chunklock.hologram.HologramService hologramService;
     private StartingChunkService startingChunkService;
+    private me.chunklock.services.ChunkPreAllocationService chunkPreAllocationService; // NEW: Performance optimization
     private me.chunklock.services.ProgressionValidationService progressionValidationService;
     
     // Listeners
@@ -136,6 +138,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             getLogger().info("  " + me.chunklock.util.ServerCompatibility.getCompatibilitySummary().replace("\n", "\n  "));
             
             // Initialize in dependency order
+            this.singleWorldManager = new me.chunklock.managers.SingleWorldManager(this);
             this.worldManager = new WorldManager(this);
             this.chunkValueRegistry = new ChunkValueRegistry(this);
             this.enhancedTeamManager = new EnhancedTeamManager(this);
@@ -147,6 +150,11 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry);
             this.chunkLockManager = new ChunkLockManager(chunkEvaluator, this, teamManager);
             this.startingChunkService = new StartingChunkService(chunkLockManager, playerDataManager);
+            
+            // NEW: Initialize chunk pre-allocation service for performance
+            this.chunkPreAllocationService = new me.chunklock.services.ChunkPreAllocationService(chunkLockManager, this);
+            this.startingChunkService.setPreAllocationService(chunkPreAllocationService);
+            
             this.progressionValidationService = new me.chunklock.services.ProgressionValidationService(this);
             this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker, teamManager);
             this.hologramService = me.chunklock.hologram.HologramService.create(chunkLockManager, biomeUnlockRegistry, worldManager);
@@ -209,11 +217,12 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             
             // Verify all dependencies are available
             if (progressTracker != null && chunkLockManager != null && unlockGui != null && 
-                teamManager != null && biomeUnlockRegistry != null && playerDataManager != null) {
+                teamManager != null && biomeUnlockRegistry != null && playerDataManager != null &&
+                singleWorldManager != null) {
                 
                 var chunklockCmd = new me.chunklock.commands.ChunklockCommandExecutor(
                     progressTracker, chunkLockManager, unlockGui, teamManager, 
-                    teamCommandHandler, biomeUnlockRegistry, playerDataManager);
+                    teamCommandHandler, biomeUnlockRegistry, playerDataManager, singleWorldManager);
                 
                 if (getCommand("chunklock") != null) {
                     getCommand("chunklock").setExecutor(chunklockCmd);
@@ -250,6 +259,11 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             boolean success = initializeComponents() && registerEventListeners();
             
             if (success) {
+                // Reload debug configurations for all components
+                if (unlockGui != null) unlockGui.reloadConfiguration();
+                if (startingChunkService != null) startingChunkService.reloadConfiguration();
+                if (chunkPreAllocationService != null) chunkPreAllocationService.reloadConfiguration();
+                
                 // Restart visual effects
                 restartVisualEffects();
                 
@@ -320,6 +334,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             
             if (hologramService != null) hologramService.cleanup();
             if (chunkBorderManager != null) chunkBorderManager.cleanup();
+            if (chunkPreAllocationService != null) chunkPreAllocationService.stop(); // NEW: Stop pre-allocation service
             
             saveAllData();
             instance = null;
@@ -408,9 +423,19 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         return chunkBorderManager;
     }
 
+    public me.chunklock.services.ChunkPreAllocationService getChunkPreAllocationService() {
+        if (chunkPreAllocationService == null) throw new IllegalStateException("ChunkPreAllocationService not initialized");
+        return chunkPreAllocationService;
+    }
+
     public WorldManager getWorldManager() {
         if (worldManager == null) throw new IllegalStateException("WorldManager not initialized");
         return worldManager;
+    }
+
+    public me.chunklock.managers.SingleWorldManager getSingleWorldManager() {
+        if (singleWorldManager == null) throw new IllegalStateException("SingleWorldManager not initialized");
+        return singleWorldManager;
     }
 
     public StartingChunkService getStartingChunkService() {
@@ -439,30 +464,11 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     }
 
     /**
-     * Start the progression validation task for player worlds
+     * Start the progression validation task (disabled for single world system)
      */
     private void startProgressionValidationTask() {
-        if (progressionValidationService != null && worldManager != null && worldManager.isPerPlayerWorldsEnabled()) {
-            Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
-                try {
-                    // Check all online players in player worlds
-                    for (Player player : Bukkit.getOnlinePlayers()) {
-                        if (worldManager.isPlayerWorld(player.getWorld().getName())) {
-                            if (!progressionValidationService.validatePlayerProgression(player)) {
-                                // Player is stuck, provide emergency assistance
-                                Bukkit.getScheduler().runTask(this, () -> {
-                                    progressionValidationService.provideEmergencyAssistance(player);
-                                });
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    getLogger().log(Level.WARNING, "Error during progression validation", e);
-                }
-            }, 20L * 60L * 5L, 20L * 60L * 5L); // Check every 5 minutes
-            
-            getLogger().info("✅ Progression validation task started (checks every 5 minutes)");
-        }
+        // Progression validation not needed for single world system
+        getLogger().info("Progression validation disabled for single world system");
     }
 
     /**

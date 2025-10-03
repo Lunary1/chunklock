@@ -3,8 +3,8 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>me.chunklock</groupId>
   <artifactId>chunklock</artifactId>
-  <name>Chunklock-1.2.5</name>
-  <version>1.2.5</version>
+  <name>Chunklock-1.2.7</name>
+  <version>1.2.7</version>
   <build>
     <plugins>
       <plugin>

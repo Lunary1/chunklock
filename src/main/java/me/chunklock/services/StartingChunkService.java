@@ -18,21 +18,52 @@ import java.util.logging.Level;
 /**
  * Service responsible for assigning starting chunks to new players.
  * Handles chunk evaluation, finding suitable spawn locations, and player setup.
+ * NOW WITH PERFORMANCE OPTIMIZATION using pre-allocated chunks.
  */
 public class StartingChunkService {
     
     private final ChunkLockManager chunkLockManager;
     private final PlayerDataManager playerDataManager;
     private final Random random = new Random();
+    private ChunkPreAllocationService preAllocationService; // NEW: Pre-allocation service
+    
+    // Debug configuration
+    private boolean debugLogging;
     
     // Configuration constants
     private static final int MAX_SPAWN_ATTEMPTS = 100;
     private static final int MAX_SCORE_THRESHOLD = 25;
     private static final int SPAWN_SEARCH_RADIUS = 20; // chunks around spawn
+    private static final int FAST_SEARCH_LIMIT = 20; // Limit attempts for fast search
+    private static final int EXCELLENT_SCORE_THRESHOLD = 10; // Stop searching if we find this good a score
     
     public StartingChunkService(ChunkLockManager chunkLockManager, PlayerDataManager playerDataManager) {
         this.chunkLockManager = chunkLockManager;
         this.playerDataManager = playerDataManager;
+        loadDebugConfiguration();
+    }
+    
+    /**
+     * Load debug configuration from config.yml
+     */
+    private void loadDebugConfiguration() {
+        var config = ChunklockPlugin.getInstance().getConfig();
+        boolean masterDebug = config.getBoolean("debug-mode.enabled", false);
+        this.debugLogging = masterDebug && config.getBoolean("debug-mode.chunk-finding", false);
+    }
+    
+    /**
+     * Reload debug configuration (called during plugin reload)
+     */
+    public void reloadConfiguration() {
+        loadDebugConfiguration();
+    }
+    
+    /**
+     * Set the pre-allocation service (called during plugin initialization)
+     */
+    public void setPreAllocationService(ChunkPreAllocationService preAllocationService) {
+        this.preAllocationService = preAllocationService;
     }
     
     /**
@@ -78,17 +109,43 @@ public class StartingChunkService {
     }
     
     /**
-     * Finds the best starting chunk with score below threshold.
+     * Finds the best starting chunk with score below threshold - OPTIMIZED VERSION.
+     * Uses pre-allocated chunks first, then falls back to real-time search if needed.
      */
     private Chunk findBestStartingChunk(Player player, World world) {
+        long startTime = System.currentTimeMillis();
+        
+        // OPTIMIZATION 1: Try pre-allocated chunks first (instant!)
+        if (preAllocationService != null && preAllocationService.hasAvailableChunks()) {
+            Chunk preAllocatedChunk = preAllocationService.getPreAllocatedChunk();
+            if (preAllocatedChunk != null) {
+                long searchTime = System.currentTimeMillis() - startTime;
+                if (debugLogging) {
+                    ChunklockPlugin.getInstance().getLogger().info("Found pre-allocated starting chunk for " + player.getName() + 
+                        " at " + preAllocatedChunk.getX() + "," + preAllocatedChunk.getZ() + " (took " + searchTime + "ms - INSTANT!)");
+                }
+                return preAllocatedChunk;
+            }
+        }
+        
+        // FALLBACK: Real-time search (optimized)
+        if (debugLogging) {
+            ChunklockPlugin.getInstance().getLogger().info("No pre-allocated chunks available, performing optimized search for " + player.getName());
+        }
+        
         Chunk bestChunk = null;
         int bestScore = Integer.MAX_VALUE;
         int validChunksFound = 0;
 
-        ChunklockPlugin.getInstance().getLogger().info("Searching for suitable starting chunk for " + player.getName() + 
-            " (target score <= " + MAX_SCORE_THRESHOLD + ")");
+        if (debugLogging) {
+            ChunklockPlugin.getInstance().getLogger().info("Searching for suitable starting chunk for " + player.getName() + 
+                " (target score <= " + MAX_SCORE_THRESHOLD + ")");
+        }
 
-        for (int attempt = 0; attempt < MAX_SPAWN_ATTEMPTS; attempt++) {
+        // OPTIMIZATION 2: Use faster search with fewer attempts
+        int searchAttempts = Math.min(FAST_SEARCH_LIMIT, MAX_SPAWN_ATTEMPTS);
+        
+        for (int attempt = 0; attempt < searchAttempts; attempt++) {
             try {
                 // Search in a reasonable area around spawn
                 int cx = random.nextInt(SPAWN_SEARCH_RADIUS * 2 + 1) - SPAWN_SEARCH_RADIUS; // -20 to +20 chunk range
@@ -97,7 +154,13 @@ public class StartingChunkService {
                 Chunk chunk = world.getChunkAt(cx, cz);
                 if (chunk == null) continue;
 
-                // Evaluate chunk score
+                // OPTIMIZATION 3: Quick water check first (fastest check)
+                if (!ChunklockPlugin.getInstance().getChunkEvaluator().isChunkSuitableForSpawning(chunk)) {
+                    ChunklockPlugin.getInstance().getLogger().fine("Skipping water-dominated chunk at " + chunk.getX() + "," + chunk.getZ());
+                    continue;
+                }
+
+                // OPTIMIZATION 4: Use cached evaluation for better performance
                 ChunkEvaluator.ChunkValueData evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), chunk);
                 
                 // Check if this chunk meets our criteria
@@ -111,10 +174,10 @@ public class StartingChunkService {
                             " with score " + evaluation.score + " (attempt " + (attempt + 1) + ")");
                     }
                     
-                    // If we find a really good chunk, stop searching
-                    if (evaluation.score <= 10) {
+                    // OPTIMIZATION 5: Stop early if we find an excellent chunk
+                    if (evaluation.score <= EXCELLENT_SCORE_THRESHOLD) {
                         ChunklockPlugin.getInstance().getLogger().info("Found excellent starting chunk for " + player.getName() + 
-                            " at " + chunk.getX() + "," + chunk.getZ() + " with score " + evaluation.score);
+                            " at " + chunk.getX() + "," + chunk.getZ() + " with score " + evaluation.score + " after " + (attempt + 1) + " attempts");
                         break;
                     }
                 }
@@ -124,8 +187,12 @@ public class StartingChunkService {
             }
         }
 
-        ChunklockPlugin.getInstance().getLogger().info("Starting chunk search complete for " + player.getName() + 
-            ": found " + validChunksFound + " valid chunks, best score: " + (bestChunk != null ? bestScore : "none"));
+        long searchTime = System.currentTimeMillis() - startTime;
+        if (debugLogging) {
+            ChunklockPlugin.getInstance().getLogger().info("Starting chunk search complete for " + player.getName() + 
+                ": found " + validChunksFound + " valid chunks, best score: " + (bestChunk != null ? bestScore : "none") + 
+                " (took " + searchTime + "ms)");
+        }
 
         return bestChunk;
     }
@@ -145,9 +212,10 @@ public class StartingChunkService {
         // Get the exact center location of the chunk
         Location centerSpawn = ChunkUtils.getChunkCenter(startChunk);
         
-        // Unlock the starting chunk
-        UUID teamId = chunkLockManager.getTeamManager().getTeamLeader(player.getUniqueId());
-        chunkLockManager.unlockChunk(startChunk, teamId);
+        // Unlock the starting chunk - assign ownership to the individual player, not team leader
+        // This ensures solo players (not in teams) still own their starting chunk
+        UUID playerId = player.getUniqueId();
+        chunkLockManager.unlockChunk(startChunk, playerId);
         
         // Set player data and teleport to center
         playerDataManager.setChunk(player.getUniqueId(), centerSpawn);

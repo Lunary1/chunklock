@@ -236,11 +236,8 @@ public class ChunklockCommandManager implements CommandExecutor, TabCompleter {
             "unlock",       // Force unlock chunks
             "reset",        // Reset player progress
             "bypass",       // Toggle bypass mode
-            "debug",        // Debug information
             "reload",       // Reload config
-            "resetall",     // Reset all players
-            "borders",      // Border management
-            "diagnostic"    // Diagnostic info
+            "resetall"      // Reset all players
         );
         
         return adminCommands.contains(commandName);
@@ -259,7 +256,8 @@ public class ChunklockCommandManager implements CommandExecutor, TabCompleter {
         Set<String> globalCommands = Set.of(
             "help",         // Help should always be available
             "reload",       // Reload should work from anywhere (admin override will handle warnings)
-            "start"         // Start command creates/loads player world - should work from any world
+            "start",        // Start command creates/loads player world - should work from any world
+            "setup"         // Setup command creates the ChunkLock world - should work from any world
         );
         
         return !globalCommands.contains(subCommandName);

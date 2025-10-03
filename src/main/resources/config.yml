@@ -348,7 +348,7 @@ glass-borders:
   show-for-bypass-players: false # Whether bypass players should see borders
   auto-update-on-movement: true # Update borders when players change chunks
   restore-original-blocks: true # Restore original blocks when removing borders
-  debug-logging: true # Enable debug logging for border system
+  debug-logging: false # Enable debug logging for border system
 
   # Block Settings
   border-material: LIGHT_GRAY_STAINED_GLASS # Material to use for borders
@@ -358,27 +358,21 @@ performance:
   max-border-updates-per-tick: 10
 
 worlds:
-  enabled-worlds:
-    - "world"
-    - "world_nether"
-    - "world_the_end"
-  auto-assign-on-world-change: true
+  # Single World System - Use this instead of per-player worlds
+  world:
+    name: "chunklock_world" # Name of the dedicated ChunkLock world
+    diameter: 30000 # World diameter in blocks (set by setup command)
 
-  # Per-Player World System
-  # Simple, clean implementation with symbolic link organization
-  per-player:
-    enabled: true # Enable per-player worlds feature
-    unload-delay-minutes: 5 # Minutes to wait before unloading unused worlds
-    max-worlds: 100 # Maximum number of player worlds allowed
-    cleanup-inactive-days: 30 # Cleanup worlds inactive for X days (future feature)
-    enable-symbolic-links: true # Create symbolic links in chunklock_worlds/ for organization
+  claims:
+    min-distance-between-claims: 2 # Minimum chunks between player starting areas
 
-    # World generation settings
-    world-type: "NORMAL" # World type for new player worlds
-    generate-structures: true # Generate villages, dungeons, etc.
-    difficulty: "NORMAL" # Default difficulty for player worlds
-    pvp: false # PvP enabled in player worlds
-    world-border-size: 2000 # World border size (radius in blocks)
+# Debug Configuration
+debug-mode:
+  enabled: true # Master switch for all debug logging (temporarily enabled to debug hologram issue)
+  borders: false # Debug logging for border system (overrides glass-borders.debug-logging if debug-mode.enabled is true)
+  unlock-gui: false # Debug logging for unlock GUI interactions
+  chunk-finding: false # Debug logging for chunk allocation and finding
+  performance: false # Debug logging for performance metrics
 
 # Hologram Configuration
 holograms:

@@ -46,11 +46,14 @@ public class UnlockGui {
     private final UnlockGuiBuilder builder;
     private final UnlockGuiStateManager stateManager;
     
+    // Debug configuration
+    private boolean debugLogging;
+    
     // Constants - Updated for new GUI
     public static final String GUI_TITLE_PREFIX = "🔓 Unlock Chunk";
     private static final int UNLOCK_BUTTON_SLOT = 31; // Updated slot for new layout
     
-    public UnlockGui(ChunkLockManager chunkLockManager,
+    public UnlockGui(ChunkLockManager chunkLockManager, 
                      BiomeUnlockRegistry biomeUnlockRegistry,
                      PlayerProgressTracker progressTracker,
                      TeamManager teamManager) {
@@ -60,9 +63,26 @@ public class UnlockGui {
         this.teamManager = teamManager;
         this.builder = new UnlockGuiBuilder();
         this.stateManager = new UnlockGuiStateManager();
+        
+        // Load debug configuration
+        loadDebugConfiguration();
     }
     
     /**
+     * Load debug configuration from config.yml
+     */
+    private void loadDebugConfiguration() {
+        var config = ChunklockPlugin.getInstance().getConfig();
+        boolean masterDebug = config.getBoolean("debug-mode.enabled", false);
+        this.debugLogging = masterDebug && config.getBoolean("debug-mode.unlock-gui", false);
+    }
+    
+    /**
+     * Reload debug configuration (called during plugin reload)
+     */
+    public void reloadConfiguration() {
+        loadDebugConfiguration();
+    }    /**
      * Open the unlock GUI for a player looking at a specific chunk.
      */
     public void open(Player player, Chunk chunk) {
@@ -107,10 +127,12 @@ public class UnlockGui {
         playGuiOpenEffects(player);
         
         // Debug logging
-        ChunklockPlugin.getInstance().getLogger().info("Opening unlock GUI for " + player.getName() + 
-            " - chunk " + chunk.getX() + "," + chunk.getZ() + 
-            " - required: " + requirement.amount() + "x " + requirement.material() +
-            (contested ? " [CONTESTED]" : ""));
+        if (debugLogging) {
+            ChunklockPlugin.getInstance().getLogger().info("Opening unlock GUI for " + player.getName() + 
+                " - chunk " + chunk.getX() + "," + chunk.getZ() + 
+                " - required: " + requirement.amount() + "x " + requirement.material() +
+                (contested ? " [CONTESTED]" : ""));
+        }
         
         player.openInventory(inventory);
     }
@@ -283,8 +305,10 @@ public class UnlockGui {
             return;
         }
         
-        ChunklockPlugin.getInstance().getLogger().info("Processing unlock for " + player.getName() + 
-            " - chunk " + state.chunk.getX() + "," + state.chunk.getZ());
+        if (debugLogging) {
+            ChunklockPlugin.getInstance().getLogger().info("Processing unlock for " + player.getName() + 
+                " - chunk " + state.chunk.getX() + "," + state.chunk.getZ());
+        }
 
         // Check if chunk is still locked
         if (!chunkLockManager.isLocked(state.chunk)) {
@@ -311,8 +335,10 @@ public class UnlockGui {
             int playerHas = countPlayerItems(player, state.requirement.material());
             int required = state.requirement.amount();
             
-            ChunklockPlugin.getInstance().getLogger().info("Item validation: player " + player.getName() + 
-                " has " + playerHas + " " + state.requirement.material() + ", needs " + required);
+            if (debugLogging) {
+                ChunklockPlugin.getInstance().getLogger().info("Item validation: player " + player.getName() + 
+                    " has " + playerHas + " " + state.requirement.material() + ", needs " + required);
+            }
             
             if (playerHas < required) {
                 handleInsufficientItems(player, playerHas, required, state.requirement.material());
@@ -376,8 +402,10 @@ public class UnlockGui {
             // Use the registry's consumption method which handles team integration
             biomeUnlockRegistry.consumeRequiredItem(player, state.biome, evaluation.score);
             
-            ChunklockPlugin.getInstance().getLogger().info("Consumed items for " + player.getName() + 
-                " using BiomeUnlockRegistry method");
+            if (debugLogging) {
+                ChunklockPlugin.getInstance().getLogger().info("Consumed items for " + player.getName() + 
+                    " using BiomeUnlockRegistry method");
+            }
             
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().warning("BiomeUnlockRegistry consumption failed, using fallback: " + e.getMessage());

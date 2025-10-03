@@ -1,7 +1,7 @@
 package me.chunklock.commands;
 
 import me.chunklock.ChunklockPlugin;
-import me.chunklock.managers.WorldManager;
+import me.chunklock.managers.SingleWorldManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
@@ -11,20 +11,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Handles the start command - creates or loads a player's private world and teleports them there.
+ * Handles the start command - teleports players to the single Chunklock world and assigns them a starting chunk.
  */
 public class StartCommand extends SubCommand {
     
-    private final WorldManager worldManager;
+    private final SingleWorldManager singleWorldManager;
     
-    public StartCommand(WorldManager worldManager) {
+    public StartCommand(SingleWorldManager singleWorldManager) {
         super("start", "chunklock.use", true);
         
-        if (worldManager == null) {
-            throw new IllegalArgumentException("WorldManager cannot be null");
+        if (singleWorldManager == null) {
+            throw new IllegalArgumentException("SingleWorldManager cannot be null");
         }
         
-        this.worldManager = worldManager;
+        this.singleWorldManager = singleWorldManager;
     }
     
     @Override
@@ -34,45 +34,66 @@ public class StartCommand extends SubCommand {
             return false; // Should not happen due to requiresPlayer = true
         }
         
-        // Check if per-player worlds are enabled
-        if (!worldManager.isPerPlayerWorldsEnabled()) {
-            player.sendMessage(Component.text("Per-player worlds are not enabled on this server.")
+        // Check if the Chunklock world is setup
+        if (!singleWorldManager.isChunklockWorldSetup()) {
+            player.sendMessage(Component.text("The Chunklock world has not been set up yet!")
                 .color(NamedTextColor.RED));
+            player.sendMessage(Component.text("Ask an administrator to run '/chunklock setup <diameter>' first.")
+                .color(NamedTextColor.GRAY));
             return true;
         }
         
-        // Check if player already has a world
-        String existingWorld = worldManager.getPlayerWorldName(player.getUniqueId());
-        if (existingWorld != null) {
-            player.sendMessage(Component.text("You already have a private world! Teleporting you there...")
-                .color(NamedTextColor.YELLOW));
-        } else {
-            player.sendMessage(Component.text("Creating your private world, please wait...")
+        // Check if player already has a claim
+        if (singleWorldManager.hasPlayerClaim(player.getUniqueId())) {
+            player.sendMessage(Component.text("Teleporting you to your starting chunk...")
                 .color(NamedTextColor.GREEN));
+        } else {
+            player.sendMessage(Component.text("Finding you a starting chunk in the Chunklock world...")
+                .color(NamedTextColor.GREEN));
+            player.sendMessage(Component.text("Please wait while we assign you a suitable location.")
+                .color(NamedTextColor.GRAY));
         }
         
-        // Get or create the player's world and teleport them
-        worldManager.teleportToPlayerWorld(player).thenAccept(success -> {
+        // Teleport to the Chunklock world
+        singleWorldManager.teleportPlayerToChunklockWorld(player).thenAccept(success -> {
             if (success) {
-                if (existingWorld == null) {
-                    player.sendMessage(Component.text("Welcome to your private Chunklock world!")
-                        .color(NamedTextColor.GREEN));
-                    player.sendMessage(Component.text("Use '/chunklock unlock' to begin unlocking chunks.")
-                        .color(NamedTextColor.GRAY));
-                    player.sendMessage(Component.text("Invite team members with '/chunklock team invite <player>'")
-                        .color(NamedTextColor.GRAY));
+                if (singleWorldManager.hasPlayerClaim(player.getUniqueId())) {
+                    if (args.length == 0 || !args[0].equals("silent")) {
+                        player.sendMessage(Component.text("✅ Welcome to the Chunklock world!")
+                            .color(NamedTextColor.GREEN));
+                        player.sendMessage(Component.text("Your starting chunk: X=" + 
+                            singleWorldManager.getPlayerClaim(player.getUniqueId()).getX() + 
+                            ", Z=" + singleWorldManager.getPlayerClaim(player.getUniqueId()).getZ())
+                            .color(NamedTextColor.GRAY));
+                        player.sendMessage(Component.text("Use the GUI to unlock adjacent chunks and explore!")
+                            .color(NamedTextColor.AQUA));
+                        player.sendMessage(Component.text("Total players in world: " + 
+                            singleWorldManager.getTotalClaims())
+                            .color(NamedTextColor.GRAY));
+                    }
                 } else {
-                    player.sendMessage(Component.text("Welcome back to your private world!")
+                    player.sendMessage(Component.text("Welcome back to your starting chunk!")
                         .color(NamedTextColor.GREEN));
                 }
             } else {
-                player.sendMessage(Component.text("Failed to create or load your private world. Please try again later.")
+                player.sendMessage(Component.text("❌ Failed to enter the Chunklock world.")
                     .color(NamedTextColor.RED));
+                player.sendMessage(Component.text("This could be because:")
+                    .color(NamedTextColor.GRAY));
+                player.sendMessage(Component.text("• The world is not set up properly")
+                    .color(NamedTextColor.GRAY));
+                player.sendMessage(Component.text("• No suitable starting chunks are available")
+                    .color(NamedTextColor.GRAY));
+                player.sendMessage(Component.text("• The world is full (too many players)")
+                    .color(NamedTextColor.GRAY));
+                player.sendMessage(Component.text("Contact an administrator for assistance.")
+                    .color(NamedTextColor.YELLOW));
             }
         }).exceptionally(throwable -> {
-            player.sendMessage(Component.text("An error occurred while setting up your world: " + throwable.getMessage())
+            player.sendMessage(Component.text("❌ An error occurred: " + throwable.getMessage())
                 .color(NamedTextColor.RED));
-            ChunklockPlugin.getInstance().getLogger().warning("Failed to setup world for " + player.getName() + ": " + throwable.getMessage());
+            ChunklockPlugin.getInstance().getLogger().warning("Failed to teleport " + player.getName() + 
+                " to Chunklock world: " + throwable.getMessage());
             return null;
         });
         
@@ -86,7 +107,7 @@ public class StartCommand extends SubCommand {
     
     @Override
     public String getDescription() {
-        return "Create or load your private Chunklock world";
+        return "Enter the Chunklock world and get your starting chunk";
     }
     
     @Override

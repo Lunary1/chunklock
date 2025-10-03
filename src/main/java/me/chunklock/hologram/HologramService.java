@@ -199,7 +199,14 @@ public final class HologramService {
             return;
         }
         
-        if (!worldManager.isWorldEnabled(player.getWorld())) {
+        boolean worldEnabled = worldManager.isWorldEnabled(player.getWorld());
+        if (!worldEnabled) {
+            if (ChunklockPlugin.getInstance().getLogger().isLoggable(Level.FINE)) {
+                ChunklockPlugin.getInstance().getLogger().fine(
+                    "Despawning holograms for " + player.getName() + " - world '" + 
+                    player.getWorld().getName() + "' is not enabled for ChunkLock. " +
+                    "Enabled worlds: " + worldManager.getEnabledWorlds());
+            }
             despawnPlayerHolograms(player);
             return;
         }
@@ -803,6 +810,8 @@ public final class HologramService {
         if (available) {
             ChunklockPlugin.getInstance().getLogger().info(
                 "HologramService initialized with provider: " + provider.getProviderName());
+            ChunklockPlugin.getInstance().getLogger().info(
+                "HologramService enabled worlds: " + worldManager.getEnabledWorlds());
         } else {
             ChunklockPlugin.getInstance().getLogger().info(
                 "HologramService disabled - provider unavailable or disabled in config");

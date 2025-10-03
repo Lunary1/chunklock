@@ -91,9 +91,7 @@ public class HelpCommand extends SubCommand {
                 .color(NamedTextColor.GRAY));
             sender.sendMessage(Component.text("/chunklock reload - Reload plugin configuration")
                 .color(NamedTextColor.GRAY));
-            sender.sendMessage(Component.text("/chunklock debug - Show debug information")
-                .color(NamedTextColor.GRAY));
-            sender.sendMessage(Component.text("/chunklock borders - Manage glass borders")
+            sender.sendMessage(Component.text("")
                 .color(NamedTextColor.GRAY));
         }
         
