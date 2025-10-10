@@ -1,5 +1,6 @@
-package me.chunklock.util;
+package me.chunklock.util.message;
 
+import me.chunklock.util.ServerCompatibility;
 import org.bukkit.entity.Player;
 
 /**

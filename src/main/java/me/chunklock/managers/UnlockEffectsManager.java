@@ -112,13 +112,13 @@ public class UnlockEffectsManager {
 
     private static void spawnParticleBurst(Location center) {
         // Firework-like burst
-        me.chunklock.util.ParticleUtil.spawnFireworkParticles(center, 30, 2, 2, 2, 0.1);
+        me.chunklock.util.world.ParticleUtil.spawnFireworkParticles(center, 30, 2, 2, 2, 0.1);
         
         // Golden sparkles
-        me.chunklock.util.ParticleUtil.spawnDustParticles(center, 20, 1.5, 1.5, 1.5, Color.YELLOW, 2.0f);
+        me.chunklock.util.world.ParticleUtil.spawnDustParticles(center, 20, 1.5, 1.5, 1.5, Color.YELLOW, 2.0f);
         
         // Green success particles
-        me.chunklock.util.ParticleUtil.spawnDustParticles(center, 15, 1, 1, 1, Color.LIME, 2.0f);
+        me.chunklock.util.world.ParticleUtil.spawnDustParticles(center, 15, 1, 1, 1, Color.LIME, 2.0f);
     }
 
     private static void spawnSpiralParticles(Location center, int tick) {
@@ -135,7 +135,7 @@ public class UnlockEffectsManager {
             
             // Rotating colored particles
             Color spiralColor = tick % 20 < 10 ? Color.YELLOW : Color.LIME;
-            me.chunklock.util.ParticleUtil.spawnDustParticles(particleLoc, 1, 0, 0, 0, spiralColor, 1.5f);
+            me.chunklock.util.world.ParticleUtil.spawnDustParticles(particleLoc, 1, 0, 0, 0, spiralColor, 1.5f);
         }
     }
 

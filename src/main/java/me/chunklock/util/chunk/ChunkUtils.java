@@ -1,4 +1,4 @@
-package me.chunklock.util;
+package me.chunklock.util.chunk;
 
 import org.bukkit.Chunk;
 import org.bukkit.Location;

@@ -29,7 +29,7 @@ import me.chunklock.border.BorderConfigLoader;
 import me.chunklock.border.BorderPlacementService;
 import me.chunklock.border.BorderUpdateQueue;
 import me.chunklock.border.BorderStateManager;
-import me.chunklock.util.ChunkCoordinate;
+import me.chunklock.util.chunk.ChunkCoordinate;
 
 import java.util.*;
 import java.util.logging.Level;

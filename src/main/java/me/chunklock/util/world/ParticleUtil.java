@@ -1,4 +1,4 @@
-package me.chunklock.util;
+package me.chunklock.util.world;
 
 import org.bukkit.Color;
 import org.bukkit.Location;

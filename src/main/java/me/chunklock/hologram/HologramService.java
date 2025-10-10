@@ -35,6 +35,7 @@ public final class HologramService {
     private final ChunkLockManager chunkLockManager;
     private final BiomeUnlockRegistry biomeUnlockRegistry;
     private final WorldManager worldManager;
+    private final me.chunklock.economy.EconomyManager economyManager;
     private final HologramDebouncer debouncer;
     private final boolean available;
 
@@ -59,6 +60,7 @@ public final class HologramService {
         this.chunkLockManager = builder.chunkLockManager;
         this.biomeUnlockRegistry = builder.biomeUnlockRegistry;
         this.worldManager = builder.worldManager;
+        this.economyManager = builder.economyManager;
         this.debouncer = new HologramDebouncer(config.getDebounceDelayTicks());
         this.available = provider.isAvailable() && config.isEnabled();
         
@@ -80,6 +82,7 @@ public final class HologramService {
             .chunkLockManager(chunkLockManager)
             .biomeUnlockRegistry(biomeUnlockRegistry)
             .worldManager(worldManager)
+            .economyManager(ChunklockPlugin.getInstance().getEconomyManager())
             .build();
     }
 
@@ -652,14 +655,31 @@ public final class HologramService {
             
             Chunk chunk = world.getChunkAt(hologramId.getChunkX(), hologramId.getChunkZ());
             var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), chunk);
-            var requirement = biomeUnlockRegistry.calculateRequirement(player, evaluation.biome, evaluation.score);
             
-            boolean hasItems = biomeUnlockRegistry.hasRequiredItems(player, evaluation.biome, evaluation.score);
-            int playerItemCount = countPlayerItems(player, requirement.material());
+            List<String> lines;
             
-            List<String> lines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLines(
-                me.chunklock.hologram.util.HologramTextUtils.formatMaterialName(requirement.material()),
-                hasItems, playerItemCount, requirement.amount());
+            // Check if we should use Vault economy or materials
+            if (economyManager != null && economyManager.getCurrentType() == me.chunklock.economy.EconomyManager.EconomyType.VAULT 
+                && economyManager.isVaultAvailable()) {
+                
+                // Use money-based hologram
+                var paymentRequirement = economyManager.calculateRequirement(player, evaluation.biome, evaluation);
+                boolean canAfford = economyManager.canAfford(player, paymentRequirement);
+                String formattedCost = economyManager.getVaultService().format(paymentRequirement.getVaultCost());
+                
+                lines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLinesForMoney(
+                    formattedCost, canAfford);
+                
+            } else {
+                // Use material-based hologram (default)
+                var requirement = biomeUnlockRegistry.calculateRequirement(player, evaluation.biome, evaluation.score);
+                boolean hasItems = biomeUnlockRegistry.hasRequiredItems(player, evaluation.biome, evaluation.score);
+                int playerItemCount = countPlayerItems(player, requirement.material());
+                
+                lines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLines(
+                    me.chunklock.hologram.util.HologramTextUtils.formatMaterialName(requirement.material()),
+                    hasItems, playerItemCount, requirement.amount());
+            }
             
             Location location = getOrComputeWallLocation(chunk, hologramId.getSide());
             createNewHologram(hologramId, location, lines);
@@ -680,14 +700,31 @@ public final class HologramService {
             
             Chunk chunk = world.getChunkAt(hologramId.getChunkX(), hologramId.getChunkZ());
             var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), chunk);
-            var requirement = biomeUnlockRegistry.calculateRequirement(player, evaluation.biome, evaluation.score);
             
-            boolean hasItems = biomeUnlockRegistry.hasRequiredItems(player, evaluation.biome, evaluation.score);
-            int playerItemCount = countPlayerItems(player, requirement.material());
+            List<String> newLines;
             
-            List<String> newLines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLines(
-                me.chunklock.hologram.util.HologramTextUtils.formatMaterialName(requirement.material()),
-                hasItems, playerItemCount, requirement.amount());
+            // Check if we should use Vault economy or materials
+            if (economyManager != null && economyManager.getCurrentType() == me.chunklock.economy.EconomyManager.EconomyType.VAULT 
+                && economyManager.isVaultAvailable()) {
+                
+                // Use money-based hologram
+                var paymentRequirement = economyManager.calculateRequirement(player, evaluation.biome, evaluation);
+                boolean canAfford = economyManager.canAfford(player, paymentRequirement);
+                String formattedCost = economyManager.getVaultService().format(paymentRequirement.getVaultCost());
+                
+                newLines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLinesForMoney(
+                    formattedCost, canAfford);
+                
+            } else {
+                // Use material-based hologram (default)
+                var requirement = biomeUnlockRegistry.calculateRequirement(player, evaluation.biome, evaluation.score);
+                boolean hasItems = biomeUnlockRegistry.hasRequiredItems(player, evaluation.biome, evaluation.score);
+                int playerItemCount = countPlayerItems(player, requirement.material());
+                
+                newLines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLines(
+                    me.chunklock.hologram.util.HologramTextUtils.formatMaterialName(requirement.material()),
+                    hasItems, playerItemCount, requirement.amount());
+            }
             
             // Update the hologram lines
             performUpdateLines(hologramId, newLines);
@@ -847,6 +884,7 @@ public final class HologramService {
         ChunkLockManager chunkLockManager;
         BiomeUnlockRegistry biomeUnlockRegistry;
         WorldManager worldManager;
+        me.chunklock.economy.EconomyManager economyManager;
         
         Builder chunkLockManager(ChunkLockManager chunkLockManager) {
             this.chunkLockManager = chunkLockManager;
@@ -860,6 +898,11 @@ public final class HologramService {
         
         Builder worldManager(WorldManager worldManager) {
             this.worldManager = worldManager;
+            return this;
+        }
+        
+        Builder economyManager(me.chunklock.economy.EconomyManager economyManager) {
+            this.economyManager = economyManager;
             return this;
         }
         

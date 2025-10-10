@@ -3,7 +3,7 @@ package me.chunklock.ui;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.models.Difficulty;
-import me.chunklock.util.EnchantmentUtil;
+import me.chunklock.util.player.EnchantmentUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -32,7 +32,8 @@ public class UnlockGuiBuilder {
     private static final int HELP_SLOT = 49;
     
     public Inventory build(Player player, Chunk chunk, ChunkEvaluator.ChunkValueData eval,
-                           BiomeUnlockRegistry.UnlockRequirement requirement) {
+                           BiomeUnlockRegistry.UnlockRequirement requirement,
+                           me.chunklock.economy.EconomyManager economyManager) {
         Inventory inv = Bukkit.createInventory(null, GUI_SIZE, 
             Component.text("🔓 Unlock Chunk (" + chunk.getX() + ", " + chunk.getZ() + ")")
                 .color(NamedTextColor.GOLD));
@@ -42,9 +43,22 @@ public class UnlockGuiBuilder {
         
         // Add all informational items
         addChunkInfoItem(inv, chunk, eval);
-        addProgressBar(inv, player, requirement);
-        addRequirementDisplay(inv, player, requirement);
-        addUnlockButton(inv, player, requirement);
+        
+        // Check if we should use Vault economy or materials
+        if (economyManager != null && economyManager.getCurrentType() == me.chunklock.economy.EconomyManager.EconomyType.VAULT 
+            && economyManager.isVaultAvailable()) {
+            // Use money-based UI
+            var paymentRequirement = economyManager.calculateRequirement(player, eval.biome, eval);
+            addMoneyProgressBar(inv, player, paymentRequirement, economyManager);
+            addMoneyRequirementDisplay(inv, player, paymentRequirement, economyManager);
+            addMoneyUnlockButton(inv, player, paymentRequirement, economyManager);
+        } else {
+            // Use material-based UI (default)
+            addProgressBar(inv, player, requirement);
+            addRequirementDisplay(inv, player, requirement);
+            addUnlockButton(inv, player, requirement);
+        }
+        
         addHelpItem(inv);
         addTeamInfo(inv, player);
         
@@ -449,5 +463,170 @@ public class UnlockGuiBuilder {
             count += offHand.getAmount();
         }
         return count;
+    }
+    
+    // ============ MONEY-BASED UI METHODS ============
+    
+    private void addMoneyProgressBar(Inventory inv, Player player, 
+                                   me.chunklock.economy.EconomyManager.PaymentRequirement requirement,
+                                   me.chunklock.economy.EconomyManager economyManager) {
+        ItemStack progressItem = new ItemStack(Material.GOLD_INGOT);
+        ItemMeta meta = progressItem.getItemMeta();
+        
+        double playerBalance = economyManager.getVaultService().getBalance(player);
+        double requiredCost = requirement.getVaultCost();
+        boolean canAfford = playerBalance >= requiredCost;
+        
+        double percentage = Math.min(100.0, (playerBalance / requiredCost) * 100.0);
+        
+        meta.displayName(Component.text("💰 Balance: " + String.format("%.1f%%", percentage))
+            .color(canAfford ? NamedTextColor.GREEN : NamedTextColor.RED)
+            .decoration(TextDecoration.ITALIC, false)
+            .decoration(TextDecoration.BOLD, true));
+            
+        List<Component> lore = new ArrayList<>();
+        lore.add(Component.empty());
+        
+        // Create visual progress bar
+        int filledBars = (int) (percentage / 10);
+        StringBuilder progressBar = new StringBuilder("§6");
+        for (int i = 0; i < 10; i++) {
+            if (i < filledBars) {
+                progressBar.append("█");
+            } else {
+                progressBar.append("§7█");
+            }
+        }
+        
+        lore.add(Component.text(progressBar.toString())
+            .decoration(TextDecoration.ITALIC, false));
+        lore.add(Component.empty());
+        
+        String formattedBalance = economyManager.getVaultService().format(playerBalance);
+        String formattedCost = economyManager.getVaultService().format(requiredCost);
+        
+        lore.add(Component.text("Balance: " + formattedBalance)
+            .color(NamedTextColor.WHITE)
+            .decoration(TextDecoration.ITALIC, false));
+        lore.add(Component.text("Required: " + formattedCost)
+            .color(NamedTextColor.WHITE)
+            .decoration(TextDecoration.ITALIC, false));
+            
+        if (!canAfford) {
+            double needed = requiredCost - playerBalance;
+            String formattedNeeded = economyManager.getVaultService().format(needed);
+            lore.add(Component.text("Need " + formattedNeeded + " more")
+                .color(NamedTextColor.YELLOW)
+                .decoration(TextDecoration.ITALIC, false));
+        }
+        
+        meta.lore(lore);
+        progressItem.setItemMeta(meta);
+        inv.setItem(PROGRESS_SLOT, progressItem);
+    }
+    
+    private void addMoneyRequirementDisplay(Inventory inv, Player player,
+                                          me.chunklock.economy.EconomyManager.PaymentRequirement requirement,
+                                          me.chunklock.economy.EconomyManager economyManager) {
+        double playerBalance = economyManager.getVaultService().getBalance(player);
+        double requiredCost = requirement.getVaultCost();
+        boolean canAfford = playerBalance >= requiredCost;
+        
+        // Main requirement display in center
+        ItemStack mainDisplay = new ItemStack(Material.EMERALD);
+        ItemMeta meta = mainDisplay.getItemMeta();
+        
+        String formattedCost = economyManager.getVaultService().format(requiredCost);
+        String currencyName = economyManager.getVaultService().getCurrencyName();
+        
+        meta.displayName(Component.text("💎 Required: " + formattedCost)
+            .color(canAfford ? NamedTextColor.GREEN : NamedTextColor.RED)
+            .decoration(TextDecoration.ITALIC, false)
+            .decoration(TextDecoration.BOLD, true));
+            
+        List<Component> lore = new ArrayList<>();
+        lore.add(Component.empty());
+        lore.add(Component.text("Economy Mode: Vault")
+            .color(NamedTextColor.AQUA)
+            .decoration(TextDecoration.ITALIC, false));
+        lore.add(Component.text("Currency: " + currencyName)
+            .color(NamedTextColor.GRAY)
+            .decoration(TextDecoration.ITALIC, false));
+        lore.add(Component.empty());
+        
+        if (canAfford) {
+            lore.add(Component.text("✓ You can afford this chunk!")
+                .color(NamedTextColor.GREEN)
+                .decoration(TextDecoration.ITALIC, false));
+        } else {
+            lore.add(Component.text("✗ Insufficient funds")
+                .color(NamedTextColor.RED)
+                .decoration(TextDecoration.ITALIC, false));
+        }
+        
+        lore.add(Component.empty());
+        lore.add(Component.text("Right-click to unlock with money")
+            .color(NamedTextColor.YELLOW)
+            .decoration(TextDecoration.ITALIC, false));
+            
+        meta.lore(lore);
+        mainDisplay.setItemMeta(meta);
+        inv.setItem(22, mainDisplay); // Center slot
+    }
+    
+    private void addMoneyUnlockButton(Inventory inv, Player player,
+                                    me.chunklock.economy.EconomyManager.PaymentRequirement requirement,
+                                    me.chunklock.economy.EconomyManager economyManager) {
+        double playerBalance = economyManager.getVaultService().getBalance(player);
+        double requiredCost = requirement.getVaultCost();
+        boolean canAfford = playerBalance >= requiredCost;
+        
+        Material buttonMaterial = canAfford ? Material.LIME_CONCRETE : Material.RED_CONCRETE;
+        ItemStack unlockButton = new ItemStack(buttonMaterial);
+        ItemMeta meta = unlockButton.getItemMeta();
+        
+        String formattedCost = economyManager.getVaultService().format(requiredCost);
+        
+        if (canAfford) {
+            meta.displayName(Component.text("💰 UNLOCK FOR " + formattedCost)
+                .color(NamedTextColor.GREEN)
+                .decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true));
+        } else {
+            meta.displayName(Component.text("💸 INSUFFICIENT FUNDS")
+                .color(NamedTextColor.RED)
+                .decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true));
+        }
+        
+        List<Component> lore = new ArrayList<>();
+        lore.add(Component.empty());
+        
+        if (canAfford) {
+            lore.add(Component.text("Click to spend " + formattedCost)
+                .color(NamedTextColor.YELLOW)
+                .decoration(TextDecoration.ITALIC, false));
+            lore.add(Component.text("and unlock this chunk!")
+                .color(NamedTextColor.YELLOW)
+                .decoration(TextDecoration.ITALIC, false));
+            
+            // Add enchant effect if affordable
+            meta.addEnchant(org.bukkit.enchantments.Enchantment.DURABILITY, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+        } else {
+            String formattedBalance = economyManager.getVaultService().format(playerBalance);
+            lore.add(Component.text("Your balance: " + formattedBalance)
+                .color(NamedTextColor.GRAY)
+                .decoration(TextDecoration.ITALIC, false));
+            double needed = requiredCost - playerBalance;
+            String formattedNeeded = economyManager.getVaultService().format(needed);
+            lore.add(Component.text("Need " + formattedNeeded + " more")
+                .color(NamedTextColor.RED)
+                .decoration(TextDecoration.ITALIC, false));
+        }
+        
+        meta.lore(lore);
+        unlockButton.setItemMeta(meta);
+        inv.setItem(UNLOCK_BUTTON_SLOT, unlockButton);
     }
 }

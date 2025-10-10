@@ -74,6 +74,10 @@
       <name>FancyInnovations Repository</name>
       <url>https://repo.fancyinnovations.com/releases</url>
     </repository>
+    <repository>
+      <id>vault-repo</id>
+      <url>https://nexus.hc.to/content/repositories/pub_releases</url>
+    </repository>
   </repositories>
   <dependencies>
     <dependency>
@@ -86,6 +90,12 @@
       <groupId>de.oliver</groupId>
       <artifactId>FancyHolograms</artifactId>
       <version>2.4.2</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.milkbowl.vault</groupId>
+      <artifactId>VaultAPI</artifactId>
+      <version>1.7</version>
       <scope>provided</scope>
     </dependency>
   </dependencies>

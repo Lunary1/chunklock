@@ -1,4 +1,4 @@
-package me.chunklock.util;
+package me.chunklock.util.player;
 
 import org.bukkit.enchantments.Enchantment;
 

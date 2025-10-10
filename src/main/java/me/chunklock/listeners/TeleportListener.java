@@ -189,7 +189,7 @@ public class TeleportListener implements Listener {
                 Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
                     try {
                         if (player.isOnline()) {
-                            Location centerSpawn = me.chunklock.util.ChunkUtils.getChunkCenter(existingSpawn.getChunk());
+                            Location centerSpawn = me.chunklock.util.chunk.ChunkUtils.getChunkCenter(existingSpawn.getChunk());
                             player.teleport(centerSpawn);
                             player.setRespawnLocation(centerSpawn, true);
                             player.sendMessage("§aReturned to your starting chunk in " + newWorld.getName());

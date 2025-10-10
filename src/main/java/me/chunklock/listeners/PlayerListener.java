@@ -3,7 +3,7 @@ package me.chunklock.listeners;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
-import me.chunklock.util.ChunkUtils;
+import me.chunklock.util.chunk.ChunkUtils;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.managers.PlayerDataManager;

@@ -239,7 +239,7 @@ public class ChunkValueRegistry {
     }
 
     private Biome getBiomeFromString(String biomeKey) {
-        return me.chunklock.util.BiomeUtil.getBiomeFromString(biomeKey);
+        return me.chunklock.util.world.BiomeUtil.getBiomeFromString(biomeKey);
     }
 
     public int getBiomeWeight(Biome biome) {

@@ -8,7 +8,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
-import me.chunklock.util.ChunkUtils;
+import me.chunklock.util.chunk.ChunkUtils;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 

@@ -52,6 +52,13 @@ public class DebugCommand extends SubCommand {
             case "fix-ownership":
                 fixChunkOwnership(player);
                 break;
+            case "deps":
+            case "dependencies":
+                debugDependencies(player);
+                break;
+            case "vault":
+                testVaultIntegration(player);
+                break;
             default:
                 showUsage(player);
                 break;
@@ -129,8 +136,51 @@ public class DebugCommand extends SubCommand {
         }
     }
     
+    private void debugDependencies(Player player) {
+        player.sendMessage(Component.text("=== Dependency Check ===")
+            .color(NamedTextColor.YELLOW));
+        
+        try {
+            ChunklockPlugin.getInstance().getDependencyChecker().checkAndLogDependencies();
+            player.sendMessage(Component.text("✅ Dependency check completed - check console for details")
+                .color(NamedTextColor.GREEN));
+        } catch (Exception e) {
+            player.sendMessage(Component.text("❌ Error during dependency check: " + e.getMessage())
+                .color(NamedTextColor.RED));
+        }
+    }
+    
+    private void testVaultIntegration(Player player) {
+        player.sendMessage(Component.text("=== Vault Integration Test ===")
+            .color(NamedTextColor.YELLOW));
+        
+        try {
+            boolean isWorking = ChunklockPlugin.getInstance().getDependencyChecker().testVaultIntegration();
+            
+            if (isWorking) {
+                player.sendMessage(Component.text("✅ Vault integration is working properly")
+                    .color(NamedTextColor.GREEN));
+                
+                // Test balance retrieval if player is involved
+                var economyManager = ChunklockPlugin.getInstance().getEconomyManager();
+                if (economyManager != null && economyManager.isVaultAvailable()) {
+                    double balance = economyManager.getVaultService().getBalance(player);
+                    String formattedBalance = economyManager.getVaultService().format(balance);
+                    player.sendMessage(Component.text("Your current balance: " + formattedBalance)
+                        .color(NamedTextColor.GRAY));
+                }
+            } else {
+                player.sendMessage(Component.text("❌ Vault integration is not working - check console for details")
+                    .color(NamedTextColor.RED));
+            }
+        } catch (Exception e) {
+            player.sendMessage(Component.text("❌ Error testing Vault integration: " + e.getMessage())
+                .color(NamedTextColor.RED));
+        }
+    }
+    
     private void showUsage(Player player) {
-        player.sendMessage(Component.text("Usage: /chunklock debug <world|holograms|full|fix-ownership>")
+        player.sendMessage(Component.text("Usage: /chunklock debug <world|holograms|full|fix-ownership|deps|vault>")
             .color(NamedTextColor.YELLOW));
         player.sendMessage(Component.text("  world - Test world detection")
             .color(NamedTextColor.GRAY));
@@ -140,12 +190,16 @@ public class DebugCommand extends SubCommand {
             .color(NamedTextColor.GRAY));
         player.sendMessage(Component.text("  fix-ownership - Fix chunk ownership issues")
             .color(NamedTextColor.GRAY));
+        player.sendMessage(Component.text("  deps - Check plugin dependencies")
+            .color(NamedTextColor.GRAY));
+        player.sendMessage(Component.text("  vault - Test Vault economy integration")
+            .color(NamedTextColor.GRAY));
     }
     
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("world", "holograms", "full", "fix-ownership");
+            return Arrays.asList("world", "holograms", "full", "fix-ownership", "deps", "dependencies", "vault");
         }
         return List.of();
     }

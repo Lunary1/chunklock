@@ -6,7 +6,7 @@ import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.PlayerDataManager;
 import me.chunklock.managers.PlayerProgressTracker;
-import me.chunklock.util.ChunkUtils;
+import me.chunklock.util.chunk.ChunkUtils;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -87,6 +87,15 @@ public class ResetCommand extends SubCommand {
                 .color(NamedTextColor.YELLOW));
         }
 
+        // Final safety check: ensure we're not assigning a chunk already owned by someone else
+        UUID existingOwner = chunkLockManager.getChunkOwner(newChunk);
+        if (existingOwner != null && !existingOwner.equals(targetId)) {
+            sender.sendMessage(Component.text("Warning: Selected chunk is owned by another player, forcing assignment")
+                .color(NamedTextColor.YELLOW));
+            ChunklockPlugin.getInstance().getLogger().warning("Reset forcing assignment of chunk " + 
+                newChunk.getX() + "," + newChunk.getZ() + " owned by " + existingOwner + " to " + targetId);
+        }
+
         // Get chunk evaluation for the new starting chunk
         ChunkEvaluator.ChunkValueData evaluation = chunkLockManager.evaluateChunk(targetId, newChunk);
 
@@ -156,6 +165,14 @@ public class ResetCommand extends SubCommand {
                     continue;
                 }
 
+                // Check if chunk is already owned by another player
+                UUID currentOwner = chunkLockManager.getChunkOwner(chunk);
+                if (currentOwner != null && !currentOwner.equals(playerId)) {
+                    ChunklockPlugin.getInstance().getLogger().fine("Attempt " + attempt + ": chunk " + 
+                        chunk.getX() + "," + chunk.getZ() + " is already owned by " + currentOwner);
+                    continue; // Skip chunks owned by other players
+                }
+
                 // Evaluate chunk score
                 ChunkEvaluator.ChunkValueData evaluation = chunkLockManager.evaluateChunk(playerId, chunk);
                 
@@ -194,13 +211,43 @@ public class ResetCommand extends SubCommand {
             ChunklockPlugin.getInstance().getLogger().warning("No suitable chunk found, trying world spawn as fallback");
             try {
                 Chunk spawnChunk = world.getSpawnLocation().getChunk();
-                ChunkEvaluator.ChunkValueData spawnEval = chunkLockManager.evaluateChunk(playerId, spawnChunk);
-                ChunklockPlugin.getInstance().getLogger().info("World spawn chunk score: " + spawnEval.score);
                 
-                // Accept spawn chunk regardless of score as last resort
-                bestChunk = spawnChunk;
+                // Check if world spawn is already owned by another player
+                UUID spawnOwner = chunkLockManager.getChunkOwner(spawnChunk);
+                if (spawnOwner != null && !spawnOwner.equals(playerId)) {
+                    ChunklockPlugin.getInstance().getLogger().warning("World spawn chunk is owned by " + spawnOwner + 
+                        ", searching for alternative...");
+                    
+                    // Try a few chunks around spawn as backup
+                    for (int dx = -2; dx <= 2 && bestChunk == null; dx++) {
+                        for (int dz = -2; dz <= 2 && bestChunk == null; dz++) {
+                            if (dx == 0 && dz == 0) continue; // Skip spawn chunk itself
+                            
+                            Chunk altChunk = world.getChunkAt(spawnChunk.getX() + dx, spawnChunk.getZ() + dz);
+                            UUID altOwner = chunkLockManager.getChunkOwner(altChunk);
+                            
+                            if (altOwner == null || altOwner.equals(playerId)) {
+                                bestChunk = altChunk;
+                                ChunklockPlugin.getInstance().getLogger().info("Using alternative chunk near spawn: " + 
+                                    altChunk.getX() + "," + altChunk.getZ());
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (bestChunk == null) {
+                    // If still no chunk found, use spawn regardless (last resort)
+                    bestChunk = spawnChunk;
+                    ChunklockPlugin.getInstance().getLogger().warning("Using world spawn as absolute last resort");
+                }
+                
+                ChunkEvaluator.ChunkValueData spawnEval = chunkLockManager.evaluateChunk(playerId, bestChunk);
+                ChunklockPlugin.getInstance().getLogger().info("Fallback chunk (" + bestChunk.getX() + 
+                    "," + bestChunk.getZ() + ") score: " + spawnEval.score);
+                
             } catch (Exception e) {
-                ChunklockPlugin.getInstance().getLogger().severe("Even world spawn chunk failed: " + e.getMessage());
+                ChunklockPlugin.getInstance().getLogger().severe("Even fallback chunk selection failed: " + e.getMessage());
             }
         }
 

@@ -1,7 +1,7 @@
 package me.chunklock.managers;
 
 import me.chunklock.ChunklockPlugin;
-import me.chunklock.util.ChunkUtils;
+import me.chunklock.util.chunk.ChunkUtils;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.*;

@@ -1,4 +1,4 @@
-package me.chunklock.util;
+package me.chunklock.util.validation;
 
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;

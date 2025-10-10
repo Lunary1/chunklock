@@ -1,4 +1,4 @@
-package me.chunklock.util;
+package me.chunklock.util.chunk;
 
 import java.util.Objects;
 

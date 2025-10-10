@@ -1,6 +1,8 @@
 package me.chunklock.util;
 
 import me.chunklock.ChunklockPlugin;
+import me.chunklock.util.validation.ConfigValidator;
+import me.chunklock.util.validation.DataMigrator;
 import org.bukkit.Bukkit;
 import java.util.ArrayList;
 import java.util.List;

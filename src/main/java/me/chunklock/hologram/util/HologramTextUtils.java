@@ -64,4 +64,19 @@ public final class HologramTextUtils {
             "§a§l RIGHT-CLICK TO UNLOCK"
         );
     }
+    
+    /**
+     * Creates hologram text lines for money-based unlocking (Vault economy mode).
+     */
+    public static java.util.List<String> createChunkHologramLinesForMoney(String formattedCost, 
+                                                                          boolean canAfford) {
+        return java.util.List.of(
+            "§c§l LOCKED CHUNK",
+            "",
+            "§6💰 Cost: " + formattedCost,
+            "",
+            canAfford ? "§a✓ You can afford this" : "§c✗ Insufficient funds",
+            "§a§l RIGHT-CLICK TO UNLOCK"
+        );
+    }
 }
