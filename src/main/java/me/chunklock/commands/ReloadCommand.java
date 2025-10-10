@@ -3,13 +3,12 @@ package me.chunklock.commands;
 
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.managers.ChunkBorderManager;
-import me.chunklock.util.ConfigValidator;
+import me.chunklock.util.validation.ConfigValidator;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import me.chunklock.util.ConfigValidator;
 
 import java.util.Collections;
 import java.util.List;

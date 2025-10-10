@@ -26,7 +26,7 @@ public class UnlockCommand extends SubCommand {
     
     private final ChunkLockManager chunkLockManager;
     private final PlayerProgressTracker progressTracker;
-    private final TeamManager teamManager;
+    // Note: teamManager kept for potential future team-based unlocking features
     
     public UnlockCommand(ChunkLockManager chunkLockManager, 
                         PlayerProgressTracker progressTracker, 
@@ -34,7 +34,7 @@ public class UnlockCommand extends SubCommand {
         super("unlock", "chunklock.admin", false); // Admin-only, works from console too
         this.chunkLockManager = chunkLockManager;
         this.progressTracker = progressTracker;
-        this.teamManager = teamManager;
+        // Note: teamManager parameter kept for API compatibility but not stored
     }
     
     @Override
@@ -121,11 +121,12 @@ public class UnlockCommand extends SubCommand {
                 return true;
             }
             
-            // Get team ID for the player
-            UUID teamId = teamManager.getTeamLeader(targetPlayer.getUniqueId());
+            // Get player ID for chunk ownership
+            // Use individual player ID, not team leader, to ensure proper ownership
+            UUID playerId = targetPlayer.getUniqueId();
             
             // Force unlock the chunk
-            chunkLockManager.unlockChunk(chunk, teamId);
+            chunkLockManager.unlockChunk(chunk, playerId);
             
             // Update progress tracking if the chunk was contested
             Location chunkCenter = new Location(chunk.getWorld(), 

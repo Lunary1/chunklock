@@ -1,7 +1,48 @@
+# ===== ECONOMY CONFIGURATION =====
+economy:
+  # Economy type: "materials" or "vault"
+  # "materials" = Players pay with items/resources (default behavior)
+  # "vault" = Players pay with money through Vault economy plugin
+  type: "materials"
+
+  # Vault economy settings (only used if type = "vault")
+  vault:
+    # Base cost multiplier for vault payments
+    base-cost: 100.0
+    # Additional cost per unlocked chunk (progressive pricing)
+    cost-per-unlocked: 25.0
+    # Difficulty multipliers
+    difficulty-multipliers:
+      EASY: 0.5
+      NORMAL: 1.0
+      HARD: 2.0
+      IMPOSSIBLE: 4.0
+    # Biome-specific cost multipliers
+    biome-multipliers:
+      PLAINS: 1.0
+      FOREST: 1.2
+      DESERT: 1.5
+      JUNGLE: 2.0
+      OCEAN: 1.8
+      SWAMP: 1.6
+      BADLANDS: 2.2
+      SAVANNA: 1.3
+      TAIGA: 1.4
+      SNOWY_PLAINS: 1.7
+      DEEP_OCEAN: 2.5
+      # Add more biomes as needed
+
+  # Material economy settings (only used if type = "materials")
+  materials:
+    # Enable/disable material requirements
+    enabled: true
+    # Allow fallback to vault if materials not available
+    vault-fallback: false
+
 chunk-values:
   # Thresholds for score → difficulty mapping
   thresholds:
-    easy: 25 # Lower threshold for easier progression
+    easy: 30 # Slightly higher threshold for easier starting chunks in new worlds
     normal: 50
     hard: 80
 
@@ -348,7 +389,7 @@ glass-borders:
   show-for-bypass-players: false # Whether bypass players should see borders
   auto-update-on-movement: true # Update borders when players change chunks
   restore-original-blocks: true # Restore original blocks when removing borders
-  debug-logging: true # Enable debug logging for border system
+  debug-logging: false # Enable debug logging for border system
 
   # Block Settings
   border-material: LIGHT_GRAY_STAINED_GLASS # Material to use for borders
@@ -358,11 +399,21 @@ performance:
   max-border-updates-per-tick: 10
 
 worlds:
-  enabled-worlds:
-    - "world"
-    - "world_nether"
-    - "world_the_end"
-  auto-assign-on-world-change: true
+  # Single World System - Use this instead of per-player worlds
+  world:
+    name: "chunklock_world" # Name of the dedicated ChunkLock world
+    diameter: 30000 # World diameter in blocks (set by setup command)
+
+  claims:
+    min-distance-between-claims: 2 # Minimum chunks between player starting areas
+
+# Debug Configuration
+debug-mode:
+  enabled: true # Master switch for all debug logging (temporarily enabled to debug hologram issue)
+  borders: false # Debug logging for border system (overrides glass-borders.debug-logging if debug-mode.enabled is true)
+  unlock-gui: false # Debug logging for unlock GUI interactions
+  chunk-finding: false # Debug logging for chunk allocation and finding
+  performance: false # Debug logging for performance metrics
 
 # Hologram Configuration
 holograms:
@@ -384,6 +435,12 @@ holograms:
     scan-range: 3 # Range to scan for chunks (3x3 around player)
     max-holograms-per-player: 16 # Maximum holograms per player to prevent lag
     cleanup-interval: 100 # ticks between hologram cleanup cycles
+
+    # New performance settings for centralized system
+    debounce-delay-ticks: 3 # Delay between rapid hologram updates to prevent spam
+    max-active-per-player: 100 # Maximum active holograms per player for distance culling
+    max-view-distance: 128.0 # Maximum view distance for holograms in blocks
+    culling-sweep-period: 60 # Ticks between distance culling sweeps (3 seconds)
 
   # Display Settings
   display:

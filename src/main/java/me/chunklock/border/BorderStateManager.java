@@ -1,6 +1,6 @@
 package me.chunklock.border;
 
-import me.chunklock.util.ChunkCoordinate;
+import me.chunklock.util.chunk.ChunkCoordinate;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;

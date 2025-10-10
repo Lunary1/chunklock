@@ -40,6 +40,7 @@ import java.util.logging.Level;
 public class BlockProtectionListener implements Listener {
 
     private final ChunkLockManager chunkLockManager;
+    @SuppressWarnings("unused") // Reserved for future GUI integration
     private final UnlockGui unlockGui;
     private final ChunkBorderManager chunkBorderManager;
     
@@ -135,7 +136,7 @@ public class BlockProtectionListener implements Listener {
      */
     @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerInteract(PlayerInteractEvent event) {
-        if (event.isCancelled()) return;
+        if (event.useInteractedBlock() == org.bukkit.event.Event.Result.DENY) return;
         
         Player player = event.getPlayer();
         

@@ -19,7 +19,14 @@ public class BorderConfigLoader {
         c.showForBypassPlayers = config.getBoolean("glass-borders.show-for-bypass-players", false);
         c.autoUpdateOnMovement = config.getBoolean("glass-borders.auto-update-on-movement", true);
         c.restoreOriginalBlocks = config.getBoolean("glass-borders.restore-original-blocks", true);
-        c.debugLogging = config.getBoolean("glass-borders.debug-logging", false);
+        
+        // Debug logging: check master debug switch first, then specific border debug setting
+        boolean masterDebug = config.getBoolean("debug-mode.enabled", false);
+        if (masterDebug) {
+            c.debugLogging = config.getBoolean("debug-mode.borders", false);
+        } else {
+            c.debugLogging = config.getBoolean("glass-borders.debug-logging", false);
+        }
         String materialName = config.getString("glass-borders.border-material", "LIGHT_GRAY_STAINED_GLASS");
         try {
             c.borderMaterial = Material.valueOf(materialName.toUpperCase());

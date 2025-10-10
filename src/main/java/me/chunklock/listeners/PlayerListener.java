@@ -3,8 +3,7 @@ package me.chunklock.listeners;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
-import org.bukkit.World;
-import me.chunklock.util.ChunkUtils;
+import me.chunklock.util.chunk.ChunkUtils;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.managers.PlayerDataManager;
@@ -12,7 +11,6 @@ import me.chunklock.ui.UnlockGui;
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.managers.ChunkBorderManager;
 import me.chunklock.services.StartingChunkService;
-import me.chunklock.managers.HologramManager;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.WorldManager;
@@ -24,7 +22,6 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
-import me.chunklock.services.StartingChunkService;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,7 +40,6 @@ public class PlayerListener implements Listener {
     
     // Track last border update per player to avoid excessive updates
     private final Map<UUID, Long> lastBorderUpdate = new ConcurrentHashMap<>();
-    private static final long BORDER_UPDATE_COOLDOWN_MS = 5000L; // 5 seconds between border updates
     
     // FIX: Track if player is truly new (first time joining)
     private final Set<UUID> newPlayers = new HashSet<>();
@@ -177,10 +173,16 @@ public class PlayerListener implements Listener {
             lastBorderUpdate.remove(playerId); // Clean up border tracking
             newPlayers.remove(playerId); // Clean up new player tracking
             
-            // Notify HologramManager to cleanup
-            HologramManager hologramManager = ChunklockPlugin.getInstance().getHologramManager();
-            if (hologramManager != null) {
-                hologramManager.stopHologramDisplay(player);
+            // Handle world pool cleanup for player worlds
+            WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+            if (worldManager != null) {
+                worldManager.onPlayerQuit(player);
+            }
+            
+            // Notify HologramService to cleanup
+            me.chunklock.hologram.HologramService hologramService = ChunklockPlugin.getInstance().getHologramService();
+            if (hologramService != null) {
+                hologramService.despawnPlayerHolograms(player);
             }
             
             // Clean up glass borders
@@ -249,9 +251,9 @@ public class PlayerListener implements Listener {
                         }
                         
                         // Update holograms after respawn
-                        HologramManager hologramManager = ChunklockPlugin.getInstance().getHologramManager();
-                        if (hologramManager != null) {
-                            hologramManager.startHologramDisplay(player);
+                        me.chunklock.hologram.HologramService hologramService = ChunklockPlugin.getInstance().getHologramService();
+                        if (hologramService != null) {
+                            hologramService.updateActiveHologramsForPlayer(player);
                         }
                     }
                 });

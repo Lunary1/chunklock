@@ -10,12 +10,17 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import me.chunklock.managers.*;
 import me.chunklock.commands.BasicTeamCommandHandler;
-import me.chunklock.util.ConfigValidator;
-import me.chunklock.util.DataMigrator;
+import me.chunklock.config.ConfigManager;
+import me.chunklock.api.ChunklockAPI;
+import me.chunklock.api.container.ServiceContainer;
+import me.chunklock.api.services.ServiceManager;
+import me.chunklock.api.services.ServiceRegistration;
+import me.chunklock.util.validation.ConfigValidator;
+import me.chunklock.util.validation.DataMigrator;
+import me.chunklock.util.validation.DependencyChecker;
 import me.chunklock.listeners.*;
 import me.chunklock.services.StartingChunkService;
 import me.chunklock.ui.UnlockGui;
-import me.chunklock.util.InitializationManager;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -23,6 +28,14 @@ import net.kyori.adventure.text.format.NamedTextColor;
 public class ChunklockPlugin extends JavaPlugin implements Listener {
 
     private static ChunklockPlugin instance;
+    
+    // Configuration
+    private ConfigManager configManager;
+    
+    // Service Layer (Phase 2)
+    private ServiceContainer serviceContainer;
+    private ServiceManager serviceManager;
+    private ServiceRegistration serviceRegistration;
     
     // Core managers
     private ChunkLockManager chunkLockManager;
@@ -33,16 +46,20 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private ChunkValueRegistry chunkValueRegistry;
     private ChunkEvaluator chunkEvaluator;
     private WorldManager worldManager;
+    private me.chunklock.managers.SingleWorldManager singleWorldManager;
     
     // UI and services
     private UnlockGui unlockGui;
-    private HologramManager hologramManager;
+    private me.chunklock.hologram.HologramService hologramService;
     private StartingChunkService startingChunkService;
+    private me.chunklock.services.ChunkPreAllocationService chunkPreAllocationService; // NEW: Performance optimization
+    private me.chunklock.services.ProgressionValidationService progressionValidationService;
     
     // Listeners
     private PlayerListener playerListener;
     private BlockProtectionListener blockProtectionListener;
     private TeleportListener teleportListener;
+    private me.chunklock.listeners.InventoryChangeListener inventoryChangeListener;
     
     // Border system
     private ChunkBorderManager chunkBorderManager;
@@ -54,13 +71,32 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     // Enhanced team system
     private EnhancedTeamManager enhancedTeamManager;
     private BasicTeamCommandHandler teamCommandHandler;
+    
+    // Economy system
+    private me.chunklock.economy.EconomyManager economyManager;
+    
+    // Dependency checker
+    private DependencyChecker dependencyChecker;
 
     @Override
     public void onEnable() {
         try {
             instance = this;
             
-            getLogger().info("=== Starting Chunklock v" + getDescription().getVersion() + " ===");
+            getLogger().info("=== Starting Chunklock v" + getPluginMeta().getVersion() + " ===");
+            
+            // Check plugin dependencies early
+            dependencyChecker = new DependencyChecker(this);
+            dependencyChecker.checkAndLogDependencies();
+            
+            // Initialize configuration manager
+            configManager = new ConfigManager(this);
+            if (!configManager.validateConfiguration()) {
+                getLogger().severe("❌ Configuration validation failed");
+                Bukkit.getPluginManager().disablePlugin(this);
+                return;
+            }
+            getLogger().info("✅ Configuration validation passed");
             
             // CRITICAL: Validate and ensure complete config before anything else
             ConfigValidator configValidator = new ConfigValidator(this);
@@ -75,7 +111,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             
             // Analytics (optional)
             try {
-                int pluginId = 19876;
+                // Metrics disabled for now
+                //int pluginId = 19876;
                 //Metrics metrics = new Metrics(this, pluginId);
                 getLogger().info("Analytics initialized successfully");
             } catch (Exception e) {
@@ -108,6 +145,14 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                 getLogger().warning("Failed to register commands - some functionality may be unavailable");
             }
             
+            // Initialize API (should be last)
+            try {
+                ChunklockAPI.initialize(this);
+                getLogger().info("✅ ChunklockAPI initialized successfully");
+            } catch (Exception e) {
+                getLogger().log(Level.WARNING, "Failed to initialize ChunklockAPI", e);
+            }
+            
             // Final summary
             getLogger().info("=== Initialization Complete ===");
             getLogger().info("✅ Core systems: Loaded");
@@ -134,6 +179,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             getLogger().info("  " + me.chunklock.util.ServerCompatibility.getCompatibilitySummary().replace("\n", "\n  "));
             
             // Initialize in dependency order
+            this.singleWorldManager = new me.chunklock.managers.SingleWorldManager(this);
             this.worldManager = new WorldManager(this);
             this.chunkValueRegistry = new ChunkValueRegistry(this);
             this.enhancedTeamManager = new EnhancedTeamManager(this);
@@ -144,9 +190,19 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.biomeUnlockRegistry = new BiomeUnlockRegistry(this, progressTracker);
             this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry);
             this.chunkLockManager = new ChunkLockManager(chunkEvaluator, this, teamManager);
+            
+            // Initialize economy manager after biome registry
+            this.economyManager = new me.chunklock.economy.EconomyManager(this, biomeUnlockRegistry, progressTracker);
+            
             this.startingChunkService = new StartingChunkService(chunkLockManager, playerDataManager);
-            this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker, teamManager);
-            this.hologramManager = new HologramManager(chunkLockManager, biomeUnlockRegistry);
+            
+            // NEW: Initialize chunk pre-allocation service for performance
+            this.chunkPreAllocationService = new me.chunklock.services.ChunkPreAllocationService(chunkLockManager, this);
+            this.startingChunkService.setPreAllocationService(chunkPreAllocationService);
+            
+            this.progressionValidationService = new me.chunklock.services.ProgressionValidationService(this);
+            this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker, teamManager, economyManager);
+            this.hologramService = me.chunklock.hologram.HologramService.create(chunkLockManager, biomeUnlockRegistry, worldManager);
             this.playerListener = new PlayerListener(chunkLockManager, progressTracker, playerDataManager, unlockGui);
             this.chunkBorderManager = new ChunkBorderManager(chunkLockManager, unlockGui, teamManager, progressTracker);
             this.borderRefreshService = new me.chunklock.border.BorderRefreshService(chunkBorderManager);
@@ -156,9 +212,16 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.borderListener = new me.chunklock.listeners.BorderListener(chunkBorderManager);
             this.blockProtectionListener = new BlockProtectionListener(chunkLockManager, unlockGui, chunkBorderManager);
             this.teleportListener = new TeleportListener(worldManager, playerDataManager, startingChunkService);
+            this.inventoryChangeListener = new me.chunklock.listeners.InventoryChangeListener(this);
             
             // Set up team integration
             biomeUnlockRegistry.setEnhancedTeamManager(enhancedTeamManager);
+            
+            // NEW Phase 2: Initialize Service Layer
+            initializeServiceLayer();
+            
+            // Start progression validation task for player worlds
+            startProgressionValidationTask();
             
             getLogger().info("✅ All components initialized successfully");
             return true;
@@ -166,6 +229,50 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "Error initializing components", e);
             return false;
+        }
+    }
+
+    /**
+     * Initialize the service layer (Phase 2 implementation)
+     */
+    private void initializeServiceLayer() {
+        try {
+            getLogger().info("🔧 Phase 2: Initializing Service Layer...");
+            
+            // Initialize service container
+            ServiceContainer.initialize(getLogger());
+            serviceContainer = ServiceContainer.getInstance();
+            
+            // Create service manager
+            serviceManager = new ServiceManager(serviceContainer, getLogger());
+            
+            // Create service registration
+            serviceRegistration = new ServiceRegistration(serviceContainer, this, getLogger());
+            
+            // Register services with their dependencies
+            serviceRegistration.registerServices(
+                chunkLockManager,
+                chunkEvaluator,
+                teamManager,
+                enhancedTeamManager,
+                progressTracker,
+                economyManager,
+                hologramService,
+                unlockGui
+            );
+            
+            // Initialize all services
+            serviceManager.initializeServices();
+            
+            // Start all services
+            serviceManager.startServices();
+            
+            getLogger().info("✅ Service Layer initialized successfully");
+            getLogger().info("📊 Registered " + serviceManager.getServiceCount() + " services");
+            
+        } catch (Exception e) {
+            getLogger().log(Level.SEVERE, "Failed to initialize service layer", e);
+            throw new RuntimeException("Service layer initialization failed", e);
         }
     }
 
@@ -182,6 +289,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             Bukkit.getPluginManager().registerEvents(blockProtectionListener, this);
             Bukkit.getPluginManager().registerEvents(borderListener, this);
             Bukkit.getPluginManager().registerEvents(teleportListener, this);
+            Bukkit.getPluginManager().registerEvents(inventoryChangeListener, this);
             Bukkit.getPluginManager().registerEvents(this, this);
             
             getLogger().info("✅ Event listeners registered successfully");
@@ -201,11 +309,12 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             
             // Verify all dependencies are available
             if (progressTracker != null && chunkLockManager != null && unlockGui != null && 
-                teamManager != null && biomeUnlockRegistry != null && playerDataManager != null) {
+                teamManager != null && biomeUnlockRegistry != null && playerDataManager != null &&
+                singleWorldManager != null) {
                 
                 var chunklockCmd = new me.chunklock.commands.ChunklockCommandExecutor(
                     progressTracker, chunkLockManager, unlockGui, teamManager, 
-                    teamCommandHandler, biomeUnlockRegistry, playerDataManager);
+                    teamCommandHandler, biomeUnlockRegistry, playerDataManager, singleWorldManager);
                 
                 if (getCommand("chunklock") != null) {
                     getCommand("chunklock").setExecutor(chunklockCmd);
@@ -232,7 +341,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             sender.sendMessage(Component.text("🔄 Reloading Chunklock...").color(NamedTextColor.YELLOW));
             
             // Cleanup existing systems
-            if (hologramManager != null) hologramManager.cleanup();
+            if (hologramService != null) hologramService.cleanup();
             if (chunkBorderManager != null) chunkBorderManager.cleanup();
             
             // Save all data
@@ -242,6 +351,12 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             boolean success = initializeComponents() && registerEventListeners();
             
             if (success) {
+                // Reload debug configurations for all components
+                if (unlockGui != null) unlockGui.reloadConfiguration();
+                if (startingChunkService != null) startingChunkService.reloadConfiguration();
+                if (chunkPreAllocationService != null) chunkPreAllocationService.reloadConfiguration();
+                if (economyManager != null) economyManager.reloadConfiguration();
+                
                 // Restart visual effects
                 restartVisualEffects();
                 
@@ -265,10 +380,10 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     }
 
     private void restartVisualEffects() {
-        if (hologramManager != null) {
+        if (hologramService != null) {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 Bukkit.getScheduler().runTaskLater(this, () -> {
-                    hologramManager.startHologramDisplay(player);
+                    hologramService.updateActiveHologramsForPlayer(player);
                 }, 20L);
             }
         }
@@ -282,8 +397,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         
         Bukkit.getScheduler().runTaskLater(this, () -> {
             try {
-                if (event.getPlayer().isOnline() && hologramManager != null) {
-                    hologramManager.startHologramDisplay(event.getPlayer());
+                if (event.getPlayer().isOnline() && hologramService != null) {
+                    hologramService.updateActiveHologramsForPlayer(event.getPlayer());
                 }
             } catch (Exception e) {
                 getLogger().log(Level.WARNING, "Error starting holograms for " + event.getPlayer().getName(), e);
@@ -294,8 +409,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         try {
-            if (hologramManager != null) {
-                hologramManager.stopHologramDisplay(event.getPlayer());
+            if (hologramService != null) {
+                hologramService.despawnPlayerHolograms(event.getPlayer());
             }
             if (blockProtectionListener != null) {
                 blockProtectionListener.cleanupPlayer(event.getPlayer().getUniqueId());
@@ -305,13 +420,42 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         }
     }
 
+    /**
+     * Shutdown the service layer (Phase 2 implementation)
+     */
+    private void shutdownServiceLayer() {
+        try {
+            getLogger().info("🔧 Phase 2: Shutting down Service Layer...");
+            
+            if (serviceManager != null) {
+                serviceManager.stopServices();
+                getLogger().info("✅ Services stopped successfully");
+            }
+            
+            if (serviceContainer != null) {
+                serviceContainer.shutdown();
+                getLogger().info("✅ Service Container shutdown successfully");
+            }
+            
+        } catch (Exception e) {
+            getLogger().log(Level.WARNING, "Error during service layer shutdown", e);
+        }
+    }
+
     @Override
     public void onDisable() {
         try {
             getLogger().info("Disabling Chunklock plugin...");
             
-            if (hologramManager != null) hologramManager.cleanup();
+            // Phase 2: Shutdown Service Layer
+            shutdownServiceLayer();
+            
+            // Shutdown API
+            ChunklockAPI.shutdown();
+            
+            if (hologramService != null) hologramService.cleanup();
             if (chunkBorderManager != null) chunkBorderManager.cleanup();
+            if (chunkPreAllocationService != null) chunkPreAllocationService.stop(); // NEW: Stop pre-allocation service
             
             saveAllData();
             instance = null;
@@ -380,9 +524,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         return teamManager;
     }
 
-    public HologramManager getHologramManager() {
-        if (hologramManager == null) throw new IllegalStateException("HologramManager not initialized");
-        return hologramManager;
+    public me.chunklock.hologram.HologramService getHologramService() {
+        if (hologramService == null) throw new IllegalStateException("HologramService not initialized");
+        return hologramService;
     }
 
     public PlayerListener getPlayerListener() {
@@ -400,9 +544,19 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         return chunkBorderManager;
     }
 
+    public me.chunklock.services.ChunkPreAllocationService getChunkPreAllocationService() {
+        if (chunkPreAllocationService == null) throw new IllegalStateException("ChunkPreAllocationService not initialized");
+        return chunkPreAllocationService;
+    }
+
     public WorldManager getWorldManager() {
         if (worldManager == null) throw new IllegalStateException("WorldManager not initialized");
         return worldManager;
+    }
+
+    public me.chunklock.managers.SingleWorldManager getSingleWorldManager() {
+        if (singleWorldManager == null) throw new IllegalStateException("SingleWorldManager not initialized");
+        return singleWorldManager;
     }
 
     public StartingChunkService getStartingChunkService() {
@@ -414,10 +568,72 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         if (enhancedTeamManager == null) throw new IllegalStateException("EnhancedTeamManager not initialized");
         return enhancedTeamManager;
     }
+    
+    public me.chunklock.economy.EconomyManager getEconomyManager() {
+        if (economyManager == null) throw new IllegalStateException("EconomyManager not initialized");
+        return economyManager;
+    }
 
     public BasicTeamCommandHandler getTeamCommandHandler() {
         if (teamCommandHandler == null) throw new IllegalStateException("BasicTeamCommandHandler not initialized");
         return teamCommandHandler;
+    }
+
+    public BiomeUnlockRegistry getBiomeUnlockRegistry() {
+        if (biomeUnlockRegistry == null) throw new IllegalStateException("BiomeUnlockRegistry not initialized");
+        return biomeUnlockRegistry;
+    }
+
+    public me.chunklock.services.ProgressionValidationService getProgressionValidationService() {
+        if (progressionValidationService == null) throw new IllegalStateException("ProgressionValidationService not initialized");
+        return progressionValidationService;
+    }
+    
+    public DependencyChecker getDependencyChecker() {
+        if (dependencyChecker == null) throw new IllegalStateException("DependencyChecker not initialized");
+        return dependencyChecker;
+    }
+
+    // Phase 2: Service Layer Access Methods
+    
+    /**
+     * Get a service instance from the service container.
+     * @param serviceClass The service class to retrieve
+     * @return The service instance
+     * @throws IllegalStateException if services are not initialized
+     */
+    public <T extends me.chunklock.api.services.BaseService> T getService(Class<T> serviceClass) {
+        if (serviceManager == null || !serviceManager.isInitialized()) {
+            throw new IllegalStateException("Service layer not initialized");
+        }
+        return serviceManager.getService(serviceClass);
+    }
+    
+    /**
+     * Get the service manager for advanced service operations.
+     * @return The service manager instance
+     */
+    public ServiceManager getServiceManager() {
+        if (serviceManager == null) {
+            throw new IllegalStateException("Service manager not initialized");
+        }
+        return serviceManager;
+    }
+    
+    /**
+     * Check if the service layer is healthy.
+     * @return true if all services are healthy, false otherwise
+     */
+    public boolean isServiceLayerHealthy() {
+        return serviceManager != null && serviceManager.isStarted() && serviceManager.checkHealth();
+    }
+
+    /**
+     * Start the progression validation task (disabled for single world system)
+     */
+    private void startProgressionValidationTask() {
+        // Progression validation not needed for single world system
+        getLogger().info("Progression validation disabled for single world system");
     }
 
     /**
@@ -477,5 +693,14 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             getLogger().log(Level.WARNING, "Error generating plugin statistics", e);
             return "Error generating statistics: " + e.getMessage();
         }
+    }
+    
+    /**
+     * Gets the configuration manager.
+     * 
+     * @return The configuration manager
+     */
+    public ConfigManager getConfigManager() {
+        return configManager;
     }
 }

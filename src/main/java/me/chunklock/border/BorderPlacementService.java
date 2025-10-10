@@ -4,7 +4,7 @@ package me.chunklock.border;
 
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.TeamManager;
-import me.chunklock.util.ChunkCoordinate;
+import me.chunklock.util.chunk.ChunkCoordinate;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;

@@ -272,6 +272,77 @@ public class ChunkEvaluator {
     }
 
     /**
+     * Check if a chunk is suitable for spawning (not water-dominated).
+     * Returns true if the chunk has less than 90% water/water-based blocks.
+     */
+    public boolean isChunkSuitableForSpawning(Chunk chunk) {
+        try {
+            if (chunk == null || chunk.getWorld() == null) {
+                return false;
+            }
+
+            int totalBlocks = 0;
+            int waterBlocks = 0;
+            
+            // Sample surface blocks across the chunk (every 2 blocks for better coverage)
+            for (int x = 0; x < 16; x += 2) {
+                for (int z = 0; z < 16; z += 2) {
+                    try {
+                        // Get the highest block at this position
+                        int y = chunk.getWorld().getHighestBlockYAt(chunk.getBlock(x, 0, z).getLocation());
+                        y = Math.max(chunk.getWorld().getMinHeight(), Math.min(y, chunk.getWorld().getMaxHeight() - 1));
+                        
+                        Block surfaceBlock = chunk.getBlock(x, y, z);
+                        if (surfaceBlock != null && surfaceBlock.getType() != null) {
+                            totalBlocks++;
+                            Material mat = surfaceBlock.getType();
+                            
+                            // Check for water and water-based blocks
+                            if (isWaterRelatedBlock(mat)) {
+                                waterBlocks++;
+                            }
+                        }
+                    } catch (Exception e) {
+                        ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Error checking block at " + x + "," + z + " for spawn suitability", e);
+                        // Continue with other blocks
+                    }
+                }
+            }
+            
+            if (totalBlocks == 0) {
+                ChunklockPlugin.getInstance().getLogger().warning("No blocks could be scanned for spawn suitability check");
+                return false; // If we can't scan, assume unsafe
+            }
+            
+            double waterPercentage = (double) waterBlocks / totalBlocks;
+            boolean suitable = waterPercentage < 0.90; // Less than 90% water
+            
+            ChunklockPlugin.getInstance().getLogger().fine("Chunk spawn suitability: " + waterBlocks + "/" + totalBlocks + 
+                " water blocks (" + String.format("%.1f", waterPercentage * 100) + "%) - " + (suitable ? "SUITABLE" : "TOO MUCH WATER"));
+            
+            return suitable;
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error checking chunk spawn suitability", e);
+            return false; // If error, assume unsafe
+        }
+    }
+
+    /**
+     * Check if a material is water-related (should be avoided for spawning)
+     */
+    private boolean isWaterRelatedBlock(Material material) {
+        return material == Material.WATER ||
+               material == Material.KELP ||
+               material == Material.KELP_PLANT ||
+               material == Material.SEAGRASS ||
+               material == Material.TALL_SEAGRASS ||
+               material == Material.SEA_PICKLE ||
+               material.name().contains("CORAL") ||
+               material.name().contains("SPONGE");
+    }
+
+    /**
      * Optimized evaluation for caching (without player-specific distance calculation)
      */
     public ChunkValueData evaluateChunkForCache(Chunk chunk) {

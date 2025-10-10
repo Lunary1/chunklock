@@ -84,4 +84,32 @@ public final class HologramConfiguration {
     public boolean isAutoDetection() {
         return "auto".equals(getProvider());
     }
+
+    /**
+     * Gets the debounce delay in ticks for rapid hologram updates.
+     */
+    public int getDebounceDelayTicks() {
+        return config.getInt("holograms.performance.debounce-delay-ticks", 3);
+    }
+
+    /**
+     * Gets the maximum number of active holograms per player for distance culling.
+     */
+    public int getMaxActiveHologramsPerPlayer() {
+        return config.getInt("holograms.performance.max-active-per-player", 100);
+    }
+
+    /**
+     * Gets the maximum view distance for holograms in blocks.
+     */
+    public double getMaxViewDistance() {
+        return config.getDouble("holograms.performance.max-view-distance", 128.0);
+    }
+
+    /**
+     * Gets the culling sweep period in ticks for distance updates.
+     */
+    public long getCullingSweepPeriod() {
+        return config.getLong("holograms.performance.culling-sweep-period", 60L);
+    }
 }

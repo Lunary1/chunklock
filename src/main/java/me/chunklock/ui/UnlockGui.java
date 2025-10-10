@@ -19,8 +19,6 @@ import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.managers.TeamManager;
-import me.chunklock.ui.UnlockGuiBuilder;
-import me.chunklock.ui.UnlockGuiStateManager;
 import me.chunklock.ui.UnlockGuiStateManager.PendingUnlock;
 import me.chunklock.ChunklockPlugin;
 import org.bukkit.Bukkit;
@@ -43,29 +41,51 @@ public class UnlockGui {
     private final BiomeUnlockRegistry biomeUnlockRegistry;
     private final PlayerProgressTracker progressTracker;
     private final TeamManager teamManager;
+    private final me.chunklock.economy.EconomyManager economyManager;
     
     // UI components
     private final UnlockGuiBuilder builder;
     private final UnlockGuiStateManager stateManager;
     
+    // Debug configuration
+    private boolean debugLogging;
+    
     // Constants - Updated for new GUI
     public static final String GUI_TITLE_PREFIX = "🔓 Unlock Chunk";
     private static final int UNLOCK_BUTTON_SLOT = 31; // Updated slot for new layout
-    private static final int[] CLICKABLE_SLOTS = {31, 49}; // Unlock button and help book
     
-    public UnlockGui(ChunkLockManager chunkLockManager,
+    public UnlockGui(ChunkLockManager chunkLockManager, 
                      BiomeUnlockRegistry biomeUnlockRegistry,
                      PlayerProgressTracker progressTracker,
-                     TeamManager teamManager) {
+                     TeamManager teamManager,
+                     me.chunklock.economy.EconomyManager economyManager) {
         this.chunkLockManager = chunkLockManager;
         this.biomeUnlockRegistry = biomeUnlockRegistry;
         this.progressTracker = progressTracker;
         this.teamManager = teamManager;
+        this.economyManager = economyManager;
         this.builder = new UnlockGuiBuilder();
         this.stateManager = new UnlockGuiStateManager();
+        
+        // Load debug configuration
+        loadDebugConfiguration();
     }
     
     /**
+     * Load debug configuration from config.yml
+     */
+    private void loadDebugConfiguration() {
+        var config = ChunklockPlugin.getInstance().getConfig();
+        boolean masterDebug = config.getBoolean("debug-mode.enabled", false);
+        this.debugLogging = masterDebug && config.getBoolean("debug-mode.unlock-gui", false);
+    }
+    
+    /**
+     * Reload debug configuration (called during plugin reload)
+     */
+    public void reloadConfiguration() {
+        loadDebugConfiguration();
+    }    /**
      * Open the unlock GUI for a player looking at a specific chunk.
      */
     public void open(Player player, Chunk chunk) {
@@ -99,7 +119,7 @@ public class UnlockGui {
         }
 
         // Build and open the GUI
-        Inventory inventory = builder.build(player, chunk, evaluation, requirement);
+        Inventory inventory = builder.build(player, chunk, evaluation, requirement, economyManager);
         
         // Store state
         PendingUnlock pendingUnlock = new PendingUnlock(chunk, biome, requirement, contested);
@@ -110,10 +130,12 @@ public class UnlockGui {
         playGuiOpenEffects(player);
         
         // Debug logging
-        ChunklockPlugin.getInstance().getLogger().info("Opening unlock GUI for " + player.getName() + 
-            " - chunk " + chunk.getX() + "," + chunk.getZ() + 
-            " - required: " + requirement.amount() + "x " + requirement.material() +
-            (contested ? " [CONTESTED]" : ""));
+        if (debugLogging) {
+            ChunklockPlugin.getInstance().getLogger().info("Opening unlock GUI for " + player.getName() + 
+                " - chunk " + chunk.getX() + "," + chunk.getZ() + 
+                " - required: " + requirement.amount() + "x " + requirement.material() +
+                (contested ? " [CONTESTED]" : ""));
+        }
         
         player.openInventory(inventory);
     }
@@ -286,8 +308,10 @@ public class UnlockGui {
             return;
         }
         
-        ChunklockPlugin.getInstance().getLogger().info("Processing unlock for " + player.getName() + 
-            " - chunk " + state.chunk.getX() + "," + state.chunk.getZ());
+        if (debugLogging) {
+            ChunklockPlugin.getInstance().getLogger().info("Processing unlock for " + player.getName() + 
+                " - chunk " + state.chunk.getX() + "," + state.chunk.getZ());
+        }
 
         // Check if chunk is still locked
         if (!chunkLockManager.isLocked(state.chunk)) {
@@ -310,20 +334,40 @@ public class UnlockGui {
                 return;
             }
             
-            // Check if player has required items
-            int playerHas = countPlayerItems(player, state.requirement.material());
-            int required = state.requirement.amount();
-            
-            ChunklockPlugin.getInstance().getLogger().info("Item validation: player " + player.getName() + 
-                " has " + playerHas + " " + state.requirement.material() + ", needs " + required);
-            
-            if (playerHas < required) {
-                handleInsufficientItems(player, playerHas, required, state.requirement.material());
-                return;
-            }
+            // Check if we should use Vault economy or materials
+            if (economyManager != null && economyManager.getCurrentType() == me.chunklock.economy.EconomyManager.EconomyType.VAULT 
+                && economyManager.isVaultAvailable()) {
+                
+                // Use money-based unlock
+                var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), state.chunk);
+                var paymentRequirement = economyManager.calculateRequirement(player, state.biome, evaluation);
+                
+                if (!economyManager.canAfford(player, paymentRequirement)) {
+                    handleInsufficientFunds(player, paymentRequirement, economyManager);
+                    return;
+                }
+                
+                // Execute money-based unlock
+                executeMoneyUnlock(player, state, teamId, paymentRequirement);
+                
+            } else {
+                // Use material-based unlock (default)
+                int playerHas = countPlayerItems(player, state.requirement.material());
+                int required = state.requirement.amount();
+                
+                if (debugLogging) {
+                    ChunklockPlugin.getInstance().getLogger().info("Item validation: player " + player.getName() + 
+                        " has " + playerHas + " " + state.requirement.material() + ", needs " + required);
+                }
+                
+                if (playerHas < required) {
+                    handleInsufficientItems(player, playerHas, required, state.requirement.material());
+                    return;
+                }
 
-            // Execute the unlock
-            executeUnlock(player, state, teamId);
+                // Execute material-based unlock
+                executeMaterialUnlock(player, state, teamId);
+            }
             
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Error processing unlock for " + player.getName(), e);
@@ -331,6 +375,114 @@ public class UnlockGui {
                 .color(NamedTextColor.RED));
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_HURT, 1.0f, 1.0f);
         }
+    }
+    
+    /**
+     * Handle case where player doesn't have enough money.
+     */
+    private void handleInsufficientFunds(Player player,
+                                       me.chunklock.economy.EconomyManager.PaymentRequirement requirement,
+                                       me.chunklock.economy.EconomyManager economyManager) {
+        // Play error sound
+        player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
+        
+        double playerBalance = economyManager.getVaultService().getBalance(player);
+        double requiredCost = requirement.getVaultCost();
+        double needed = requiredCost - playerBalance;
+        
+        // Send formatted message
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━").color(NamedTextColor.DARK_RED));
+        player.sendMessage(Component.text("   💸 INSUFFICIENT FUNDS").color(NamedTextColor.RED).decorate(TextDecoration.BOLD));
+        player.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━").color(NamedTextColor.DARK_RED));
+        player.sendMessage(Component.empty());
+        
+        String formattedBalance = economyManager.getVaultService().format(playerBalance);
+        String formattedCost = economyManager.getVaultService().format(requiredCost);
+        String formattedNeeded = economyManager.getVaultService().format(needed);
+        
+        player.sendMessage(Component.text("💰 Required: ").color(NamedTextColor.GRAY)
+            .append(Component.text(formattedCost).color(NamedTextColor.WHITE)));
+        player.sendMessage(Component.text("🏦 Your balance: ").color(NamedTextColor.GRAY)
+            .append(Component.text(formattedBalance).color(NamedTextColor.RED)));
+        player.sendMessage(Component.text("❗ Missing: ").color(NamedTextColor.GRAY)
+            .append(Component.text(formattedNeeded).color(NamedTextColor.YELLOW)));
+        
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("💡 Tip: ").color(NamedTextColor.AQUA)
+            .append(Component.text("Earn more money and try again!").color(NamedTextColor.WHITE)));
+        player.sendMessage(Component.empty());
+        
+        ChunklockPlugin.getInstance().getLogger().info("Player " + player.getName() + 
+            " missing funds: has " + formattedBalance + ", needs " + formattedCost);
+    }
+    
+    /**
+     * Execute money-based unlock process.
+     */
+    private void executeMoneyUnlock(Player player, PendingUnlock state, UUID teamId,
+                                  me.chunklock.economy.EconomyManager.PaymentRequirement requirement) {
+        try {
+            // Pre-unlock effects
+            player.playSound(player.getLocation(), Sound.BLOCK_SMITHING_TABLE_USE, 1.0f, 1.0f);
+            
+            // Get current evaluation (required for processPayment)
+            var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), state.chunk);
+            
+            // Process payment
+            if (!economyManager.processPayment(player, requirement, state.biome, evaluation)) {
+                player.sendMessage(Component.text("❌ Payment failed. Please try again.")
+                    .color(NamedTextColor.RED));
+                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
+                return;
+            }
+            
+            if (debugLogging) {
+                String formattedCost = economyManager.getVaultService().format(requirement.getVaultCost());
+                ChunklockPlugin.getInstance().getLogger().info("Charged " + formattedCost + 
+                    " from " + player.getName() + " for chunk unlock");
+            }
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().warning("Money processing failed: " + e.getMessage());
+            player.sendMessage(Component.text("❌ Payment processing failed. Please try again.")
+                .color(NamedTextColor.RED));
+            return;
+        }
+
+        // Complete the unlock process
+        finishUnlock(player, state, teamId);
+    }
+    
+    /**
+     * Execute material-based unlock process.
+     */
+    private void executeMaterialUnlock(Player player, PendingUnlock state, UUID teamId) {
+        try {
+            // Pre-unlock effects
+            player.playSound(player.getLocation(), Sound.BLOCK_SMITHING_TABLE_USE, 1.0f, 1.0f);
+            
+            // Get current evaluation (might have changed)
+            var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), state.chunk);
+            
+            // Use the registry's consumption method which handles team integration
+            biomeUnlockRegistry.consumeRequiredItem(player, state.biome, evaluation.score);
+            
+            if (debugLogging) {
+                ChunklockPlugin.getInstance().getLogger().info("Consumed items for " + player.getName() + 
+                    " using BiomeUnlockRegistry method");
+            }
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().warning("BiomeUnlockRegistry consumption failed, using fallback: " + e.getMessage());
+            
+            // Fallback: Manual item removal
+            ItemStack requiredStack = new ItemStack(state.requirement.material(), state.requirement.amount());
+            player.getInventory().removeItem(requiredStack);
+        }
+
+        // Complete the unlock process
+        finishUnlock(player, state, teamId);
     }
     
     /**
@@ -366,61 +518,47 @@ public class UnlockGui {
     }
     
     /**
-     * Execute the actual unlock process.
+     * Complete the unlock process after payment has been processed.
      */
-    private void executeUnlock(Player player, PendingUnlock state, UUID teamId) {
+    private void finishUnlock(Player player, PendingUnlock state, UUID teamId) {
         try {
-            // Pre-unlock effects
-            player.playSound(player.getLocation(), Sound.BLOCK_SMITHING_TABLE_USE, 1.0f, 1.0f);
-            
-            // Get current evaluation (might have changed)
-            var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), state.chunk);
-            
-            // Use the registry's consumption method which handles team integration
-            biomeUnlockRegistry.consumeRequiredItem(player, state.biome, evaluation.score);
-            
-            ChunklockPlugin.getInstance().getLogger().info("Consumed items for " + player.getName() + 
-                " using BiomeUnlockRegistry method");
-            
-        } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().warning("BiomeUnlockRegistry consumption failed, using fallback: " + e.getMessage());
-            
-            // Fallback: Manual item removal
-            ItemStack requiredStack = new ItemStack(state.requirement.material(), state.requirement.amount());
-            player.getInventory().removeItem(requiredStack);
-        }
-
-        // Unlock chunk
-        chunkLockManager.unlockChunk(state.chunk, teamId);
-        if (state.contested) {
-            progressTracker.incrementContestedClaims(teamId);
-        }
-        ChunklockPlugin.getInstance().getLogger().info("Unlocked chunk " + state.chunk.getX() + 
-            "," + state.chunk.getZ() + " for player " + player.getName());
-
-        // Record team statistics if available
-        try {
-            var enhancedTeamManager = ChunklockPlugin.getInstance().getEnhancedTeamManager();
-            if (enhancedTeamManager != null) {
-                enhancedTeamManager.recordChunkUnlock(player.getUniqueId(), 
-                    BiomeUnlockRegistry.getBiomeDisplayName(state.biome));
+            // Unlock chunk
+            chunkLockManager.unlockChunk(state.chunk, teamId);
+            if (state.contested) {
+                progressTracker.incrementContestedClaims(teamId);
             }
+            ChunklockPlugin.getInstance().getLogger().info("Unlocked chunk " + state.chunk.getX() + 
+                "," + state.chunk.getZ() + " for player " + player.getName());
+
+            // Record team statistics if available
+            try {
+                var enhancedTeamManager = ChunklockPlugin.getInstance().getEnhancedTeamManager();
+                if (enhancedTeamManager != null) {
+                    enhancedTeamManager.recordChunkUnlock(player.getUniqueId(), 
+                        BiomeUnlockRegistry.getBiomeDisplayName(state.biome));
+                }
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().fine("Team statistics recording failed: " + e.getMessage());
+            }
+
+            // Play success effects
+            playUnlockSuccessEffects(player, state.chunk);
+
+            // Send success message
+            sendUnlockSuccessMessage(player, state);
+
+            // Clean up and close GUI
+            player.closeInventory();
+            stateManager.cleanupPlayer(player.getUniqueId());
+
+            // Trigger related systems
+            notifyUnlockSystems(player, state.chunk);
+            
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().fine("Team statistics recording failed: " + e.getMessage());
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Failed to finish unlock for " + player.getName(), e);
+            player.sendMessage(Component.text("❌ Failed to complete unlock. Please try again.")
+                .color(NamedTextColor.RED));
         }
-
-        // Play success effects
-        playUnlockSuccessEffects(player, state.chunk);
-
-        // Send success message
-        sendUnlockSuccessMessage(player, state);
-
-        // Clean up and close GUI
-        player.closeInventory();
-        stateManager.cleanupPlayer(player.getUniqueId());
-
-        // Trigger related systems
-        notifyUnlockSystems(player, state.chunk);
     }
     
     /**
@@ -449,14 +587,14 @@ public class UnlockGui {
                     return;
                 }
                 
-                me.chunklock.util.ParticleUtil.spawnFireworkParticles(
+                me.chunklock.util.world.ParticleUtil.spawnFireworkParticles(
                     chunkCenter,
                     30,
                     4, 2, 4,
                     0.1
                 );
                 
-                me.chunklock.util.ParticleUtil.spawnHappyVillagerParticles(
+                me.chunklock.util.world.ParticleUtil.spawnHappyVillagerParticles(
                     player.getLocation().add(0, 1, 0),
                     20,
                     1, 1, 1,
@@ -498,7 +636,6 @@ public class UnlockGui {
     /**
      * Notify other systems that a chunk was unlocked.
      */
-    @SuppressWarnings("deprecation") // Using deprecated wrapper methods temporarily
     private void notifyUnlockSystems(Player player, Chunk chunk) {
         try {
             // Update borders with comprehensive approach
@@ -551,23 +688,24 @@ public class UnlockGui {
                 }, 10L); // 0.5 second delay
             }
             
-            // Update holograms - ENHANCED: Force immediate cleanup for unlocked chunk
+            // Update holograms - ENHANCED: Clean up chunk holograms and refresh active set
             try {
-                var hologramManager = ChunklockPlugin.getInstance().getHologramManager();
-                if (hologramManager != null) {
-                    // Force immediate cleanup of the unlocked chunk's holograms
-                    hologramManager.forceCleanupChunk(player, chunk);
+                var hologramService = ChunklockPlugin.getInstance().getHologramService();
+                if (hologramService != null) {
+                    // Immediately despawn all holograms for this specific chunk
+                    hologramService.despawnChunkHolograms(player, chunk);
                     
-                    // Schedule additional cleanup with a small delay to catch any race conditions
+                    // Schedule refresh of active holograms to update the visible set
                     Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
                         if (player.isOnline()) {
-                            // Force cleanup again and refresh all holograms
-                            hologramManager.forceCleanupChunk(player, chunk);
-                            hologramManager.refreshHologramsForPlayer(player);
+                            // Update active hologram set to reflect new unlocked chunk
+                            hologramService.updateActiveHologramsForPlayer(player);
+                            ChunklockPlugin.getInstance().getLogger().fine("Updated active holograms for " + player.getName() + 
+                                " after unlocking chunk " + chunk.getX() + "," + chunk.getZ());
                         }
                     }, 5L); // 0.25 second delay
                     
-                    ChunklockPlugin.getInstance().getLogger().fine("Cleaned up and scheduled refresh of holograms after chunk unlock for " + player.getName() + 
+                    ChunklockPlugin.getInstance().getLogger().fine("Stopped hologram updates and scheduled restart after chunk unlock for " + player.getName() + 
                         " at chunk " + chunk.getX() + "," + chunk.getZ());
                 }
             } catch (Exception e) {

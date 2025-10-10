@@ -16,52 +16,82 @@ public final class HologramLocationUtils {
     }
 
     /**
-     * Wall sides for chunk boundaries.
+     * Wall sides for chunk boundaries - deterministic chunk-centric ordering.
+     * Each side represents the wall where the hologram should be placed for that chunk edge.
      */
     public enum WallSide {
-        NORTH(0, -1), EAST(1, 0), SOUTH(0, 1), WEST(-1, 0);
+        /** North wall - where Z is minimal for the chunk (chunkZ * 16) */
+        NORTH(0, -1, 0),
+        /** East wall - where X is maximal for the chunk (chunkX * 16 + 15) */ 
+        EAST(1, 0, 1),
+        /** South wall - where Z is maximal for the chunk (chunkZ * 16 + 15) */
+        SOUTH(0, 1, 2),
+        /** West wall - where X is minimal for the chunk (chunkX * 16) */
+        WEST(-1, 0, 3);
 
         public final int dx;
         public final int dz;
+        public final int order; // Deterministic ordering for tie-breaking
 
-        WallSide(int dx, int dz) {
+        WallSide(int dx, int dz, int order) {
             this.dx = dx;
             this.dz = dz;
+            this.order = order;
+        }
+        
+        /**
+         * Gets all sides in deterministic order (NORTH, EAST, SOUTH, WEST).
+         */
+        public static WallSide[] getOrderedSides() {
+            return new WallSide[]{NORTH, EAST, SOUTH, WEST};
         }
     }
 
     /**
      * Calculates the hologram location for a specific wall side of a chunk.
+     * Uses chunk-centric side determination - each side is placed at the corresponding chunk boundary.
      */
     public static Location calculateWallHologramLocation(Chunk chunk, WallSide side, 
                                                        double wallOffset, double centerOffset,
                                                        double groundClearance, int minHeight) {
         World world = chunk.getWorld();
-        int startX = chunk.getX() * 16;
-        int startZ = chunk.getZ() * 16;
+        
+        // Chunk boundaries - these are the actual chunk coordinate boundaries
+        int chunkMinX = chunk.getX() * 16;      // X coordinate of west edge
+        int chunkMaxX = chunkMinX + 15;         // X coordinate of east edge  
+        int chunkMinZ = chunk.getZ() * 16;      // Z coordinate of north edge
+        int chunkMaxZ = chunkMinZ + 15;         // Z coordinate of south edge
 
         double x, z;
         switch (side) {
             case NORTH -> {
-                x = startX + centerOffset;
-                z = startZ - wallOffset;
+                // North wall: at the north edge of chunk (minimal Z)
+                x = chunkMinX + centerOffset;       // Position along chunk width (X axis)
+                z = chunkMinZ - wallOffset;         // Just outside north edge (negative Z direction)
             }
             case SOUTH -> {
-                x = startX + centerOffset;
-                z = startZ + 16 + wallOffset;
+                // South wall: at the south edge of chunk (maximal Z)  
+                x = chunkMinX + centerOffset;       // Position along chunk width (X axis)
+                z = chunkMaxZ + 1 + wallOffset;     // Just outside south edge (positive Z direction)
             }
             case EAST -> {
-                x = startX + 16 + wallOffset;
-                z = startZ + centerOffset;
+                // East wall: at the east edge of chunk (maximal X)
+                x = chunkMaxX + 1 + wallOffset;     // Just outside east edge (positive X direction)
+                z = chunkMinZ + centerOffset;       // Position along chunk depth (Z axis)
             }
             case WEST -> {
-                x = startX - wallOffset;
-                z = startZ + centerOffset;
+                // West wall: at the west edge of chunk (minimal X)
+                x = chunkMinX - wallOffset;         // Just outside west edge (negative X direction)
+                z = chunkMinZ + centerOffset;       // Position along chunk depth (Z axis)
             }
             default -> throw new IllegalArgumentException("Unknown wall side: " + side);
         }
 
-        int y = getHighestSolidY(world, (int) x, (int) z) + (int) groundClearance;
+        // Find ground level at the hologram location
+        int groundY = getHighestSolidY(world, (int) Math.floor(x), (int) Math.floor(z));
+        int y = groundY + (int) Math.ceil(groundClearance);
+        
+        // Ensure minimum height
         if (y < minHeight) {
             y = minHeight;
         }

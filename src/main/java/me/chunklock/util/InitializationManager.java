@@ -1,6 +1,8 @@
 package me.chunklock.util;
 
 import me.chunklock.ChunklockPlugin;
+import me.chunklock.util.validation.ConfigValidator;
+import me.chunklock.util.validation.DataMigrator;
 import org.bukkit.Bukkit;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +29,7 @@ public class InitializationManager {
     public boolean initialize() {
         long startTime = System.currentTimeMillis();
         
-        plugin.getLogger().info("=== Starting Chunklock v" + plugin.getDescription().getVersion() + " ===");
+        plugin.getLogger().info("=== Starting Chunklock v" + plugin.getPluginMeta().getVersion() + " ===");
         
         try {
             // Phase 1: Configuration
