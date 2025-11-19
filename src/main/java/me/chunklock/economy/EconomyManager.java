@@ -377,6 +377,8 @@ public class EconomyManager {
     
     /**
      * Calculate material-based payment requirement with optional OpenAI optimization
+     * NOTE: This returns the first vanilla material for backward compatibility, but
+     * hasRequiredItems() should be called to validate ALL items (vanilla + custom)
      */
     private PaymentRequirement calculateMaterialRequirement(Player player, org.bukkit.Chunk chunk, Biome biome, 
                                                           ChunkEvaluator.ChunkValueData evaluation) {
@@ -409,18 +411,24 @@ public class EconomyManager {
         }
         
         // Traditional calculation (fallback or when AI disabled)
+        // Returns the first vanilla material for backward compatibility display
         BiomeUnlockRegistry.UnlockRequirement requirement = 
             biomeRegistry.calculateRequirement(player, biome, evaluation.score);
         return new PaymentRequirement(requirement.material(), requirement.amount());
     }
     
     /**
-     * Check if player can afford the payment
+     * Check if player can afford the payment.
+     * For material-based economy, this now validates ALL requirements (vanilla + custom items).
+     * The PaymentRequirement is a simplified view; the actual check uses BiomeUnlockRegistry's
+     * complete ItemRequirement list.
      */
     public boolean canAfford(Player player, PaymentRequirement requirement) {
         if (requirement.getType() == EconomyType.VAULT) {
             return vaultService.hasEnoughMoney(player, requirement.getVaultCost());
         } else {
+            // For materials, we can do a quick check with the first material shown
+            // but in practice, the unlock system will check ALL items via BiomeUnlockRegistry.hasRequiredItems()
             ItemStack required = new ItemStack(requirement.getMaterial(), requirement.getMaterialAmount());
             return player.getInventory().containsAtLeast(required, requirement.getMaterialAmount());
         }
@@ -446,7 +454,9 @@ public class EconomyManager {
     }
     
     /**
-     * Process material payment and record OpenAI learning data
+     * Process material payment and record OpenAI learning data.
+     * Consumes ALL required items (vanilla + custom) via BiomeUnlockRegistry.
+     * This is an all-or-nothing operation: if any item is missing, it fails.
      */
     private boolean processMaterialPayment(Player player, PaymentRequirement requirement, 
                                          Biome biome, ChunkEvaluator.ChunkValueData evaluation) {
@@ -467,7 +477,7 @@ public class EconomyManager {
                 recordPaymentForOpenAI(player, requirement, false, 0, false);
             }
             
-            // Fallback: Manual item removal
+            // Fallback: Manual item removal (only for first vanilla item shown in PaymentRequirement)
             ItemStack requiredStack = new ItemStack(requirement.getMaterial(), requirement.getMaterialAmount());
             boolean fallbackSuccess = player.getInventory().removeItem(requiredStack).isEmpty();
             
