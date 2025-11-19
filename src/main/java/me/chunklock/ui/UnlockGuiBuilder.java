@@ -1,5 +1,6 @@
 package me.chunklock.ui;
 
+import me.chunklock.economy.items.ItemRequirement;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.models.Difficulty;
@@ -33,7 +34,8 @@ public class UnlockGuiBuilder {
     
     public Inventory build(Player player, Chunk chunk, ChunkEvaluator.ChunkValueData eval,
                            BiomeUnlockRegistry.UnlockRequirement requirement,
-                           me.chunklock.economy.EconomyManager economyManager) {
+                           me.chunklock.economy.EconomyManager economyManager,
+                           BiomeUnlockRegistry biomeRegistry) {
         Inventory inv = Bukkit.createInventory(null, GUI_SIZE, 
             Component.text("🔓 Unlock Chunk (" + chunk.getX() + ", " + chunk.getZ() + ")")
                 .color(NamedTextColor.GOLD));
@@ -55,7 +57,7 @@ public class UnlockGuiBuilder {
         } else {
             // Use material-based UI (default)
             addProgressBar(inv, player, requirement);
-            addRequirementDisplay(inv, player, requirement);
+            addRequirementDisplay(inv, player, requirement, eval.biome, biomeRegistry);
             addUnlockButton(inv, player, requirement);
         }
         
@@ -199,7 +201,104 @@ public class UnlockGuiBuilder {
         inv.setItem(PROGRESS_SLOT, progressItem);
     }
     
-    private void addRequirementDisplay(Inventory inv, Player player, BiomeUnlockRegistry.UnlockRequirement requirement) {
+    private void addRequirementDisplay(Inventory inv, Player player, BiomeUnlockRegistry.UnlockRequirement requirement, 
+                                       Biome biome, BiomeUnlockRegistry biomeRegistry) {
+        // Get all requirements (vanilla + custom items) for this biome
+        List<ItemRequirement> allRequirements = biomeRegistry.getRequirementsForBiome(biome);
+        
+        if (allRequirements.isEmpty()) {
+            // Fallback to old display if no requirements found
+            addRequirementDisplayLegacy(inv, player, requirement);
+            return;
+        }
+        
+        // Display all requirements
+        int requiredAmount = requirement.amount();
+        int playerHas = countPlayerItems(player, requirement.material());
+        boolean hasEnough = playerHas >= requiredAmount;
+        
+        // Main requirement display in center (shows first vanilla item or first custom item)
+        ItemRequirement firstReq = allRequirements.get(0);
+        ItemStack mainDisplay = firstReq.getRepresentativeStack();
+        if (mainDisplay == null) {
+            mainDisplay = new ItemStack(Material.PAPER);
+        }
+        mainDisplay.setAmount(Math.min(64, requiredAmount));
+        
+        ItemMeta meta = mainDisplay.getItemMeta();
+        if (meta == null) {
+            // Fallback: create a new ItemMeta for this item type
+            ItemStack temp = new ItemStack(Material.PAPER);
+            meta = temp.getItemMeta();
+        }
+        
+        String itemDisplayName = firstReq.getDisplayName();
+        meta.displayName(Component.text("💎 Required: " + itemDisplayName)
+            .color(hasEnough ? NamedTextColor.GREEN : NamedTextColor.RED)
+            .decoration(TextDecoration.ITALIC, false)
+            .decoration(TextDecoration.BOLD, true));
+            
+        if (hasEnough) {
+            Enchantment unbreaking = EnchantmentUtil.getUnbreaking();
+            if (unbreaking != null) {
+                meta.addEnchant(unbreaking, 1, true);
+                meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            }
+        }
+        
+        List<Component> lore = new ArrayList<>();
+        lore.add(Component.empty());
+        lore.add(Component.text("📦 Total Required: " + requiredAmount)
+            .color(NamedTextColor.WHITE)
+            .decoration(TextDecoration.ITALIC, false));
+        lore.add(Component.text("🎒 You Have: " + playerHas)
+            .color(hasEnough ? NamedTextColor.GREEN : NamedTextColor.RED)
+            .decoration(TextDecoration.ITALIC, false));
+        
+        // Show all requirements if multiple items needed
+        if (allRequirements.size() > 1) {
+            lore.add(Component.empty());
+            lore.add(Component.text("📋 All Requirements:")
+                .color(NamedTextColor.YELLOW)
+                .decoration(TextDecoration.ITALIC, false));
+            for (ItemRequirement req : allRequirements) {
+                boolean hasReq = req.hasInInventory(player);
+                lore.add(Component.text("  • " + req.getDisplayName())
+                    .color(hasReq ? NamedTextColor.GREEN : NamedTextColor.RED)
+                    .decoration(TextDecoration.ITALIC, false));
+            }
+        }
+            
+        if (!hasEnough) {
+            lore.add(Component.empty());
+            lore.add(Component.text("⚠ Missing: " + (requiredAmount - playerHas))
+                .color(NamedTextColor.YELLOW)
+                .decoration(TextDecoration.ITALIC, false));
+            lore.add(Component.empty());
+            lore.add(Component.text("💡 Tip: Gather more " + itemDisplayName)
+                .color(NamedTextColor.GRAY)
+                .decoration(TextDecoration.ITALIC, true));
+        } else {
+            lore.add(Component.empty());
+            lore.add(Component.text("✅ You have all required items!")
+                .color(NamedTextColor.GREEN)
+                .decoration(TextDecoration.ITALIC, false));
+        }
+        
+        meta.lore(lore);
+        mainDisplay.setItemMeta(meta);
+        inv.setItem(22, mainDisplay);
+        
+        // Visual representation of stacks if needed
+        if (requiredAmount > 64) {
+            addStackVisualization(inv, requirement, playerHas);
+        }
+    }
+    
+    /**
+     * Legacy requirement display for backward compatibility.
+     */
+    private void addRequirementDisplayLegacy(Inventory inv, Player player, BiomeUnlockRegistry.UnlockRequirement requirement) {
         int requiredAmount = requirement.amount();
         int playerHas = countPlayerItems(player, requirement.material());
         boolean hasEnough = playerHas >= requiredAmount;

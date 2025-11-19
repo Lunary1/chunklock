@@ -119,7 +119,7 @@ public class UnlockGui {
         }
 
         // Build and open the GUI
-        Inventory inventory = builder.build(player, chunk, evaluation, requirement, economyManager);
+        Inventory inventory = builder.build(player, chunk, evaluation, requirement, economyManager, biomeUnlockRegistry);
         
         // Store state
         PendingUnlock pendingUnlock = new PendingUnlock(chunk, biome, requirement, contested);
