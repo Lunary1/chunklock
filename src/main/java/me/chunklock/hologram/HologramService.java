@@ -662,15 +662,32 @@ public final class HologramService {
             if (economyManager != null && economyManager.getCurrentType() == me.chunklock.economy.EconomyManager.EconomyType.VAULT 
                 && economyManager.isVaultAvailable()) {
                 
-                // CRITICAL FIX: Make economy calculation async to prevent main thread blocking
+                // ASYNC FIX: Use fast path (materials or cache) immediately, schedule AI update asynchronously
+                // This prevents main thread blocking while OpenAI API calls are made
                 try {
-                    // Use money-based hologram with timeout
-                    var paymentRequirement = economyManager.calculateRequirement(player, chunk, evaluation.biome, evaluation);
-                    boolean canAfford = economyManager.canAfford(player, paymentRequirement);
-                    String formattedCost = economyManager.getVaultService().format(paymentRequirement.getVaultCost());
+                    // Try to get material-based fallback immediately for fast initial display
+                    var materialRequirement = biomeUnlockRegistry.calculateRequirement(player, evaluation.biome, evaluation.score);
+                    boolean canAfford = economyManager.canAfford(player, 
+                        new me.chunklock.economy.EconomyManager.PaymentRequirement(materialRequirement.material(), materialRequirement.amount()));
+                    // Use material name as placeholder - will show actual vault cost after cache/AI completes
+                    String estimatedCost = materialRequirement.amount() + " " + 
+                        me.chunklock.hologram.util.HologramTextUtils.formatMaterialName(materialRequirement.material()) + " (est.)";
                     
+                    // Create fast hologram immediately using material display
                     lines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLinesForMoney(
-                        formattedCost, canAfford);
+                        estimatedCost, canAfford);
+                    
+                    // Schedule AI calculation asynchronously in background (doesn't block main thread)
+                    Bukkit.getScheduler().runTaskAsynchronously(ChunklockPlugin.getInstance(), () -> {
+                        try {
+                            // This runs async and won't block the server
+                            // The result gets cached internally in EconomyManager for next hologram update
+                            economyManager.calculateRequirement(player, chunk, evaluation.biome, evaluation);
+                        } catch (Exception e) {
+                            // Async failures don't affect main thread
+                            ChunklockPlugin.getInstance().getLogger().fine("Background AI calculation failed: " + e.getMessage());
+                        }
+                    });
                     
                 } catch (Exception e) {
                     ChunklockPlugin.getInstance().getLogger().warning("Failed to calculate vault cost for hologram (player: " + 
