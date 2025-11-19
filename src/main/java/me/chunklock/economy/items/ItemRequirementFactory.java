@@ -23,17 +23,23 @@ public class ItemRequirementFactory {
     
     /**
      * Parse and build a list of ItemRequirements from a biome config section.
-     * Config format:
-     * {
-     *   "vanilla": {
-     *     "WHEAT": 8,
-     *     "HAY_BLOCK": 2
-     *   },
-     *   "custom": [
-     *     { "plugin": "mmoitems", "type": "MATERIAL", "item": "diamond_ingot", "amount": 3 },
-     *     { "plugin": "oraxen", "item": "custom_sword", "amount": 1 }
-     *   ]
-     * }
+     * Supports both flat format (legacy) and structured format (new with custom items).
+     * 
+     * FLAT FORMAT (Legacy - Auto-detected):
+     *   PLAINS:
+     *     WHEAT: 8
+     *     HAY_BLOCK: 2
+     * 
+     * STRUCTURED FORMAT (New - Custom item support):
+     *   PLAINS:
+     *     vanilla:
+     *       WHEAT: 8
+     *       HAY_BLOCK: 2
+     *     custom:
+     *       - plugin: mmoitems
+     *         type: MATERIAL
+     *         item: diamond_ingot
+     *         amount: 3
      */
     public List<ItemRequirement> parseRequirements(String biomeName, ConfigurationSection biomeSection) {
         List<ItemRequirement> requirements = new ArrayList<>();
@@ -43,34 +49,57 @@ public class ItemRequirementFactory {
             return requirements;
         }
         
-        // Parse vanilla items
-        if (biomeSection.isConfigurationSection("vanilla")) {
-            ConfigurationSection vanillaSection = biomeSection.getConfigurationSection("vanilla");
-            if (vanillaSection != null) {
-                for (String itemName : vanillaSection.getKeys(false)) {
-                    try {
-                        Material material = Material.valueOf(itemName.toUpperCase());
-                        int amount = vanillaSection.getInt(itemName, 1);
-                        if (amount > 0) {
-                            requirements.add(new VanillaItemRequirement(material, amount));
+        // Check if this is the NEW structured format (has "vanilla" or "custom" sections)
+        boolean isStructuredFormat = biomeSection.isConfigurationSection("vanilla") || biomeSection.isList("custom");
+        
+        if (isStructuredFormat) {
+            // NEW STRUCTURED FORMAT
+            // Parse vanilla items
+            if (biomeSection.isConfigurationSection("vanilla")) {
+                ConfigurationSection vanillaSection = biomeSection.getConfigurationSection("vanilla");
+                if (vanillaSection != null) {
+                    for (String itemName : vanillaSection.getKeys(false)) {
+                        try {
+                            Material material = Material.valueOf(itemName.toUpperCase());
+                            int amount = vanillaSection.getInt(itemName, 1);
+                            if (amount > 0) {
+                                requirements.add(new VanillaItemRequirement(material, amount));
+                            }
+                        } catch (IllegalArgumentException e) {
+                            plugin.getLogger().warning("Invalid vanilla material for " + biomeName + ": " + itemName);
                         }
-                    } catch (IllegalArgumentException e) {
-                        plugin.getLogger().warning("Invalid vanilla material for " + biomeName + ": " + itemName);
                     }
                 }
             }
-        }
-        
-        // Parse custom items (list format)
-        if (biomeSection.isList("custom")) {
-            List<?> customList = biomeSection.getList("custom");
-            if (customList != null) {
-                for (Object obj : customList) {
-                    if (obj instanceof ConfigurationSection customItem) {
-                        parseCustomItem(biomeName, customItem, requirements);
-                    } else if (obj instanceof Map<?, ?> customMap) {
-                        parseCustomItemMap(biomeName, customMap, requirements);
+            
+            // Parse custom items (list format)
+            if (biomeSection.isList("custom")) {
+                List<?> customList = biomeSection.getList("custom");
+                if (customList != null) {
+                    for (Object obj : customList) {
+                        if (obj instanceof ConfigurationSection customItem) {
+                            parseCustomItem(biomeName, customItem, requirements);
+                        } else if (obj instanceof Map<?, ?> customMap) {
+                            parseCustomItemMap(biomeName, customMap, requirements);
+                        }
                     }
+                }
+            }
+        } else {
+            // LEGACY FLAT FORMAT - All top-level keys are materials with amounts
+            // Example: WHEAT: 8, HAY_BLOCK: 2
+            plugin.getLogger().fine("Parsing legacy flat format for biome: " + biomeName);
+            
+            for (String key : biomeSection.getKeys(false)) {
+                try {
+                    Material material = Material.valueOf(key.toUpperCase());
+                    int amount = biomeSection.getInt(key, 1);
+                    if (amount > 0) {
+                        requirements.add(new VanillaItemRequirement(material, amount));
+                        plugin.getLogger().fine("  Added vanilla requirement: " + material.name() + " x" + amount);
+                    }
+                } catch (IllegalArgumentException e) {
+                    plugin.getLogger().fine("Skipping non-material key in " + biomeName + ": " + key);
                 }
             }
         }
