@@ -114,11 +114,17 @@ chunk-values:
 biome-unlocks:
   # Complete biome costs configuration for Chunklock
   # Supports both classic flat format (vanilla items) and structured format (vanilla + custom items)
-  # 
+  #
+  # AUTO-DETECTION: Format is automatically detected based on structure:
+  #   - If biome has "vanilla:" or "custom:" keys → Structured format (new)
+  #   - If biome has only material keys → Flat format (legacy)
+  #
   # FLAT FORMAT (LEGACY - Backward Compatible):
   #   PLAINS:
   #     WHEAT: 8
   #     HAY_BLOCK: 2
+  #   Advantages: Simple, clean, works with vanilla items
+  #   Use when: No custom items needed
   #
   # STRUCTURED FORMAT (NEW - Custom Item Support):
   #   PLAINS:
@@ -133,21 +139,37 @@ biome-unlocks:
   #       - plugin: oraxen
   #         item: mythic_sword
   #         amount: 1
+  #   Advantages: Mix vanilla + custom items, future-proof
+  #   Use when: Need custom items from MMOItems or Oraxen
   #
-  # NOTES:
-  #   - All items are REQUIRED (all-or-nothing system)
-  #   - Vanilla items use Minecraft material names (WHEAT, DIAMOND, etc.)
-  #   - Custom items require: plugin, item name, and amount
-  #   - MMOItems plugin: use 'type' and 'item' (format: MATERIAL.item_name)
-  #   - Oraxen plugin: use 'item' only (just the item ID)
-  #   - Mix and match vanilla and custom items as needed
+  # MIGRATION EXAMPLES:
+  #   Simple flat format:
+  #     FOREST: {OAK_LOG: 16, APPLE: 4}
+  #   Becomes structured:
+  #     FOREST:
+  #       vanilla:
+  #         OAK_LOG: 16
+  #         APPLE: 4
+  #
+  #   Adding custom items:
+  #     JUNGLE:
+  #       vanilla:
+  #         COCOA_BEANS: 16
+  #         MELON_SLICE: 8
+  #       custom:
+  #         - plugin: mmoitems
+  #           type: MATERIAL
+  #           item: jungle_essence
+  #           amount: 2
+  #
+  # REQUIREMENTS AND NOTES:
+  #   - All items are REQUIRED (all-or-nothing system) - player must have ALL items
+  #   - Vanilla items use exact Minecraft material names (WHEAT, DIAMOND, etc.)
+  #   - Custom items require exact 'plugin', 'item' name, and 'amount' fields
+  #   - MMOItems format: type (MATERIAL/CONSUMABLE) + item (database name)
+  #   - Oraxen format: item only (the item ID you defined in Oraxen)
+  #   - Mix vanilla and custom items freely in one biome
   #   - Costs are balanced for progression gameplay
-  #
-  # MIGRATION FROM V1.x:
-  #   - Existing flat format configs continue to work unchanged
-  #   - To add custom items, convert to structured format
-  #   - Example: FOREST: {OAK_LOG: 16, APPLE: 4}
-  #   - Becomes: FOREST: {vanilla: {OAK_LOG: 16, APPLE: 4}, custom: []}
 
   # === BASIC OVERWORLD BIOMES ===
   PLAINS:

@@ -709,8 +709,8 @@ public class UnlockGuiBuilder {
                 .color(NamedTextColor.YELLOW)
                 .decoration(TextDecoration.ITALIC, false));
             
-            // Add enchant effect if affordable
-            meta.addEnchant(org.bukkit.enchantments.Enchantment.DURABILITY, 1, true);
+            // Add enchant effect if affordable (use UNBREAKING instead of deprecated DURABILITY)
+            meta.addEnchant(org.bukkit.enchantments.Enchantment.UNBREAKING, 1, true);
             meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
         } else {
             String formattedBalance = economyManager.getVaultService().format(playerBalance);

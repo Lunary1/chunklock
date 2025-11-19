@@ -109,14 +109,10 @@ public class TeleportListener implements Listener {
         
         // These are considered automatic world changes that should trigger chunk assignment
         switch (cause) {
-            case NETHER_PORTAL:
-            case END_PORTAL:
-            case END_GATEWAY:
-            case CHORUS_FRUIT:
+            case NETHER_PORTAL, END_PORTAL, END_GATEWAY -> {
                 return true;
-                
-            case PLUGIN:
-            case COMMAND:
+            }
+            case PLUGIN, COMMAND -> {
                 // For plugins/commands, check if destination seems intentional
                 // If the teleport destination is close to spawn, it might be automatic
                 // If it's to a specific coordinate, it's likely intentional
@@ -131,14 +127,15 @@ public class TeleportListener implements Listener {
                     return distanceFromSpawn < 100;
                 }
                 return false;
-                
-            case UNKNOWN:
+            }
+            case UNKNOWN -> {
                 // Unknown cause - be conservative and don't override
                 return false;
-                
-            default:
+            }
+            default -> {
                 // Most other causes (SPECTATE, ENDER_PEARL, etc.) are intentional
                 return false;
+            }
         }
     }
     
