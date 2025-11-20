@@ -352,17 +352,20 @@ public class UnlockGui {
                 
             } else {
                 // Use material-based unlock (default)
-                int playerHas = countPlayerItems(player, state.requirement.material());
-                int required = state.requirement.amount();
+                // Re-evaluate chunk to get current score
+                var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), state.chunk);
                 
-                if (debugLogging) {
-                    ChunklockPlugin.getInstance().getLogger().info("Item validation: player " + player.getName() + 
-                        " has " + playerHas + " " + state.requirement.material() + ", needs " + required);
-                }
-                
-                if (playerHas < required) {
+                // Check if player has ALL required items (vanilla + custom)
+                if (!biomeUnlockRegistry.hasRequiredItems(player, state.biome, evaluation.score)) {
+                    // Get first vanilla item for display purposes only
+                    int playerHas = countPlayerItems(player, state.requirement.material());
+                    int required = state.requirement.amount();
                     handleInsufficientItems(player, playerHas, required, state.requirement.material());
                     return;
+                }
+
+                if (debugLogging) {
+                    ChunklockPlugin.getInstance().getLogger().info("Item validation passed for " + player.getName());
                 }
 
                 // Execute material-based unlock

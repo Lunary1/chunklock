@@ -1,6 +1,7 @@
 package me.chunklock.hologram.util;
 
 import org.bukkit.Material;
+import me.chunklock.economy.items.ItemRequirement;
 
 /**
  * Utility class for formatting and text manipulation in holograms.
@@ -63,6 +64,31 @@ public final class HologramTextUtils {
             createStatusText(hasItems, playerCount, requiredCount),
             "§a§l RIGHT-CLICK TO UNLOCK"
         );
+    }
+    
+    /**
+     * Creates hologram text lines for multiple items (vanilla + custom).
+     */
+    public static java.util.List<String> createChunkHologramLinesForMultipleItems(
+            java.util.List<ItemRequirement> requirements, boolean hasAllItems) {
+        
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        lines.add("§c§l LOCKED CHUNK");
+        lines.add("");
+        
+        // Add each requirement as a line
+        for (ItemRequirement req : requirements) {
+            String itemName = req.getDisplayName();
+            int amount = req.getAmount();
+            String line = "§7" + itemName + " §8x" + amount;
+            lines.add(line);
+        }
+        
+        lines.add("");
+        lines.add(hasAllItems ? "§a✓ §a§lYou have all items" : "§c✗ §c§lMissing items");
+        lines.add("§a§l RIGHT-CLICK TO UNLOCK");
+        
+        return lines;
     }
     
     /**

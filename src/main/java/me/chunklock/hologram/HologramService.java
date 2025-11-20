@@ -704,14 +704,12 @@ public final class HologramService {
                 }
                 
             } else {
-                // Use material-based hologram (default)
-                var requirement = biomeUnlockRegistry.calculateRequirement(player, evaluation.biome, evaluation.score);
+                // Use material-based hologram (default) - supports both vanilla and custom items
+                var allRequirements = biomeUnlockRegistry.getRequirementsForBiome(evaluation.biome);
                 boolean hasItems = biomeUnlockRegistry.hasRequiredItems(player, evaluation.biome, evaluation.score);
-                int playerItemCount = countPlayerItems(player, requirement.material());
                 
-                lines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLines(
-                    me.chunklock.hologram.util.HologramTextUtils.formatMaterialName(requirement.material()),
-                    hasItems, playerItemCount, requirement.amount());
+                lines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLinesForMultipleItems(
+                    allRequirements, hasItems);
             }
             
             Location location = getOrComputeWallLocation(chunk, hologramId.getSide());
@@ -749,14 +747,12 @@ public final class HologramService {
                     formattedCost, canAfford);
                 
             } else {
-                // Use material-based hologram (default)
-                var requirement = biomeUnlockRegistry.calculateRequirement(player, evaluation.biome, evaluation.score);
+                // Use material-based hologram (default) - supports both vanilla and custom items
+                var allRequirements = biomeUnlockRegistry.getRequirementsForBiome(evaluation.biome);
                 boolean hasItems = biomeUnlockRegistry.hasRequiredItems(player, evaluation.biome, evaluation.score);
-                int playerItemCount = countPlayerItems(player, requirement.material());
                 
-                newLines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLines(
-                    me.chunklock.hologram.util.HologramTextUtils.formatMaterialName(requirement.material()),
-                    hasItems, playerItemCount, requirement.amount());
+                newLines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLinesForMultipleItems(
+                    allRequirements, hasItems);
             }
             
             // Update the hologram lines

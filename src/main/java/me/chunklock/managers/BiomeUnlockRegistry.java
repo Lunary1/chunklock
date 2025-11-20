@@ -79,13 +79,21 @@ public class BiomeUnlockRegistry {
         List<ItemRequirement> requirements = itemRequirements.getOrDefault(biome, new ArrayList<>());
         if (requirements.isEmpty()) return new UnlockRequirement(Material.DIRT, 1);
         
-        ItemRequirement firstReq = requirements.get(0);
+        // Find first vanilla item requirement (for backwards compatibility with single-item system)
+        ItemRequirement firstVanillaReq = null;
+        for (ItemRequirement req : requirements) {
+            if (req instanceof me.chunklock.economy.items.VanillaItemRequirement) {
+                firstVanillaReq = req;
+                break;
+            }
+        }
+        
         Material material = Material.DIRT;
         int baseAmount = 1;
         
-        if (firstReq instanceof me.chunklock.economy.items.VanillaItemRequirement vanillaReq) {
+        if (firstVanillaReq != null && firstVanillaReq instanceof me.chunklock.economy.items.VanillaItemRequirement vanillaReq) {
             material = vanillaReq.getMaterial();
-            baseAmount = firstReq.getAmount();
+            baseAmount = firstVanillaReq.getAmount();
         }
 
         int unlocked = progressTracker.getUnlockedChunkCount(player.getUniqueId());
