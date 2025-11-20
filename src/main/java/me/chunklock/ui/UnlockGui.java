@@ -533,6 +533,16 @@ public class UnlockGui {
             ChunklockPlugin.getInstance().getLogger().info("Unlocked chunk " + state.chunk.getX() + 
                 "," + state.chunk.getZ() + " for player " + player.getName());
 
+            // CRITICAL: Save all data immediately after unlock to ensure persistence
+            try {
+                chunkLockManager.saveAll();
+                progressTracker.saveAll();
+                // playerDataManager is saved by the PlayerListener on join, so persistent spawn is already saved
+                ChunklockPlugin.getInstance().getLogger().fine("Saved chunk and progress data after unlock for " + player.getName());
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().warning("Error saving data after unlock: " + e.getMessage());
+            }
+
             // Record team statistics if available
             try {
                 var enhancedTeamManager = ChunklockPlugin.getInstance().getEnhancedTeamManager();

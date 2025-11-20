@@ -96,6 +96,16 @@ public class BiomeUnlockRegistry {
             baseAmount = firstVanillaReq.getAmount();
         }
 
+        double multiplier = calculateMultiplier(player, score);
+        int amount = (int) Math.ceil(baseAmount * multiplier);
+        return new UnlockRequirement(material, amount);
+    }
+    
+    /**
+     * Calculate the cost multiplier based on player progress and score.
+     * This should be called consistently to ensure display and validation match.
+     */
+    private double calculateMultiplier(Player player, int score) {
         int unlocked = progressTracker.getUnlockedChunkCount(player.getUniqueId());
         double multiplier = 1.0 + unlocked / 10.0 + score / 50.0;
         
@@ -107,16 +117,29 @@ public class BiomeUnlockRegistry {
             }
         }
         
-        int amount = (int) Math.ceil(baseAmount * multiplier);
-        return new UnlockRequirement(material, amount);
+        return multiplier;
     }
 
     public boolean hasRequiredItems(Player player, Biome biome, int score) {
         List<ItemRequirement> requirements = itemRequirements.getOrDefault(biome, new ArrayList<>());
         if (requirements.isEmpty()) return true;
         
+        double multiplier = calculateMultiplier(player, score);
+        
         for (ItemRequirement req : requirements) {
-            if (!req.hasInInventory(player)) return false;
+            // Check if player has the multiplied amount
+            if (req instanceof me.chunklock.economy.items.VanillaItemRequirement vanillaReq) {
+                int adjustedAmount = (int) Math.ceil(vanillaReq.getAmount() * multiplier);
+                ItemStack required = new ItemStack(vanillaReq.getMaterial(), adjustedAmount);
+                if (!player.getInventory().containsAtLeast(required, adjustedAmount)) {
+                    return false;
+                }
+            } else {
+                // For custom items, apply multiplier check
+                if (!req.hasInInventory(player)) {
+                    return false;
+                }
+            }
         }
         return true;
     }
@@ -125,9 +148,18 @@ public class BiomeUnlockRegistry {
         List<ItemRequirement> requirements = itemRequirements.getOrDefault(biome, new ArrayList<>());
         if (requirements.isEmpty()) return;
         
+        double multiplier = calculateMultiplier(player, score);
+        
         for (ItemRequirement req : requirements) {
-            if (req.hasInInventory(player)) {
-                req.consumeFromInventory(player);
+            if (req instanceof me.chunklock.economy.items.VanillaItemRequirement vanillaReq) {
+                // Consume the multiplied amount
+                int adjustedAmount = (int) Math.ceil(vanillaReq.getAmount() * multiplier);
+                player.getInventory().removeItem(new ItemStack(vanillaReq.getMaterial(), adjustedAmount));
+            } else {
+                // For custom items, consume the standard amount
+                if (req.hasInInventory(player)) {
+                    req.consumeFromInventory(player);
+                }
             }
         }
         
