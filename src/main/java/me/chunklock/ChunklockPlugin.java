@@ -232,7 +232,6 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             }
             
             // Initialize in dependency order
-            this.singleWorldManager = new me.chunklock.managers.SingleWorldManager(this);
             this.worldManager = new WorldManager(this);
             this.chunkValueRegistry = new ChunkValueRegistry(this);
             this.enhancedTeamManager = new EnhancedTeamManager(this);
@@ -243,6 +242,12 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.biomeUnlockRegistry = new BiomeUnlockRegistry(this, progressTracker);
             this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry);
             this.chunkLockManager = new ChunkLockManager(chunkEvaluator, this, teamManager);
+            
+            // NEW: Initialize chunk pre-allocation service BEFORE SingleWorldManager (it needs this service)
+            this.chunkPreAllocationService = new me.chunklock.services.ChunkPreAllocationService(chunkLockManager, this);
+            
+            // Now safe to initialize SingleWorldManager since ChunkPreAllocationService is ready
+            this.singleWorldManager = new me.chunklock.managers.SingleWorldManager(this);
             
             // Initialize economy manager after biome registry and chunk evaluator
             this.economyManager = new me.chunklock.economy.EconomyManager(this, biomeUnlockRegistry, progressTracker, chunkEvaluator);
@@ -261,9 +266,6 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.asyncCostCalculationService = new me.chunklock.services.AsyncCostCalculationService(this, economyManager, chunkLockManager);
             
             this.startingChunkService = new StartingChunkService(chunkLockManager, playerDataManager);
-            
-            // NEW: Initialize chunk pre-allocation service for performance
-            this.chunkPreAllocationService = new me.chunklock.services.ChunkPreAllocationService(chunkLockManager, this);
             this.startingChunkService.setPreAllocationService(chunkPreAllocationService);
             
             this.progressionValidationService = new me.chunklock.services.ProgressionValidationService(this);

@@ -119,7 +119,7 @@ public class UnlockGui {
         }
 
         // Build and open the GUI
-        Inventory inventory = builder.build(player, chunk, evaluation, requirement, economyManager);
+        Inventory inventory = builder.build(player, chunk, evaluation, requirement, economyManager, biomeUnlockRegistry);
         
         // Store state
         PendingUnlock pendingUnlock = new PendingUnlock(chunk, biome, requirement, contested);
@@ -352,17 +352,20 @@ public class UnlockGui {
                 
             } else {
                 // Use material-based unlock (default)
-                int playerHas = countPlayerItems(player, state.requirement.material());
-                int required = state.requirement.amount();
+                // Re-evaluate chunk to get current score
+                var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), state.chunk);
                 
-                if (debugLogging) {
-                    ChunklockPlugin.getInstance().getLogger().info("Item validation: player " + player.getName() + 
-                        " has " + playerHas + " " + state.requirement.material() + ", needs " + required);
-                }
-                
-                if (playerHas < required) {
+                // Check if player has ALL required items (vanilla + custom)
+                if (!biomeUnlockRegistry.hasRequiredItems(player, state.biome, evaluation.score)) {
+                    // Get first vanilla item for display purposes only
+                    int playerHas = countPlayerItems(player, state.requirement.material());
+                    int required = state.requirement.amount();
                     handleInsufficientItems(player, playerHas, required, state.requirement.material());
                     return;
+                }
+
+                if (debugLogging) {
+                    ChunklockPlugin.getInstance().getLogger().info("Item validation passed for " + player.getName());
                 }
 
                 // Execute material-based unlock
@@ -529,6 +532,16 @@ public class UnlockGui {
             }
             ChunklockPlugin.getInstance().getLogger().info("Unlocked chunk " + state.chunk.getX() + 
                 "," + state.chunk.getZ() + " for player " + player.getName());
+
+            // CRITICAL: Save all data immediately after unlock to ensure persistence
+            try {
+                chunkLockManager.saveAll();
+                progressTracker.saveAll();
+                // playerDataManager is saved by the PlayerListener on join, so persistent spawn is already saved
+                ChunklockPlugin.getInstance().getLogger().fine("Saved chunk and progress data after unlock for " + player.getName());
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().warning("Error saving data after unlock: " + e.getMessage());
+            }
 
             // Record team statistics if available
             try {
