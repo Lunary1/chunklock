@@ -13,6 +13,7 @@
 ### What Changed
 
 1. **pom.xml**
+
    - `paper.version: 1.20.4-R0.1-SNAPSHOT` → `1.21.10-R0.1-SNAPSHOT`
    - Java version remains 17 ✅
 
@@ -25,8 +26,10 @@
 **2 API changes fixed to support 1.21.10:**
 
 #### Fix 1: TeleportListener.java (Line 115)
+
 **Issue:** Switch statement syntax changed in newer Paper API
 **What changed:**
+
 - Old syntax: `case NETHER_PORTAL:` (traditional switch)
 - New syntax: `case NETHER_PORTAL, END_PORTAL, END_GATEWAY -> {}` (Java switch expressions)
 
@@ -35,8 +38,10 @@
 **File:** `src/main/java/me/chunklock/listeners/TeleportListener.java`
 
 #### Fix 2: UnlockGuiBuilder.java (Line 713)
+
 **Issue:** `Enchantment.DURABILITY` removed in 1.21
 **What changed:**
+
 - Old: `Enchantment.DURABILITY` (removed)
 - New: `Enchantment.UNBREAKING` (equivalent visual effect)
 
@@ -47,6 +52,7 @@
 ## 🔨 Build Details
 
 ### Compilation Results
+
 ```
 ✅ 124 source files compiled successfully
 ⚠️ 10 warnings (deprecation warnings - acceptable, not breaking)
@@ -59,6 +65,7 @@
 The following deprecation warnings are present but non-critical:
 
 1. **OldEnum.name() deprecated** (EconomyManager.java)
+
    - Impact: Minor - methods still work
    - Fix: Can update in future refactor
    - Current: Works fine as-is
@@ -106,6 +113,7 @@ The generated config is ready:
 ## 🎯 Ready for Testing
 
 ### Your Test Environment
+
 - ✅ Paper 1.21.10 server
 - ✅ Oraxen 1.195.1
 - ✅ MMOItems 6.10.1
@@ -136,20 +144,21 @@ The plugin is ready to test with your dependency plugins:
 
 ## 📊 Compatibility Summary
 
-| Component | 1.20.4 | 1.21.10 | Status |
-|-----------|--------|---------|--------|
-| Paper API | ✅ | ✅ | **Updated** |
-| Java 17 | ✅ | ✅ | **Compatible** |
-| FancyHolograms 2.4.2 | ✅ | ✅ | **Compatible** |
-| Vault API 1.7 | ✅ | ✅ | **Compatible** |
-| Oraxen 1.195.1 | ❓ | ✅ | **Recommended** |
-| MMOItems 6.10.1 | ❓ | ✅ | **Recommended** |
+| Component            | 1.20.4 | 1.21.10 | Status          |
+| -------------------- | ------ | ------- | --------------- |
+| Paper API            | ✅     | ✅      | **Updated**     |
+| Java 17              | ✅     | ✅      | **Compatible**  |
+| FancyHolograms 2.4.2 | ✅     | ✅      | **Compatible**  |
+| Vault API 1.7        | ✅     | ✅      | **Compatible**  |
+| Oraxen 1.195.1       | ❓     | ✅      | **Recommended** |
+| MMOItems 6.10.1      | ❓     | ✅      | **Recommended** |
 
 ---
 
 ## 📝 Changes Summary
 
 ### Modified Files: 4
+
 1. `pom.xml` - Paper version updated
 2. `plugin.yml` - API version updated
 3. `TeleportListener.java` - Switch syntax modernized
@@ -162,6 +171,7 @@ The plugin is ready to test with your dependency plugins:
 ## 🚀 Next Steps
 
 ### Immediate
+
 1. **Transfer JAR to test server** (target/Chunklock.jar)
 2. **Start/restart Paper 1.21.10 server**
 3. **Verify plugin loads** (check server.log)
@@ -170,27 +180,32 @@ The plugin is ready to test with your dependency plugins:
 ### Testing Phases
 
 **Phase 1: Core Functionality**
+
 - Plugin loads correctly
 - Config loads with all sections
 - No Console errors
 
 **Phase 2: Hologram System**
+
 - Holograms display at chunk borders
 - Holograms update correctly
 - FancyHolograms integration works
 
 **Phase 3: Economy System**
+
 - Vault integration works (if enabled)
 - Material requirements work
 - Costs display correctly
 
 **Phase 4: Custom Item Integration** (Main Feature)
+
 - Oraxen items recognized
 - MMOItems items recognized
 - Custom items consume correctly
 - Mixed vanilla + custom items work
 
 **Phase 5: Full Integration Test**
+
 - Complete biome unlock flow
 - All 69 biomes work
 - Teams work correctly
@@ -213,16 +228,19 @@ The following API elements are deprecated in 1.21 but still functional:
 ## 📌 Important Notes
 
 ### For Your Player Base
+
 - Requires Paper 1.21.10 (or later 1.21.x)
 - NOT backward compatible with 1.20.4 servers
 - All custom items must be from 1.21.10 compatible versions
 
 ### For Testing
+
 - Use Paper 1.21.10 test server
 - Use Oraxen 1.195.1 (1.21.10+ only)
 - Use MMOItems 6.10.1 (1.21.10+ only)
 
 ### For Deployment
+
 - Version 2.0 is now updated to 1.21.10
 - Next release should be v2.1 (or v2.0.1 if minimal)
 - Update version in pom.xml if doing a new version number
@@ -247,6 +265,7 @@ The following API elements are deprecated in 1.21 but still functional:
 **Status: ✅ UPGRADE COMPLETE AND SUCCESSFUL**
 
 Your Chunklock plugin is now:
+
 - ✅ Targeting Paper 1.21.10
 - ✅ API compatible with latest Paper
 - ✅ Ready to test Oraxen + MMOItems integration
@@ -257,7 +276,6 @@ Your Chunklock plugin is now:
 
 ---
 
-*Upgrade Date: November 19, 2025*  
-*Build Time: 5.597 seconds*  
-*Status: Production Ready*
-
+_Upgrade Date: November 19, 2025_  
+_Build Time: 5.597 seconds_  
+_Status: Production Ready_

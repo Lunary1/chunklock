@@ -39,7 +39,7 @@ Current (1.20.4) → Support ALL versions 1.20.4-1.21.10
 ```
 Phase 1: Current (1.20.4) → 1.21.10 (2-4 hrs)
          Release and gather feedback
-         
+
 Phase 2: Later decide on multi-version if needed (2-4 weeks)
 ```
 
@@ -52,12 +52,12 @@ Phase 2: Later decide on multi-version if needed (2-4 weeks)
 
 ### ✅ Your Situation Fits Perfectly
 
-| Factor | Status |
-|--------|--------|
-| Test Server | 1.21.10 ✅ |
-| Oraxen Plugin | 1.195.1 (1.21.10+) ✅ |
-| MMOItems Plugin | 6.10.1 (1.21.10+) ✅ |
-| Ready to test | YES ✅ |
+| Factor          | Status                |
+| --------------- | --------------------- |
+| Test Server     | 1.21.10 ✅            |
+| Oraxen Plugin   | 1.195.1 (1.21.10+) ✅ |
+| MMOItems Plugin | 6.10.1 (1.21.10+) ✅  |
+| Ready to test   | YES ✅                |
 
 ### ✅ Simplest Implementation
 
@@ -87,6 +87,7 @@ Phase 2: Later decide on multi-version if needed (2-4 weeks)
 ### When to Consider Option 2
 
 **Only if:**
+
 - Your player base REQUIRES 1.20.4 support
 - Players ask for backward compatibility
 - You have resources for 7+ test servers
@@ -115,7 +116,7 @@ Later (if players ask):
 ✅ **Works:** Everything lined up for 1.21.10  
 ✅ **Flexible:** Can add support later if needed  
 ✅ **Testable:** Can actually verify it works  
-✅ **Maintainable:** Simple code, easy to debug  
+✅ **Maintainable:** Simple code, easy to debug
 
 ---
 
@@ -124,7 +125,7 @@ Later (if players ask):
 **Please confirm one of:**
 
 - [ ] **YES, do Option 1** - Upgrade to 1.21.10, get working ASAP
-- [ ] **YES, do Option 3** - Upgrade to 1.21.10 now, consider multi-version later  
+- [ ] **YES, do Option 3** - Upgrade to 1.21.10 now, consider multi-version later
 - [ ] **NO, do Option 2** - Support all versions (need to discuss testing plan)
 
 ---
@@ -142,4 +143,3 @@ Once you confirm, I will:
 7. ✅ Document any changes needed
 
 **Timeline:** Ready to start immediately upon confirmation ⚡
-

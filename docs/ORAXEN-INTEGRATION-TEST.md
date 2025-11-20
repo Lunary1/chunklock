@@ -10,16 +10,19 @@
 ## 📋 Prerequisites
 
 ### Server Requirements
+
 - ✅ Paper 1.21.10 or later (1.21.x)
 - ✅ Java 17+
 - ✅ 2GB+ RAM allocated
 
 ### Required Plugins
+
 - ✅ **Chunklock 2.0** - Main plugin (freshly built)
 - ✅ **Oraxen 1.195.1** - Custom items plugin
 - ✅ **FancyHolograms 2.4.2** - Optional but recommended (for visual display)
 
 ### Optional But Recommended
+
 - ✅ **Vault** - For economy integration
 - ✅ **EssentialsX** - For easier player management in testing
 
@@ -30,18 +33,20 @@
 ### Step 1.1: Deploy Plugins
 
 1. **Create plugins folder** (if not exists):
+
    ```
    mkdir server/plugins
    ```
 
 2. **Copy plugins:**
+
    ```
    Copy: C:\Users\woute.FELIX\Desktop\chunklock-plugin\target\Chunklock.jar
    To:   server/plugins/Chunklock.jar
-   
+
    Copy: [Your Oraxen JAR]
    To:   server/plugins/Oraxen.jar
-   
+
    Copy: [Your FancyHolograms JAR] (optional)
    To:   server/plugins/FancyHolograms.jar
    ```
@@ -61,6 +66,7 @@ java -Xmx2G -jar paper-1.21.10.jar nogui
 ```
 
 Wait for:
+
 ```
 [XX:XX:XX] [Server thread/INFO]: Done (X.XXXs)! For help, type "help"
 ```
@@ -68,11 +74,13 @@ Wait for:
 ### Step 1.3: Verify Plugin Loading
 
 **In-game command:**
+
 ```
 /plugins
 ```
 
 **Expected output:**
+
 ```
 Plugins (X):
 - Chunklock
@@ -81,6 +89,7 @@ Plugins (X):
 ```
 
 **Check console for:**
+
 ```
 ✅ [Chunklock] ✅ Plugin initialized successfully
 ✅ [Chunklock] ✅ Configuration loaded
@@ -93,21 +102,25 @@ Plugins (X):
 ### Step 1.4: Verify Configs Loaded
 
 **Check Chunklock config:**
+
 ```
 /chunklock status
 ```
 
 **Expected:**
+
 - Plugin responds
 - No errors
 - Config loaded successfully
 
 **Check Oraxen:**
+
 ```
 /oraxen list
 ```
 
 **Expected:**
+
 - Lists available custom items
 - At least some items shown
 
@@ -118,11 +131,13 @@ Plugins (X):
 ### Step 2.1: Identify Available Oraxen Items
 
 **Find custom items in Oraxen:**
+
 ```
 /oraxen list
 ```
 
 **Write down some item IDs you see:**
+
 ```
 Example output:
 - custom_sword
@@ -132,6 +147,7 @@ Example output:
 ```
 
 **Or give yourself some items:**
+
 ```
 /oraxen give @s custom_sword 1
 /oraxen give @s mythic_bow 1
@@ -140,11 +156,13 @@ Example output:
 ### Step 2.2: Verify You Can Get Oraxen Items
 
 **Test giving items:**
+
 ```
 /oraxen give @s <item_id> 1
 ```
 
 **Verify items appear in inventory:**
+
 - You should see the custom item with custom name/color
 - Unique texture/model if configured in Oraxen
 
@@ -155,6 +173,7 @@ Example output:
 ### Step 3.1: Edit Chunklock Config
 
 **File location:**
+
 ```
 server/plugins/Chunklock/config.yml
 ```
@@ -162,6 +181,7 @@ server/plugins/Chunklock/config.yml
 ### Step 3.2: Find Biome Unlocks Section
 
 Look for:
+
 ```yaml
 biome-unlocks:
   PLAINS:
@@ -177,25 +197,28 @@ biome-unlocks:
 **Add to PLAINS biome (simple test):**
 
 **Before:**
+
 ```yaml
-  PLAINS:
-    WHEAT: 8
-    HAY_BLOCK: 2
+PLAINS:
+  WHEAT: 8
+  HAY_BLOCK: 2
 ```
 
 **After:**
+
 ```yaml
-  PLAINS:
-    vanilla:
-      WHEAT: 8
-      HAY_BLOCK: 2
-    custom:
-      - plugin: oraxen
-        item: custom_sword
-        amount: 1
+PLAINS:
+  vanilla:
+    WHEAT: 8
+    HAY_BLOCK: 2
+  custom:
+    - plugin: oraxen
+      item: custom_sword
+      amount: 1
 ```
 
 **What this means:**
+
 - Player needs: 8 WHEAT + 2 HAY_BLOCK + 1 custom_sword (ALL items)
 - Any one missing = cannot unlock
 
@@ -204,20 +227,21 @@ biome-unlocks:
 **Add to FOREST biome (with multiple custom items):**
 
 ```yaml
-  FOREST:
-    vanilla:
-      OAK_LOG: 16
-      APPLE: 4
-    custom:
-      - plugin: oraxen
-        item: custom_sword
-        amount: 1
-      - plugin: oraxen
-        item: mythic_bow
-        amount: 1
+FOREST:
+  vanilla:
+    OAK_LOG: 16
+    APPLE: 4
+  custom:
+    - plugin: oraxen
+      item: custom_sword
+      amount: 1
+    - plugin: oraxen
+      item: mythic_bow
+      amount: 1
 ```
 
 **What this means:**
+
 - Player needs: 16 OAK_LOG + 4 APPLE + 1 custom_sword + 1 mythic_bow
 
 ### Step 3.5: Create Oraxen-Only Test Biome
@@ -225,17 +249,18 @@ biome-unlocks:
 **Create a new biome with ONLY Oraxen items:**
 
 ```yaml
-  JUNGLE:
-    custom:
-      - plugin: oraxen
-        item: custom_sword
-        amount: 2
-      - plugin: oraxen
-        item: glowing_dust
-        amount: 5
+JUNGLE:
+  custom:
+    - plugin: oraxen
+      item: custom_sword
+      amount: 2
+    - plugin: oraxen
+      item: glowing_dust
+      amount: 5
 ```
 
 **What this means:**
+
 - NO vanilla items needed
 - ONLY custom Oraxen items required
 - Pure test of Oraxen integration
@@ -245,16 +270,19 @@ biome-unlocks:
 **Save the file** (keep YAML indentation!)
 
 **Reload Chunklock:**
+
 ```
 /chunklock reload
 ```
 
 **Expected output:**
+
 ```
 [Chunklock] ✅ Configuration reloaded successfully
 ```
 
 **If errors appear:**
+
 - Check YAML indentation (2 spaces)
 - Verify item names match exactly `/oraxen list`
 - Check console for specific errors
@@ -266,22 +294,26 @@ biome-unlocks:
 ### Test 4.1: Vanilla-Only PLAINS (Baseline)
 
 **Clear inventory:**
+
 ```
 /clear @s
 ```
 
 **Give vanilla items only:**
+
 ```
 /give @s wheat 8
 /give @s hay_block 2
 ```
 
 **Try to unlock PLAINS:**
+
 ```
 /chunklock unlock
 ```
 
 **Expected flow:**
+
 1. GUI shows PLAINS option
 2. You can click to unlock
 3. Items consumed
@@ -294,11 +326,13 @@ biome-unlocks:
 ### Test 4.2: Vanilla + Oraxen Mixed - FOREST
 
 **Clear inventory:**
+
 ```
 /clear @s
 ```
 
 **Give ALL required items:**
+
 ```
 /give @s oak_log 16
 /give @s apple 4
@@ -307,11 +341,13 @@ biome-unlocks:
 ```
 
 **Try to unlock FOREST:**
+
 ```
 /chunklock unlock
 ```
 
 **Expected flow:**
+
 1. GUI shows costs
 2. Shows: OAK_LOG (16), APPLE (4), + Oraxen items
 3. All items displayed correctly
@@ -320,6 +356,7 @@ biome-unlocks:
 6. Chunk unlocks ✅
 
 **What to verify:**
+
 - [ ] Custom items show in GUI
 - [ ] Custom items consume
 - [ ] Vanilla items consume
@@ -332,22 +369,26 @@ biome-unlocks:
 ### Test 4.3: Oraxen-Only Unlock - JUNGLE
 
 **Clear inventory:**
+
 ```
 /clear @s
 ```
 
 **Give ONLY Oraxen items (no vanilla):**
+
 ```
 /oraxen give @s custom_sword 2
 /oraxen give @s glowing_dust 5
 ```
 
 **Try to unlock JUNGLE:**
+
 ```
 /chunklock unlock
 ```
 
 **Expected flow:**
+
 1. GUI shows JUNGLE option
 2. Shows ONLY Oraxen items needed
 3. No vanilla items required
@@ -355,6 +396,7 @@ biome-unlocks:
 5. Items consumed ✅
 
 **What to verify:**
+
 - [ ] No vanilla items required
 - [ ] Custom items are sole requirement
 - [ ] Pure Oraxen integration works
@@ -367,6 +409,7 @@ biome-unlocks:
 ### Test 4.4: Missing Oraxen Items (Negative Test)
 
 **Clear inventory and give incomplete items:**
+
 ```
 /clear @s
 /give @s oak_log 16
@@ -376,16 +419,19 @@ biome-unlocks:
 ```
 
 **Try to unlock FOREST:**
+
 ```
 /chunklock unlock
 ```
 
 **Expected behavior:**
+
 1. Cannot unlock (all-or-nothing system)
 2. Error message: "You don't have all required items"
 3. Items NOT consumed ✅
 
 **What to verify:**
+
 - [ ] Missing item prevents unlock
 - [ ] All-or-nothing system enforced
 - [ ] No partial unlocks allowed
@@ -399,11 +445,13 @@ biome-unlocks:
 ### Step 5.1: Check Cost Display
 
 **Open unlock GUI:**
+
 ```
 /chunklock unlock
 ```
 
 **Visually inspect:**
+
 - [ ] Oraxen item names display correctly
 - [ ] Item amounts show
 - [ ] Colors/formatting looks good
@@ -415,17 +463,20 @@ Take a screenshot or note what you see.
 ### Step 5.2: Check Hologram Display
 
 **Build near chunk border:**
+
 ```
 Move to edge of unlocked chunk
 ```
 
 **Look for holograms:**
+
 - [ ] Holograms appear
 - [ ] Show chunk info
 - [ ] Display costs
 - [ ] Update correctly
 
 **Expected text:**
+
 ```
 ═══════════════════
 Unlock: FOREST
@@ -444,6 +495,7 @@ Cost: OAK_LOG x16
 ### Test 6.1: Wrong Item Type
 
 **If Oraxen item name is wrong in config:**
+
 ```yaml
 - plugin: oraxen
   item: nonexistent_item
@@ -451,6 +503,7 @@ Cost: OAK_LOG x16
 ```
 
 **Expected:**
+
 - Console warning: "Custom item not found"
 - Plugin handles gracefully
 - No crash ✅
@@ -458,6 +511,7 @@ Cost: OAK_LOG x16
 ### Test 6.2: Duplicate Items
 
 **If same item listed twice:**
+
 ```yaml
 custom:
   - plugin: oraxen
@@ -469,6 +523,7 @@ custom:
 ```
 
 **Expected:**
+
 - Requires 2 total custom_sword items
 - Or error if not allowed
 - No crash ✅
@@ -476,6 +531,7 @@ custom:
 ### Test 6.3: Zero Amount
 
 **If amount is 0:**
+
 ```yaml
 - plugin: oraxen
   item: custom_sword
@@ -483,6 +539,7 @@ custom:
 ```
 
 **Expected:**
+
 - Item requirement ignored
 - Or error message
 - No crash ✅
@@ -490,6 +547,7 @@ custom:
 ### Test 6.4: Negative Amount
 
 **If amount is negative:**
+
 ```yaml
 - plugin: oraxen
   item: custom_sword
@@ -497,6 +555,7 @@ custom:
 ```
 
 **Expected:**
+
 - Validation error
 - Config rejected
 - Clear error message ✅
@@ -515,38 +574,38 @@ custom:
 Plugin Loading: ✅ ⚠️ ❌
   - /plugins shows Chunklock
   - /plugins shows Oraxen
-  
+
 Configuration: ✅ ⚠️ ❌
   - Config loaded without errors
   - Biome-unlocks section present
-  
+
 Vanilla Items (Baseline): ✅ ⚠️ ❌
   - PLAINS unlock works with vanilla items
   - Items consumed correctly
-  
+
 Mixed Items: ✅ ⚠️ ❌
   - FOREST unlock works with mixed items
   - All items displayed in GUI
   - All items consumed
-  
+
 Oraxen-Only: ✅ ⚠️ ❌
   - JUNGLE unlock works with only Oraxen items
   - No vanilla items needed
   - Custom items consumed
-  
+
 Validation: ✅ ⚠️ ❌
   - Cannot unlock without all items
   - All-or-nothing system works
-  
+
 GUI Display: ✅ ⚠️ ❌
   - Oraxen items show in unlock GUI
   - Names and amounts display
   - Formatting looks correct
-  
+
 Holograms: ✅ ⚠️ ❌
   - Holograms appear at borders
   - Custom items display in holograms
-  
+
 Error Handling: ✅ ⚠️ ❌
   - No crashes on errors
   - Graceful error messages
@@ -555,6 +614,7 @@ Error Handling: ✅ ⚠️ ❌
 ### Step 7.2: Issues Encountered
 
 **Document any problems:**
+
 ```
 Issue 1: [Description]
 Location: [File/Command/Config]
@@ -569,6 +629,7 @@ Issue 2: [Description]
 ### Step 7.3: Console Logs
 
 **Save console output:**
+
 - Any error messages
 - Warnings
 - Info messages about Oraxen items
@@ -583,6 +644,7 @@ Issue 2: [Description]
 ## 🎯 Success Criteria
 
 ### ✅ Full Success (Ready for Production)
+
 - All checkboxes pass ✅
 - No errors or exceptions
 - All items work as expected
@@ -590,6 +652,7 @@ Issue 2: [Description]
 - Ready to release
 
 ### ⚠️ Partial Success (Needs Fixes)
+
 - Some features work ✅
 - Some features fail ⚠️
 - Issues documented
@@ -597,6 +660,7 @@ Issue 2: [Description]
 - Requires fixes before release
 
 ### ❌ Failed (Not Ready)
+
 - Multiple failures
 - Crashes or exceptions
 - Major functionality broken
@@ -609,10 +673,12 @@ Issue 2: [Description]
 ### Issue: Oraxen Items Not Recognized
 
 **Symptoms:**
+
 - Custom items don't show in GUI
 - Cannot unlock even with items
 
 **Solutions:**
+
 1. Check item names match exactly: `/oraxen list`
 2. Verify YAML indentation (2 spaces)
 3. Check Oraxen is loaded: `/plugins`
@@ -622,11 +688,13 @@ Issue 2: [Description]
 ### Issue: Items Show But Don't Consume
 
 **Symptoms:**
+
 - GUI shows items
 - Click to unlock
 - But items still in inventory
 
 **Solutions:**
+
 1. Check all-or-nothing logic
 2. Verify amounts are correct
 3. Check for inventory limit issues
@@ -636,10 +704,12 @@ Issue 2: [Description]
 ### Issue: GUI Shows Nothing
 
 **Symptoms:**
+
 - `/chunklock unlock` opens empty GUI
 - No items or costs displayed
 
 **Solutions:**
+
 1. Verify config has items
 2. Check YAML syntax
 3. Reload config: `/chunklock reload`
@@ -649,10 +719,12 @@ Issue 2: [Description]
 ### Issue: Plugin Crashes
 
 **Symptoms:**
+
 - Server console shows exceptions
 - Plugin unloads
 
 **Solutions:**
+
 1. Check Java version (17+)
 2. Check Paper version (1.21.10)
 3. Review full error stack trace
@@ -664,17 +736,20 @@ Issue 2: [Description]
 ## 📞 Debug Commands
 
 ### Check Plugin Status
+
 ```
 /chunklock status
 ```
 
 ### Check Available Biomes
+
 ```
 /chunklock unlock
 (See what biomes are available)
 ```
 
 ### Check Oraxen Integration
+
 ```
 /oraxen list
 (Verify items exist)
@@ -683,11 +758,13 @@ Issue 2: [Description]
 ```
 
 ### Reload After Config Changes
+
 ```
 /chunklock reload
 ```
 
 ### Check Console for Errors
+
 ```
 Watch server console during tests
 Look for [ERROR] or stack traces
@@ -740,6 +817,7 @@ Recommendations:
 ## 🎉 Next Steps
 
 ### If All Tests Pass ✅
+
 1. Document the successful configuration
 2. Create example config for users
 3. Release version 2.1 with Oraxen support
@@ -747,6 +825,7 @@ Recommendations:
 5. Create user guide for setup
 
 ### If Issues Found ⚠️
+
 1. Document all issues clearly
 2. Prioritize by severity
 3. Create fixes
@@ -754,6 +833,7 @@ Recommendations:
 5. Iterate until all pass
 
 ### If Critical Failures ❌
+
 1. Analyze root causes
 2. Review API compatibility
 3. Check plugin interactions
@@ -779,4 +859,3 @@ Recommendations:
 **Good luck with testing! 🧪✨**
 
 Report your findings when complete, and we can proceed to the next phase (MMOItems integration or production release).
-

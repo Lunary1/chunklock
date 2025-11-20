@@ -9,6 +9,7 @@
 ## ✅ Pre-Testing Checklist
 
 ### Server Setup
+
 - [ ] Paper 1.21.10 server running
 - [ ] Chunklock plugin deployed (target/Chunklock.jar)
 - [ ] Oraxen 1.195.1 installed
@@ -17,6 +18,7 @@
 - [ ] Server started and all plugins loaded
 
 ### Plugin Verification
+
 ```
 /plugins
 Should show:
@@ -27,6 +29,7 @@ Should show:
 ```
 
 ### Config Verification
+
 ```
 Location: plugins/Chunklock/config.yml
 Should have:
@@ -47,11 +50,13 @@ Should have:
 **Objective:** Verify plugin loads without errors
 
 **Steps:**
+
 1. Check server console for errors
 2. Look for initialization messages
 3. Verify no RED ERROR messages
 
 **Expected Output:**
+
 ```
 [Chunklock] ✅ Plugin initialized successfully
 [Chunklock] ✅ Configuration loaded
@@ -67,12 +72,14 @@ Should have:
 **Objective:** Verify all config sections load correctly
 
 **Commands to Run:**
+
 ```
 /chunklock status
 /chunklock help
 ```
 
 **What to Look For:**
+
 - [ ] Status command works
 - [ ] Help message displays
 - [ ] No config-related errors
@@ -86,11 +93,13 @@ Should have:
 **Objective:** Verify holograms display correctly
 
 **Commands to Run:**
+
 ```
 /chunklock start
 ```
 
 **What to Look For:**
+
 - [ ] Holograms appear at chunk borders
 - [ ] Holograms are readable
 - [ ] Glass borders visible (if enabled)
@@ -106,33 +115,39 @@ Should have:
 **Test Cases:**
 
 **Test 4.1: PLAINS Unlock (Simple)**
+
 ```
 Required: WHEAT: 8, HAY_BLOCK: 2
 ```
 
 Steps:
+
 1. Give yourself items: `/give @s wheat 8` `/give @s hay_block 2`
 2. Run `/chunklock unlock`
 3. Select PLAINS biome
 4. Verify chunk unlocks
 
 Expected:
+
 - [ ] Items consumed
 - [ ] Chunk unlocks successfully
 - [ ] No errors
 
 **Test 4.2: FOREST Unlock (Medium)**
+
 ```
 Required: OAK_LOG: 16, APPLE: 4
 ```
 
 Steps:
+
 1. Give yourself items
 2. Run `/chunklock unlock`
 3. Select FOREST biome
 4. Verify chunk unlocks
 
 Expected:
+
 - [ ] Items consumed correctly
 - [ ] Hologram updates
 - [ ] Cost displayed correctly
@@ -146,10 +161,12 @@ Expected:
 **Objective:** Test custom items from MMOItems
 
 **Prerequisites:**
+
 - Verify MMOItems items exist: `/mi list`
 - Verify items can be obtained
 
 **Test 5.1: Check MMOItems Integration**
+
 ```
 /mi list
 Should show available items
@@ -168,11 +185,12 @@ biome-unlocks:
     custom:
       - plugin: mmoitems
         type: MATERIAL
-        item: diamond_ingot  # or your custom item name
+        item: diamond_ingot # or your custom item name
         amount: 2
 ```
 
 Save and reload:
+
 ```
 /chunklock reload
 ```
@@ -180,12 +198,14 @@ Save and reload:
 **Test 5.3: Try Unlock with Custom Items**
 
 Steps:
+
 1. Get MMOItems item: `/mi give <player> MATERIAL:diamond_ingot 2`
 2. Get vanilla items: `/give @s wheat 8` `/give @s hay_block 2`
 3. Run `/chunklock unlock`
 4. Verify all items are required (all-or-nothing)
 
 Expected:
+
 - [ ] Plugin recognizes custom items
 - [ ] Custom items count toward unlock cost
 - [ ] Without custom items, unlock fails
@@ -200,10 +220,12 @@ Expected:
 **Objective:** Test custom items from Oraxen
 
 **Prerequisites:**
+
 - Verify Oraxen items exist
 - Verify items can be obtained
 
 **Test 6.1: Check Oraxen Integration**
+
 ```
 /oraxen list  (or appropriate command)
 Should show available custom items
@@ -221,11 +243,12 @@ biome-unlocks:
       MELON_SLICE: 8
     custom:
       - plugin: oraxen
-        item: mythic_sword  # or your Oraxen item ID
+        item: mythic_sword # or your Oraxen item ID
         amount: 1
 ```
 
 Save and reload:
+
 ```
 /chunklock reload
 ```
@@ -233,12 +256,14 @@ Save and reload:
 **Test 6.3: Try Unlock with Oraxen Items**
 
 Steps:
+
 1. Get Oraxen item: `/oraxen give <player> mythic_sword 1`
 2. Get vanilla items: `/give @s cocoa_beans 16` `/give @s melon_slice 8`
 3. Run `/chunklock unlock`
 4. Verify all items are required
 
 Expected:
+
 - [ ] Plugin recognizes Oraxen items
 - [ ] Oraxen items display correctly
 - [ ] All-or-nothing requirement works
@@ -253,6 +278,7 @@ Expected:
 **Objective:** Test both MMOItems and Oraxen in same biome
 
 **Test Config:**
+
 ```yaml
 biome-unlocks:
   DARK_FOREST:
@@ -270,12 +296,14 @@ biome-unlocks:
 ```
 
 **Steps:**
+
 1. Give all items (vanilla + both custom)
 2. Run `/chunklock unlock`
 3. Select DARK_FOREST
 4. Verify unlock succeeds
 
 Expected:
+
 - [ ] All items types recognized
 - [ ] All items consumed
 - [ ] No conflicts between plugins
@@ -290,12 +318,14 @@ Expected:
 **Objective:** Verify economy costs work with custom items
 
 **Test 8.1: Check Cost Display**
+
 ```
 /chunklock unlock
 (Look at shown costs)
 ```
 
 Expected:
+
 - [ ] Costs display for each biome
 - [ ] Format is readable
 - [ ] All biomes have costs
@@ -303,6 +333,7 @@ Expected:
 **Test 8.2: Test Vault Mode (if enabled)**
 
 Edit config:
+
 ```yaml
 economy:
   type: "vault"
@@ -311,6 +342,7 @@ economy:
 Reload: `/chunklock reload`
 
 Expected:
+
 - [ ] Costs show in money
 - [ ] Unlock requires currency
 - [ ] Currency deducted on unlock
@@ -324,11 +356,13 @@ Expected:
 **Objective:** Verify visual chunk indicators
 
 **Steps:**
+
 1. Check config: `glass-borders.enabled: true`
 2. Move near chunk boundaries
 3. Look for glass blocks at borders
 
 Expected:
+
 - [ ] Glass borders appear
 - [ ] Correct material: LIGHT_GRAY_STAINED_GLASS
 - [ ] Full height visible
@@ -343,6 +377,7 @@ Expected:
 **Objective:** Complete end-to-end test with all features
 
 **Scenario:**
+
 ```
 1. Start fresh player
 2. Run /chunklock start
@@ -352,6 +387,7 @@ Expected:
 ```
 
 **Expected Flow:**
+
 ```
 [Player] /chunklock start
 → Starting chunk assigned
@@ -404,6 +440,7 @@ Issues Found: [List here]
 ## 🐛 Troubleshooting
 
 ### Plugin Won't Load
+
 ```
 Check: Paper 1.21.10 compatibility
 Check: No conflicting plugins
@@ -412,6 +449,7 @@ Action: Post error message for analysis
 ```
 
 ### Custom Items Not Recognized
+
 ```
 Check: MMOItems/Oraxen installed
 Check: Items exist in plugin config
@@ -420,6 +458,7 @@ Action: Verify item IDs in respective plugins
 ```
 
 ### Items Not Consumed
+
 ```
 Check: Inventory has exact amounts
 Check: All items present (all-or-nothing)
@@ -428,6 +467,7 @@ Action: Try with admin account first
 ```
 
 ### Holograms Not Showing
+
 ```
 Check: FancyHolograms installed
 Check: holograms.enabled: true in config
@@ -443,9 +483,9 @@ Space for notes during testing:
 
 ```
 [Phase X Notes]
-Time: 
-Result: 
-Issues: 
+Time:
+Result:
+Issues:
 ```
 
 ---
@@ -458,7 +498,7 @@ Once all phases complete successfully:
 **Date:** [Date]  
 **Overall Result:** ✅ READY FOR PRODUCTION
 
-Signature: _________________
+Signature: ********\_********
 
 ---
 
@@ -475,4 +515,3 @@ Signature: _________________
 ---
 
 **Good luck with testing! 🎮✨**
-
