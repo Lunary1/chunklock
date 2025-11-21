@@ -47,18 +47,23 @@ public class UnlockGuiBuilder {
         addChunkInfoItem(inv, chunk, eval);
         
         // Check if we should use Vault economy or materials
+        // Always use the chunk-aware calculateRequirement to support dynamic costs
+        var paymentRequirement = economyManager.calculateRequirement(player, chunk, eval.biome, eval);
+        
         if (economyManager != null && economyManager.getCurrentType() == me.chunklock.economy.EconomyManager.EconomyType.VAULT 
             && economyManager.isVaultAvailable()) {
             // Use money-based UI
-            var paymentRequirement = economyManager.calculateRequirement(player, eval.biome, eval);
             addMoneyProgressBar(inv, player, paymentRequirement, economyManager);
             addMoneyRequirementDisplay(inv, player, paymentRequirement, economyManager);
             addMoneyUnlockButton(inv, player, paymentRequirement, economyManager);
         } else {
             // Use material-based UI (default)
-            addProgressBar(inv, player, requirement);
-            addRequirementDisplay(inv, player, requirement, eval.biome, biomeRegistry);
-            addUnlockButton(inv, player, requirement);
+            // Convert PaymentRequirement to UnlockRequirement for display
+            BiomeUnlockRegistry.UnlockRequirement materialRequirement = new BiomeUnlockRegistry.UnlockRequirement(
+                paymentRequirement.getMaterial(), paymentRequirement.getMaterialAmount());
+            addProgressBar(inv, player, materialRequirement);
+            addRequirementDisplay(inv, player, materialRequirement, eval.biome, biomeRegistry);
+            addUnlockButton(inv, player, materialRequirement);
         }
         
         addHelpItem(inv);

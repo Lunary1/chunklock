@@ -184,9 +184,10 @@ public class ChunkLockManager {
                 Difficulty diff = Difficulty.valueOf(diffStr.toUpperCase());
                 String ownerStr = section.getString(key + ".owner", null);
                 UUID owner = ownerStr != null ? UUID.fromString(ownerStr) : null;
+                double baseValue = section.getDouble(key + ".base-value", 0.0);
 
                 String mapKey = world + ":" + x + ":" + z;
-                chunkDataMap.put(mapKey, new ChunkData(locked, diff, owner));
+                chunkDataMap.put(mapKey, new ChunkData(locked, diff, owner, baseValue));
             } catch (Exception e) {
                 plugin.getLogger().warning("Failed to load chunk entry: " + key);
             }
@@ -233,6 +234,7 @@ public class ChunkLockManager {
                 } else {
                     section.set(base + ".owner", null);
                 }
+                section.set(base + ".base-value", entry.getValue().getBaseValue());
             }
 
             config.save(file);
@@ -291,5 +293,23 @@ public class ChunkLockManager {
 
     public TeamManager getTeamManager() {
         return teamManager;
+    }
+
+    /**
+     * Get the base value for a chunk.
+     * @param chunk The chunk to get the base value for
+     * @return The base value, or 0.0 if not set
+     */
+    public double getBaseValue(Chunk chunk) {
+        return getChunkData(chunk).getBaseValue();
+    }
+
+    /**
+     * Set the base value for a chunk.
+     * @param chunk The chunk to set the base value for
+     * @param value The base value to set
+     */
+    public void setBaseValue(Chunk chunk, double value) {
+        getChunkData(chunk).setBaseValue(value);
     }
 }

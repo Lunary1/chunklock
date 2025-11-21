@@ -15,18 +15,16 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.Particle;
+import org.bukkit.Location;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.managers.TeamManager;
 import me.chunklock.ui.UnlockGuiStateManager.PendingUnlock;
 import me.chunklock.ChunklockPlugin;
-import org.bukkit.Bukkit;
-import org.bukkit.World;
-import org.bukkit.Particle;
-import org.bukkit.Location;
-import java.util.logging.Level;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -86,7 +84,7 @@ public class UnlockGui {
      */
     public void reloadConfiguration() {
         loadDebugConfiguration();
-    }    /**
+    }        /** 
      * Open the unlock GUI for a player looking at a specific chunk.
      */
     public void open(Player player, Chunk chunk) {
@@ -95,19 +93,26 @@ public class UnlockGui {
         // Clean up any existing state first
         stateManager.cleanupPlayer(playerId);
         
-        // Evaluate chunk and calculate requirements
+        // Evaluate chunk and calculate requirements using unified cost calculation
         var evaluation = chunkLockManager.evaluateChunk(playerId, chunk);
         Biome biome = evaluation.biome;
         UUID teamId = teamManager.getTeamLeader(playerId);
         boolean contested = chunkLockManager.isContestedChunk(chunk, teamId);
 
-        var requirement = biomeUnlockRegistry.calculateRequirement(player, biome, evaluation.score);
+        // Always use chunk-aware calculateRequirement to support dynamic costs
+        var paymentRequirement = economyManager.calculateRequirement(player, chunk, biome, evaluation);
         
         // Apply contested chunk cost multiplier
         if (contested) {
             double multiplier = chunkLockManager.getContestedCostMultiplier();
-            int adjustedAmount = (int) Math.ceil(requirement.amount() * multiplier);
-            requirement = new BiomeUnlockRegistry.UnlockRequirement(requirement.material(), adjustedAmount);
+            if (paymentRequirement.getType() == me.chunklock.economy.EconomyManager.EconomyType.MATERIALS) {
+                int adjustedAmount = (int) Math.ceil(paymentRequirement.getMaterialAmount() * multiplier);
+                paymentRequirement = new me.chunklock.economy.EconomyManager.PaymentRequirement(
+                    paymentRequirement.getMaterial(), adjustedAmount);
+            } else {
+                double adjustedCost = paymentRequirement.getVaultCost() * multiplier;
+                paymentRequirement = new me.chunklock.economy.EconomyManager.PaymentRequirement(adjustedCost);
+            }
             
             // Enhanced contested notification
             player.sendMessage(Component.text("⚔ ").color(NamedTextColor.RED)
@@ -119,11 +124,22 @@ public class UnlockGui {
             player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
         }
 
+        // Convert PaymentRequirement to UnlockRequirement for builder (backward compatibility)
+        BiomeUnlockRegistry.UnlockRequirement requirementForBuilder = null;
+        if (paymentRequirement.getType() == me.chunklock.economy.EconomyManager.EconomyType.MATERIALS) {
+            requirementForBuilder = new BiomeUnlockRegistry.UnlockRequirement(
+                paymentRequirement.getMaterial(), paymentRequirement.getMaterialAmount());
+        } else {
+            // Fallback for vault - use default material
+            requirementForBuilder = new BiomeUnlockRegistry.UnlockRequirement(
+                org.bukkit.Material.DIRT, 1);
+        }
+
         // Build and open the GUI
-        Inventory inventory = builder.build(player, chunk, evaluation, requirement, economyManager, biomeUnlockRegistry);
+        Inventory inventory = builder.build(player, chunk, evaluation, requirementForBuilder, economyManager, biomeUnlockRegistry);
         
-        // Store state
-        PendingUnlock pendingUnlock = new PendingUnlock(chunk, biome, requirement, contested);
+        // Store state with PaymentRequirement (unified cost)
+        PendingUnlock pendingUnlock = new PendingUnlock(chunk, biome, paymentRequirement, contested);
         stateManager.setPendingUnlock(playerId, pendingUnlock);
         stateManager.setActiveGui(playerId, inventory);
         
@@ -132,9 +148,15 @@ public class UnlockGui {
         
         // Debug logging
         if (debugLogging) {
+            String costInfo;
+            if (paymentRequirement.getType() == me.chunklock.economy.EconomyManager.EconomyType.MATERIALS) {
+                costInfo = paymentRequirement.getMaterialAmount() + "x " + paymentRequirement.getMaterial();
+            } else {
+                costInfo = "$" + paymentRequirement.getVaultCost();
+            }
             ChunklockPlugin.getInstance().getLogger().info("Opening unlock GUI for " + player.getName() + 
                 " - chunk " + chunk.getX() + "," + chunk.getZ() + 
-                " - required: " + requirement.amount() + "x " + requirement.material() +
+                " - required: " + costInfo +
                 (contested ? " [CONTESTED]" : ""));
         }
         
@@ -340,8 +362,9 @@ public class UnlockGui {
                 && economyManager.isVaultAvailable()) {
                 
                 // Use money-based unlock
+                // Always use chunk-aware calculateRequirement to support dynamic costs
                 var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), state.chunk);
-                var paymentRequirement = economyManager.calculateRequirement(player, state.biome, evaluation);
+                var paymentRequirement = economyManager.calculateRequirement(player, state.chunk, state.biome, evaluation);
                 
                 if (!economyManager.canAfford(player, paymentRequirement)) {
                     handleInsufficientFunds(player, paymentRequirement, economyManager);
@@ -353,15 +376,32 @@ public class UnlockGui {
                 
             } else {
                 // Use material-based unlock (default)
-                // Re-evaluate chunk to get current score
+                // Recalculate cost at validation time to ensure it matches current state (neighbors may have changed)
                 var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), state.chunk);
+                var paymentRequirement = economyManager.calculateRequirement(player, state.chunk, state.biome, evaluation);
                 
-                // Check if player has ALL required items (vanilla + custom)
-                if (!biomeUnlockRegistry.hasRequiredItems(player, state.biome, evaluation.score)) {
-                    // Get first vanilla item for display purposes only
-                    int playerHas = countPlayerItems(player, state.requirement.material());
-                    int required = state.requirement.amount();
-                    handleInsufficientItems(player, playerHas, required, state.requirement.material());
+                // Apply contested multiplier if needed
+                if (state.contested) {
+                    double multiplier = chunkLockManager.getContestedCostMultiplier();
+                    if (paymentRequirement.getType() == me.chunklock.economy.EconomyManager.EconomyType.MATERIALS) {
+                        int adjustedAmount = (int) Math.ceil(paymentRequirement.getMaterialAmount() * multiplier);
+                        paymentRequirement = new me.chunklock.economy.EconomyManager.PaymentRequirement(
+                            paymentRequirement.getMaterial(), adjustedAmount);
+                    }
+                }
+                
+                // Validate using unified cost calculation
+                if (!economyManager.canAfford(player, paymentRequirement)) {
+                    // Get player's item count for error message
+                    int playerHas = 0;
+                    int required = 0;
+                    Material material = null;
+                    if (paymentRequirement.getType() == me.chunklock.economy.EconomyManager.EconomyType.MATERIALS) {
+                        material = paymentRequirement.getMaterial();
+                        required = paymentRequirement.getMaterialAmount();
+                        playerHas = countPlayerItems(player, material);
+                    }
+                    handleInsufficientItems(player, playerHas, required, material);
                     return;
                 }
 
@@ -369,8 +409,8 @@ public class UnlockGui {
                     ChunklockPlugin.getInstance().getLogger().info("Item validation passed for " + player.getName());
                 }
 
-                // Execute material-based unlock
-                executeMaterialUnlock(player, state, teamId);
+                // Execute material-based unlock with recalculated payment requirement
+                executeMaterialUnlock(player, state, teamId, paymentRequirement);
             }
             
         } catch (Exception e) {
@@ -461,28 +501,39 @@ public class UnlockGui {
     /**
      * Execute material-based unlock process.
      */
-    private void executeMaterialUnlock(Player player, PendingUnlock state, UUID teamId) {
+    private void executeMaterialUnlock(Player player, PendingUnlock state, UUID teamId, 
+                                      me.chunklock.economy.EconomyManager.PaymentRequirement paymentRequirement) {
         try {
             // Pre-unlock effects
             player.playSound(player.getLocation(), Sound.BLOCK_SMITHING_TABLE_USE, 1.0f, 1.0f);
             
-            // Get current evaluation (might have changed)
+            // Get current evaluation (required for processPayment)
             var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), state.chunk);
             
-            // Use the registry's consumption method which handles team integration
-            biomeUnlockRegistry.consumeRequiredItem(player, state.biome, evaluation.score);
+            // Use unified payment processing which handles dynamic costs correctly
+            if (!economyManager.processPayment(player, paymentRequirement, state.biome, evaluation)) {
+                player.sendMessage(Component.text("❌ Payment processing failed. Please try again.")
+                    .color(NamedTextColor.RED));
+                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
+                return;
+            }
             
             if (debugLogging) {
-                ChunklockPlugin.getInstance().getLogger().info("Consumed items for " + player.getName() + 
-                    " using BiomeUnlockRegistry method");
+                if (paymentRequirement.getType() == me.chunklock.economy.EconomyManager.EconomyType.MATERIALS) {
+                    ChunklockPlugin.getInstance().getLogger().info("Consumed " + 
+                        paymentRequirement.getMaterialAmount() + "x " + paymentRequirement.getMaterial() + 
+                        " for " + player.getName());
+                }
             }
             
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().warning("BiomeUnlockRegistry consumption failed, using fallback: " + e.getMessage());
+            ChunklockPlugin.getInstance().getLogger().warning("Payment processing failed, using fallback: " + e.getMessage());
             
-            // Fallback: Manual item removal
-            ItemStack requiredStack = new ItemStack(state.requirement.material(), state.requirement.amount());
-            player.getInventory().removeItem(requiredStack);
+            // Fallback: Manual item removal (only for material-based payments)
+            if (paymentRequirement.getType() == me.chunklock.economy.EconomyManager.EconomyType.MATERIALS) {
+                ItemStack requiredStack = new ItemStack(paymentRequirement.getMaterial(), paymentRequirement.getMaterialAmount());
+                player.getInventory().removeItem(requiredStack);
+            }
         }
 
         // Complete the unlock process
@@ -496,7 +547,8 @@ public class UnlockGui {
         // Play error sound
         player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
         
-        int needed = required - playerHas;
+        // Calculate missing amount (ensure it's not negative)
+        int needed = Math.max(0, required - playerHas);
         
         // Send formatted message
         player.sendMessage(Component.empty());
@@ -505,16 +557,26 @@ public class UnlockGui {
         player.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━").color(NamedTextColor.DARK_RED));
         player.sendMessage(Component.empty());
         
-        player.sendMessage(Component.text("📦 Required: ").color(NamedTextColor.GRAY)
-            .append(Component.text(required + "x " + formatMaterialName(material)).color(NamedTextColor.WHITE)));
-        player.sendMessage(Component.text("🎒 You have: ").color(NamedTextColor.GRAY)
-            .append(Component.text(playerHas + "x").color(NamedTextColor.RED)));
-        player.sendMessage(Component.text("❗ Missing: ").color(NamedTextColor.GRAY)
-            .append(Component.text(needed + "x").color(NamedTextColor.YELLOW)));
+        if (material != null) {
+            player.sendMessage(Component.text("📦 Required: ").color(NamedTextColor.GRAY)
+                .append(Component.text(required + "x " + formatMaterialName(material)).color(NamedTextColor.WHITE)));
+            player.sendMessage(Component.text("🎒 You have: ").color(NamedTextColor.GRAY)
+                .append(Component.text(playerHas + "x").color(NamedTextColor.RED)));
+            player.sendMessage(Component.text("❗ Missing: ").color(NamedTextColor.GRAY)
+                .append(Component.text(needed + "x").color(NamedTextColor.YELLOW)));
+            
+            player.sendMessage(Component.empty());
+            player.sendMessage(Component.text("💡 Tip: ").color(NamedTextColor.AQUA)
+                .append(Component.text("Find more " + formatMaterialName(material) + " and try again!").color(NamedTextColor.WHITE)));
+        } else {
+            player.sendMessage(Component.text("📦 Required: ").color(NamedTextColor.GRAY)
+                .append(Component.text(required + "x items").color(NamedTextColor.WHITE)));
+            player.sendMessage(Component.text("🎒 You have: ").color(NamedTextColor.GRAY)
+                .append(Component.text(playerHas + "x").color(NamedTextColor.RED)));
+            player.sendMessage(Component.text("❗ Missing: ").color(NamedTextColor.GRAY)
+                .append(Component.text(needed + "x").color(NamedTextColor.YELLOW)));
+        }
         
-        player.sendMessage(Component.empty());
-        player.sendMessage(Component.text("💡 Tip: ").color(NamedTextColor.AQUA)
-            .append(Component.text("Find more " + formatMaterialName(material) + " and try again!").color(NamedTextColor.WHITE)));
         player.sendMessage(Component.empty());
         
         ChunklockPlugin.getInstance().getLogger().info("Player " + player.getName() + 
@@ -567,6 +629,9 @@ public class UnlockGui {
 
             // Trigger related systems
             notifyUnlockSystems(player, state.chunk);
+            
+            // Refresh neighboring chunks (their costs may have changed due to dynamic cost system)
+            refreshNeighboringChunks(state.chunk, player);
             
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Failed to finish unlock for " + player.getName(), e);
@@ -634,8 +699,17 @@ public class UnlockGui {
             .append(Component.text(state.chunk.getX() + ", " + state.chunk.getZ()).color(NamedTextColor.WHITE)));
         player.sendMessage(Component.text("🌿 Biome: ").color(NamedTextColor.GRAY)
             .append(Component.text(BiomeUnlockRegistry.getBiomeDisplayName(state.biome)).color(NamedTextColor.YELLOW)));
-        player.sendMessage(Component.text("📦 Consumed: ").color(NamedTextColor.GRAY)
-            .append(Component.text(state.requirement.amount() + "x " + formatMaterialName(state.requirement.material())).color(NamedTextColor.AQUA)));
+        
+        // Display consumed resources based on payment type
+        if (state.paymentRequirement.getType() == me.chunklock.economy.EconomyManager.EconomyType.MATERIALS) {
+            player.sendMessage(Component.text("📦 Consumed: ").color(NamedTextColor.GRAY)
+                .append(Component.text(state.paymentRequirement.getMaterialAmount() + "x " + 
+                    formatMaterialName(state.paymentRequirement.getMaterial())).color(NamedTextColor.AQUA)));
+        } else {
+            String formattedCost = economyManager.getVaultService().format(state.paymentRequirement.getVaultCost());
+            player.sendMessage(Component.text("💰 Consumed: ").color(NamedTextColor.GRAY)
+                .append(Component.text(formattedCost).color(NamedTextColor.AQUA)));
+        }
         
         if (state.contested) {
             player.sendMessage(Component.empty());
@@ -788,5 +862,61 @@ public class UnlockGui {
      */
     public int cleanupExpired() {
         return stateManager.cleanupExpired();
+    }
+
+    /**
+     * Refresh neighboring chunks after a chunk is unlocked.
+     * This updates holograms and GUIs for chunks whose costs may have changed.
+     * 
+     * @param unlockedChunk The chunk that was just unlocked
+     * @param player The player who unlocked it
+     */
+    private void refreshNeighboringChunks(Chunk unlockedChunk, Player player) {
+        try {
+            // Get cardinal neighbors
+            List<Chunk> neighbors = me.chunklock.util.chunk.ChunkNeighborUtils.getCardinalNeighbors(unlockedChunk);
+            
+            // Refresh holograms for all players (they may be viewing neighboring chunks)
+            me.chunklock.hologram.HologramService hologramService = ChunklockPlugin.getInstance().getHologramService();
+            if (hologramService != null) {
+                // Trigger a refresh for all online players - the hologram service will recalculate costs
+                for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                    if (onlinePlayer.getWorld().equals(unlockedChunk.getWorld())) {
+                        // Schedule a refresh to update holograms with new costs
+                        Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
+                            hologramService.updateActiveHologramsForPlayer(onlinePlayer, false);
+                        }, 5L); // Small delay to ensure chunk unlock is fully processed
+                    }
+                }
+            }
+            
+            // Refresh GUIs for any players viewing neighboring chunks
+            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                UUID playerId = onlinePlayer.getUniqueId();
+                if (stateManager.hasActiveGui(playerId)) {
+                    PendingUnlock pending = stateManager.getPendingUnlock(playerId);
+                    if (pending != null) {
+                        // Check if the pending unlock is for a neighboring chunk
+                        for (Chunk neighbor : neighbors) {
+                            if (pending.chunk.getX() == neighbor.getX() && 
+                                pending.chunk.getZ() == neighbor.getZ() &&
+                                pending.chunk.getWorld().getName().equals(neighbor.getWorld().getName())) {
+                                // Refresh the GUI for this player with updated costs
+                                Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
+                                    if (onlinePlayer.isOnline()) {
+                                        open(onlinePlayer, neighbor);
+                                    }
+                                }, 5L); // Small delay to ensure costs are recalculated
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                "Error refreshing neighboring chunks after unlock", e);
+        }
     }
 }

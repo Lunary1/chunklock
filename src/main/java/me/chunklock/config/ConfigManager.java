@@ -40,6 +40,7 @@ public class ConfigManager {
     private HologramsConfig hologramsConfig;
     private DebugConfig debugConfig;
     private PerformanceConfig performanceConfig;
+    private DynamicCostsConfig dynamicCostsConfig;
     
     public ConfigManager(Plugin plugin) {
         this.plugin = plugin;
@@ -84,6 +85,7 @@ public class ConfigManager {
             hologramsConfig = new HologramsConfig(plugin);
             debugConfig = new DebugConfig(plugin);
             performanceConfig = new PerformanceConfig(plugin);
+            dynamicCostsConfig = new DynamicCostsConfig(plugin);
             
             logger.info("Modular configuration loaded successfully");
         } catch (Exception e) {
@@ -166,6 +168,10 @@ public class ConfigManager {
     public PerformanceConfig getPerformanceConfig() {
         return performanceConfig;
     }
+
+    public DynamicCostsConfig getDynamicCostsConfig() {
+        return dynamicCostsConfig;
+    }
     
     /**
      * Gets the chunk configuration section.
@@ -232,7 +238,8 @@ public class ConfigManager {
             blockValuesConfig == null || biomeUnlocksConfig == null ||
             teamSettingsConfig == null || bordersConfig == null ||
             worldsConfig == null || hologramsConfig == null ||
-            debugConfig == null || performanceConfig == null) {
+            debugConfig == null || performanceConfig == null ||
+            dynamicCostsConfig == null) {
             logger.warning("Some modular configuration files failed to load.");
             valid = false;
         }

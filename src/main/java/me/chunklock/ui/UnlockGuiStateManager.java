@@ -2,9 +2,8 @@ package me.chunklock.ui;
 
 import org.bukkit.Chunk;
 import org.bukkit.block.Biome;
-import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
-import me.chunklock.managers.BiomeUnlockRegistry;
+import me.chunklock.economy.EconomyManager;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -22,14 +21,14 @@ public class UnlockGuiStateManager {
     public static class PendingUnlock {
         public final Chunk chunk;
         public final Biome biome;
-        public final BiomeUnlockRegistry.UnlockRequirement requirement;
+        public final EconomyManager.PaymentRequirement paymentRequirement;
         public final boolean contested;
         public final long timestamp;
         
-        public PendingUnlock(Chunk chunk, Biome biome, BiomeUnlockRegistry.UnlockRequirement requirement, boolean contested) {
+        public PendingUnlock(Chunk chunk, Biome biome, EconomyManager.PaymentRequirement paymentRequirement, boolean contested) {
             this.chunk = chunk;
             this.biome = biome;
-            this.requirement = requirement;
+            this.paymentRequirement = paymentRequirement;
             this.contested = contested;
             this.timestamp = System.currentTimeMillis();
         }

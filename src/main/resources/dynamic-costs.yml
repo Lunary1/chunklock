@@ -1,10 +1,41 @@
-# ===== BIOME UNLOCK REQUIREMENTS =====
-# ⚠️ DEPRECATED: This file is deprecated and will be removed in a future version.
-# All biome costs have been merged into dynamic-costs.yml.
-# 
-# The plugin will automatically use dynamic-costs.yml if available, and fall back to this file
-# for backward compatibility. Please migrate your biome definitions to dynamic-costs.yml.
+# ===== DYNAMIC CHUNK UNLOCK COST SYSTEM =====
+# Unified configuration for chunk unlock costs.
+# This file replaces biome-unlocks.yml and serves as the single source of truth for all biome costs.
 #
+# The dynamic cost system scales unlock costs based on the relationship between a chunk's base value
+# and the average base value of its four cardinal neighbors. When dynamic costs are disabled,
+# these base costs are used directly without multipliers.
+
+# Enable or disable the dynamic cost system
+# When disabled, base costs are used directly (traditional system)
+# When enabled, base costs are multiplied based on neighbor chunk values
+enabled: false
+
+# Multiplier configuration (only used when enabled: true)
+multiplier:
+  # Minimum multiplier value (clamps lower bound)
+  min: 0.5
+  # Maximum multiplier value (clamps upper bound)
+  max: 2.0
+
+# Rounding configuration (only used when enabled: true)
+rounding:
+  # Rounding mode: "round", "floor", or "ceil"
+  mode: "round"
+
+# Scanning configuration (only used when enabled: true)
+scanning:
+  # Scanning mode: "sync" or "async"
+  # async = compute base values asynchronously (recommended for performance)
+  # sync = compute base values synchronously (faster but may lag server)
+  mode: "async"
+  
+  # Block value mapping: "use-registry" or "custom"
+  # use-registry = use ChunkValueRegistry block weights
+  # custom = use custom mapping (not yet implemented)
+  block-value-mapping: "use-registry"
+
+# ===== BIOME UNLOCK REQUIREMENTS =====
 # Complete biome costs configuration for Chunklock
 # Supports both classic flat format (vanilla items) and structured format (vanilla + custom items)
 #
@@ -43,6 +74,8 @@
 #   - Oraxen format: item only (the item ID you defined in Oraxen)
 #   - Mix vanilla and custom items freely in one biome
 #   - Costs are balanced for progression gameplay
+#   - When dynamic costs are enabled, these amounts are multiplied based on neighbor values
+#   - When dynamic costs are disabled, these amounts are used directly
 
 # === BASIC OVERWORLD BIOMES ===
 PLAINS:
@@ -304,4 +337,3 @@ END_HIGHLANDS:
 END_BARRENS:
   END_STONE: 40
   PURPUR_BLOCK: 8
-

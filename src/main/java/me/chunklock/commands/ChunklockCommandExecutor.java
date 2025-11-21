@@ -180,6 +180,14 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
                     ", progressTracker=" + (progressTracker != null ? "OK" : "NULL") +
                     ", teamManager=" + (teamManager != null ? "OK" : "NULL"));
             }
+
+            // ChunkValue command (admin-only) - for inspecting dynamic cost system
+            if (chunkLockManager != null) {
+                registerSubCommand(new ChunkValueCommand(chunkLockManager));
+                plugin.getLogger().info("✓ Registered ChunkValueCommand (admin-only) with valid dependencies");
+            } else {
+                plugin.getLogger().severe("✗ Cannot register ChunkValueCommand - chunkLockManager is null");
+            }
             
             plugin.getLogger().info("SubCommand registration completed. Total commands: " + getSubCommands().size());
             

@@ -82,11 +82,13 @@ public class EconomyManager {
     private final BiomeUnlockRegistry biomeRegistry;
     private final PlayerProgressTracker progressTracker;
     private final OpenAIChunkCostAgent openAIAgent; // OpenAI ChatGPT integration
+    private me.chunklock.services.DynamicCostCalculationService dynamicCostService; // Dynamic cost system
     
     private EconomyType currentType;
     private boolean materialsEnabled;
     private boolean vaultFallbackEnabled;
     private boolean aiCostingEnabled;
+    private boolean dynamicCostsEnabled;
     
     // Vault configuration
     private double baseCost;
@@ -135,10 +137,20 @@ public class EconomyManager {
         // AI settings
         aiCostingEnabled = openAIConfig != null ? openAIConfig.isEnabled() : false;
         
+        // Dynamic cost system settings
+        me.chunklock.config.modular.DynamicCostsConfig dynamicCostsConfig = null;
+        if (plugin instanceof me.chunklock.ChunklockPlugin) {
+            dynamicCostsConfig = ((me.chunklock.ChunklockPlugin) plugin).getConfigManager().getDynamicCostsConfig();
+        } else {
+            dynamicCostsConfig = new me.chunklock.config.modular.DynamicCostsConfig(plugin);
+        }
+        dynamicCostsEnabled = dynamicCostsConfig != null ? dynamicCostsConfig.isEnabled() : false;
+        
         plugin.getLogger().info("Economy Configuration:");
         plugin.getLogger().info("  Type: " + currentType.getConfigName());
         plugin.getLogger().info("  Vault available: " + vaultService.isVaultAvailable());
         plugin.getLogger().info("  AI costing enabled: " + aiCostingEnabled);
+        plugin.getLogger().info("  Dynamic costs enabled: " + dynamicCostsEnabled);
         plugin.getLogger().info("  OpenAI agent available: " + (openAIAgent != null));
         plugin.getLogger().info("  Base cost: $" + baseCost);
         plugin.getLogger().info("  Cost per unlocked: $" + costPerUnlocked);
@@ -164,10 +176,29 @@ public class EconomyManager {
     }
     
     /**
+     * Set the dynamic cost calculation service (injected after initialization).
+     */
+    public void setDynamicCostService(me.chunklock.services.DynamicCostCalculationService service) {
+        this.dynamicCostService = service;
+    }
+
+    /**
      * Calculate payment requirement for a chunk unlock
      */
     public PaymentRequirement calculateRequirement(Player player, org.bukkit.Chunk chunk, Biome biome, 
                                                  ChunkEvaluator.ChunkValueData evaluation) {
+        // Check if dynamic cost system is enabled and available
+        if (dynamicCostsEnabled && dynamicCostService != null && chunk != null) {
+            try {
+                // Use dynamic cost calculation service
+                plugin.getLogger().fine("Using dynamic cost calculation for " + player.getName());
+                return dynamicCostService.getFinalCostSync(chunk, player);
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.WARNING, "Dynamic cost calculation failed, falling back to traditional method", e);
+                // Fall through to traditional calculation
+            }
+        }
+        
         // If vault type is selected but not available, fall back to materials
         EconomyType effectiveType = currentType;
         if (currentType == EconomyType.VAULT && !vaultService.isVaultAvailable()) {
@@ -435,7 +466,9 @@ public class EconomyManager {
         }
         
         // Traditional calculation (fallback or when AI disabled)
-        // Returns the first vanilla material for backward compatibility display
+        // ALWAYS returns only the first item from the biome requirements
+        // This ensures consistency - only one item is ever used/displayed
+        // Use calculateRequirement which already returns only the first item
         BiomeUnlockRegistry.UnlockRequirement requirement = 
             biomeRegistry.calculateRequirement(player, biome, evaluation.score);
         return new PaymentRequirement(requirement.material(), requirement.amount());
@@ -479,13 +512,26 @@ public class EconomyManager {
     
     /**
      * Process material payment and record OpenAI learning data.
-     * Consumes ALL required items (vanilla + custom) via BiomeUnlockRegistry.
-     * This is an all-or-nothing operation: if any item is missing, it fails.
+     * ALWAYS consumes items based on PaymentRequirement directly (only first item).
+     * This ensures consistency - only one item is ever consumed, matching what's displayed.
      */
     private boolean processMaterialPayment(Player player, PaymentRequirement requirement, 
                                          Biome biome, ChunkEvaluator.ChunkValueData evaluation) {
         try {
-            biomeRegistry.consumeRequiredItem(player, biome, evaluation.score);
+            // ALWAYS consume items directly from PaymentRequirement (only first item)
+            // This ensures we consume the exact amount that was calculated and displayed
+            if (requirement.getType() == EconomyType.MATERIALS && requirement.getMaterial() != null) {
+                ItemStack requiredStack = new ItemStack(requirement.getMaterial(), requirement.getMaterialAmount());
+                if (!player.getInventory().containsAtLeast(requiredStack, requirement.getMaterialAmount())) {
+                    plugin.getLogger().warning("Player " + player.getName() + " does not have required items: " + 
+                        requirement.getMaterialAmount() + "x " + requirement.getMaterial());
+                    return false;
+                }
+                player.getInventory().removeItem(requiredStack);
+            } else {
+                plugin.getLogger().warning("Invalid PaymentRequirement for material payment: " + requirement.getType());
+                return false;
+            }
             
             // Record OpenAI learning data for success
             if (aiCostingEnabled && openAIAgent != null) {
@@ -502,14 +548,18 @@ public class EconomyManager {
             }
             
             // Fallback: Manual item removal (only for first vanilla item shown in PaymentRequirement)
-            ItemStack requiredStack = new ItemStack(requirement.getMaterial(), requirement.getMaterialAmount());
-            boolean fallbackSuccess = player.getInventory().removeItem(requiredStack).isEmpty();
-            
-            if (fallbackSuccess && aiCostingEnabled && openAIAgent != null) {
-                recordPaymentForOpenAI(player, requirement, true, 0, false);
+            if (requirement.getType() == EconomyType.MATERIALS && requirement.getMaterial() != null) {
+                ItemStack requiredStack = new ItemStack(requirement.getMaterial(), requirement.getMaterialAmount());
+                boolean fallbackSuccess = player.getInventory().removeItem(requiredStack).isEmpty();
+                
+                if (fallbackSuccess && aiCostingEnabled && openAIAgent != null) {
+                    recordPaymentForOpenAI(player, requirement, true, 0, false);
+                }
+                
+                return fallbackSuccess;
             }
             
-            return fallbackSuccess;
+            return false;
         }
     }
     

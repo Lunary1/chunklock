@@ -43,36 +43,78 @@ public class BiomeUnlockRegistry {
     }
     
     private void loadBiomeUnlocks() {
-        // Use modular config system
-        me.chunklock.config.modular.BiomeUnlocksConfig biomeUnlocksConfig = null;
+        // Try to load from dynamic-costs.yml first (unified config)
+        me.chunklock.config.modular.DynamicCostsConfig dynamicCostsConfig = null;
         if (plugin instanceof ChunklockPlugin) {
-            biomeUnlocksConfig = ((ChunklockPlugin) plugin).getConfigManager().getBiomeUnlocksConfig();
+            dynamicCostsConfig = ((ChunklockPlugin) plugin).getConfigManager().getDynamicCostsConfig();
         } else {
-            biomeUnlocksConfig = new me.chunklock.config.modular.BiomeUnlocksConfig(plugin);
+            dynamicCostsConfig = new me.chunklock.config.modular.DynamicCostsConfig(plugin);
         }
         
-        if (biomeUnlocksConfig == null) {
-            plugin.getLogger().warning("Failed to load biome-unlocks.yml");
+        ConfigurationSection config = null;
+        boolean usingDynamicCosts = false;
+        
+        if (dynamicCostsConfig != null) {
+            config = dynamicCostsConfig.getRootSection();
+            usingDynamicCosts = true;
+            plugin.getLogger().info("[BiomeUnlockRegistry] Loading biome costs from dynamic-costs.yml (unified config)");
+        }
+        
+        // Fallback to biome-unlocks.yml if dynamic-costs.yml doesn't have biome definitions
+        if (config == null || config.getKeys(false).isEmpty()) {
+            me.chunklock.config.modular.BiomeUnlocksConfig biomeUnlocksConfig = null;
+            if (plugin instanceof ChunklockPlugin) {
+                biomeUnlocksConfig = ((ChunklockPlugin) plugin).getConfigManager().getBiomeUnlocksConfig();
+            } else {
+                biomeUnlocksConfig = new me.chunklock.config.modular.BiomeUnlocksConfig(plugin);
+            }
+            
+            if (biomeUnlocksConfig != null) {
+                config = biomeUnlocksConfig.getRootSection();
+                usingDynamicCosts = false;
+                plugin.getLogger().info("[BiomeUnlockRegistry] Loading biome costs from biome-unlocks.yml (legacy config)");
+            }
+        }
+        
+        if (config == null) {
+            plugin.getLogger().warning("Failed to load biome costs from both dynamic-costs.yml and biome-unlocks.yml");
             return;
         }
         
-        ConfigurationSection config = biomeUnlocksConfig.getRootSection();
-        if (config == null) return;
-        
+        int loadedCount = 0;
         for (String biomeKey : config.getKeys(false)) {
             try {
+                // Skip known config keys in dynamic-costs.yml
+                if (usingDynamicCosts && (biomeKey.equalsIgnoreCase("enabled") || 
+                    biomeKey.equalsIgnoreCase("multiplier") || biomeKey.equalsIgnoreCase("rounding") ||
+                    biomeKey.equalsIgnoreCase("scanning") || biomeKey.equalsIgnoreCase("base-cost-templates"))) {
+                    continue;
+                }
+                
                 Biome biome = getBiomeFromString(biomeKey);
                 if (biome == null) continue;
-                ConfigurationSection section = config.getConfigurationSection(biomeKey);
+                
+                ConfigurationSection section = null;
+                if (usingDynamicCosts) {
+                    // Use getBiomeSection to filter out config keys
+                    section = dynamicCostsConfig.getBiomeSection(biomeKey);
+                } else {
+                    section = config.getConfigurationSection(biomeKey);
+                }
+                
                 if (section == null) continue;
                 List<ItemRequirement> requirements = requirementFactory.parseRequirements(biomeKey, section);
                 if (!requirements.isEmpty()) {
                     itemRequirements.put(biome, requirements);
+                    loadedCount++;
                 }
             } catch (Exception ex) {
-                plugin.getLogger().warning("Error loading biome: " + ex.getMessage());
+                plugin.getLogger().warning("Error loading biome " + biomeKey + ": " + ex.getMessage());
             }
         }
+        
+        plugin.getLogger().info("[BiomeUnlockRegistry] Loaded " + loadedCount + " biome unlock requirements from " + 
+            (usingDynamicCosts ? "dynamic-costs.yml" : "biome-unlocks.yml"));
     }
 
     private Biome getBiomeFromString(String biomeKey) {

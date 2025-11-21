@@ -254,6 +254,17 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             // Initialize economy manager after biome registry and chunk evaluator
             this.economyManager = new me.chunklock.economy.EconomyManager(this, biomeUnlockRegistry, progressTracker, chunkEvaluator);
             
+            // Initialize dynamic cost system services
+            me.chunklock.config.modular.DynamicCostsConfig dynamicCostsConfig = configManager.getDynamicCostsConfig();
+            boolean asyncMode = dynamicCostsConfig != null && "async".equalsIgnoreCase(dynamicCostsConfig.getScanningMode());
+            me.chunklock.services.ChunkBaseValueService baseValueService = new me.chunklock.services.ChunkBaseValueService(
+                this, chunkLockManager, chunkValueRegistry, asyncMode);
+            me.chunklock.services.DynamicCostCalculationService dynamicCostService = new me.chunklock.services.DynamicCostCalculationService(
+                this, baseValueService, chunkLockManager, chunkEvaluator, dynamicCostsConfig);
+            
+            // Inject dynamic cost service into economy manager
+            economyManager.setDynamicCostService(dynamicCostService);
+            
             // Initialize chunk cost database for persistent caching
             this.costDatabase = new me.chunklock.services.ChunkCostDatabase(this);
             try {

@@ -14,6 +14,7 @@ import me.chunklock.ChunklockPlugin;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -662,32 +663,15 @@ public final class HologramService {
             if (economyManager != null && economyManager.getCurrentType() == me.chunklock.economy.EconomyManager.EconomyType.VAULT 
                 && economyManager.isVaultAvailable()) {
                 
-                // ASYNC FIX: Use fast path (materials or cache) immediately, schedule AI update asynchronously
-                // This prevents main thread blocking while OpenAI API calls are made
+                // Use chunk-aware calculateRequirement to support dynamic costs
+                // This will use dynamic cost calculation if enabled, otherwise fall back to traditional
                 try {
-                    // Try to get material-based fallback immediately for fast initial display
-                    var materialRequirement = biomeUnlockRegistry.calculateRequirement(player, evaluation.biome, evaluation.score);
-                    boolean canAfford = economyManager.canAfford(player, 
-                        new me.chunklock.economy.EconomyManager.PaymentRequirement(materialRequirement.material(), materialRequirement.amount()));
-                    // Use material name as placeholder - will show actual vault cost after cache/AI completes
-                    String estimatedCost = materialRequirement.amount() + " " + 
-                        me.chunklock.hologram.util.HologramTextUtils.formatMaterialName(materialRequirement.material()) + " (est.)";
+                    var paymentRequirement = economyManager.calculateRequirement(player, chunk, evaluation.biome, evaluation);
+                    boolean canAfford = economyManager.canAfford(player, paymentRequirement);
+                    String formattedCost = economyManager.getVaultService().format(paymentRequirement.getVaultCost());
                     
-                    // Create fast hologram immediately using material display
                     lines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLinesForMoney(
-                        estimatedCost, canAfford);
-                    
-                    // Schedule AI calculation asynchronously in background (doesn't block main thread)
-                    Bukkit.getScheduler().runTaskAsynchronously(ChunklockPlugin.getInstance(), () -> {
-                        try {
-                            // This runs async and won't block the server
-                            // The result gets cached internally in EconomyManager for next hologram update
-                            economyManager.calculateRequirement(player, chunk, evaluation.biome, evaluation);
-                        } catch (Exception e) {
-                            // Async failures don't affect main thread
-                            ChunklockPlugin.getInstance().getLogger().fine("Background AI calculation failed: " + e.getMessage());
-                        }
-                    });
+                        formattedCost, canAfford);
                     
                 } catch (Exception e) {
                     ChunklockPlugin.getInstance().getLogger().warning("Failed to calculate vault cost for hologram (player: " + 
@@ -704,12 +688,24 @@ public final class HologramService {
                 }
                 
             } else {
-                // Use material-based hologram (default) - supports both vanilla and custom items
-                var allRequirements = biomeUnlockRegistry.getRequirementsForBiome(evaluation.biome);
-                boolean hasItems = biomeUnlockRegistry.hasRequiredItems(player, evaluation.biome, evaluation.score);
+                // Use material-based hologram (default) - ALWAYS use unified cost calculation
+                // This ensures hologram shows the same cost as GUI, using only the first item
+                var paymentRequirement = economyManager.calculateRequirement(player, chunk, evaluation.biome, evaluation);
                 
-                lines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLinesForMultipleItems(
-                    allRequirements, hasItems);
+                // Always use PaymentRequirement (unified cost) - only shows first item
+                if (paymentRequirement.getType() == me.chunklock.economy.EconomyManager.EconomyType.MATERIALS) {
+                    Material material = paymentRequirement.getMaterial();
+                    int requiredAmount = paymentRequirement.getMaterialAmount();
+                    int playerHas = countPlayerItems(player, material);
+                    boolean hasItems = playerHas >= requiredAmount;
+                    
+                    lines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLines(
+                        me.chunklock.hologram.util.HologramTextUtils.formatMaterialName(material),
+                        hasItems, playerHas, requiredAmount);
+                } else {
+                    // Vault economy - should not reach here in material-based mode
+                    lines = java.util.Collections.singletonList("ERROR: Invalid payment type");
+                }
             }
             
             Location location = getOrComputeWallLocation(chunk, hologramId.getSide());
@@ -747,12 +743,24 @@ public final class HologramService {
                     formattedCost, canAfford);
                 
             } else {
-                // Use material-based hologram (default) - supports both vanilla and custom items
-                var allRequirements = biomeUnlockRegistry.getRequirementsForBiome(evaluation.biome);
-                boolean hasItems = biomeUnlockRegistry.hasRequiredItems(player, evaluation.biome, evaluation.score);
+                // Use material-based hologram (default) - ALWAYS use unified cost calculation
+                // This ensures hologram shows the same cost as GUI, using only the first item
+                var paymentRequirement = economyManager.calculateRequirement(player, chunk, evaluation.biome, evaluation);
                 
-                newLines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLinesForMultipleItems(
-                    allRequirements, hasItems);
+                // Always use PaymentRequirement (unified cost) - only shows first item
+                if (paymentRequirement.getType() == me.chunklock.economy.EconomyManager.EconomyType.MATERIALS) {
+                    Material material = paymentRequirement.getMaterial();
+                    int requiredAmount = paymentRequirement.getMaterialAmount();
+                    int playerHas = countPlayerItems(player, material);
+                    boolean hasItems = playerHas >= requiredAmount;
+                    
+                    newLines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLines(
+                        me.chunklock.hologram.util.HologramTextUtils.formatMaterialName(material),
+                        hasItems, playerHas, requiredAmount);
+                } else {
+                    // Vault economy - should not reach here in material-based mode
+                    newLines = java.util.Collections.singletonList("ERROR: Invalid payment type");
+                }
             }
             
             // Update the hologram lines
