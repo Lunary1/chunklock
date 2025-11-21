@@ -1,0 +1,12 @@
+# ===== DEBUG CONFIGURATION =====
+# Debug and logging options for Chunklock plugin
+
+# Master switch for all debug logging (set to true for detailed startup logs)
+enabled: false
+
+# Individual debug switches (only active if enabled: true above)
+borders: false # Debug logging for border system
+unlock-gui: false # Debug logging for unlock GUI interactions
+chunk-finding: false # Debug logging for chunk allocation and finding
+performance: false # Debug logging for performance metrics
+

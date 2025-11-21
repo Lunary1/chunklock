@@ -1,14 +1,13 @@
 package me.chunklock.managers;
 
+import me.chunklock.ChunklockPlugin;
+import me.chunklock.config.modular.BlockValuesConfig;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Biome;
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.File;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.logging.Level;
@@ -19,6 +18,7 @@ public class ChunkValueRegistry {
     private final Map<Material, Integer> blockWeights = new EnumMap<Material, Integer>(Material.class);
     private final Map<String, Integer> thresholds = new java.util.HashMap<String, Integer>();
     private final JavaPlugin plugin;
+    private BlockValuesConfig blockValuesConfig;
 
     public ChunkValueRegistry(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -26,31 +26,25 @@ public class ChunkValueRegistry {
     }
 
     private void loadConfiguration() {
-        plugin.getLogger().info("[ChunkValueRegistry] Loading config.yml (chunk-values section)...");
-        File file = new File(plugin.getDataFolder(), "config.yml");
-
-        if (!file.exists()) {
-            plugin.getLogger().info("[ChunkValueRegistry] config.yml not found, generating default...");
-            try {
-                plugin.saveResource("config.yml", false);
-            } catch (Exception e) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to save default config.yml", e);
-                loadDefaults();
-                return;
-            }
+        plugin.getLogger().info("[ChunkValueRegistry] Loading block-values.yml...");
+        
+        // Get modular config from ConfigManager
+        if (plugin instanceof ChunklockPlugin) {
+            blockValuesConfig = ((ChunklockPlugin) plugin).getConfigManager().getBlockValuesConfig();
+        } else {
+            // Fallback: create config directly
+            blockValuesConfig = new BlockValuesConfig(plugin);
         }
-
-        FileConfiguration root = YamlConfiguration.loadConfiguration(file);
-        ConfigurationSection config = root.getConfigurationSection("chunk-values");
-        if (config == null) {
-            plugin.getLogger().severe("Missing chunk-values section in config.yml, using defaults");
+        
+        if (blockValuesConfig == null) {
+            plugin.getLogger().severe("Failed to load block-values.yml, using defaults");
             loadDefaults();
             return;
         }
 
-        loadThresholds(config);
-        loadBiomeWeights(config);
-        loadBlockWeights(config);
+        loadThresholds();
+        loadBiomeWeights();
+        loadBlockWeights();
         
         plugin.getLogger().info("[ChunkValueRegistry] Configuration loaded successfully: " +
             biomeWeights.size() + " biomes, " + blockWeights.size() + " blocks, " + thresholds.size() + " thresholds");
@@ -97,99 +91,89 @@ public class ChunkValueRegistry {
         }
     }
 
-    private void loadThresholds(ConfigurationSection config) {
+    private void loadThresholds() {
         try {
-            if (config.isConfigurationSection("thresholds")) {
-                plugin.getLogger().info("[ChunkValueRegistry] Loading difficulty thresholds...");
-                
-                int easy = config.getInt("thresholds.easy", 25);
-                int normal = config.getInt("thresholds.normal", 50);
-                int hard = config.getInt("thresholds.hard", 80);
-                
-                thresholds.put("easy", easy);
-                thresholds.put("normal", normal);
-                thresholds.put("hard", hard);
-                
-                plugin.getLogger().info("[ChunkValueRegistry] Thresholds loaded: Easy=" + easy + ", Normal=" + normal + ", Hard=" + hard);
-            } else {
-                loadDefaultThresholds();
-            }
+            plugin.getLogger().info("[ChunkValueRegistry] Loading difficulty thresholds...");
+            
+            int easy = blockValuesConfig.getThreshold("easy");
+            int normal = blockValuesConfig.getThreshold("normal");
+            int hard = blockValuesConfig.getThreshold("hard");
+            
+            thresholds.put("easy", easy);
+            thresholds.put("normal", normal);
+            thresholds.put("hard", hard);
+            
+            plugin.getLogger().info("[ChunkValueRegistry] Thresholds loaded: Easy=" + easy + ", Normal=" + normal + ", Hard=" + hard);
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "Error loading thresholds, using defaults", e);
             loadDefaultThresholds();
         }
     }
 
-    private void loadBiomeWeights(ConfigurationSection config) {
+    private void loadBiomeWeights() {
         try {
-            if (config.isConfigurationSection("biomes")) {
-                plugin.getLogger().info("[ChunkValueRegistry] Loading biome weights...");
-                int loadedBiomes = 0;
-                int errorBiomes = 0;
-                
-                for (String key : config.getConfigurationSection("biomes").getKeys(false)) {
-                    try {
-                        Biome biome = getBiomeFromString(key);
-                        if (biome != null) {
-                            int weight = config.getInt("biomes." + key, 8);
-                            if (weight < 0) {
-                                plugin.getLogger().warning("Negative weight for biome " + key + ", using 0");
-                                weight = 0;
-                            }
-                            biomeWeights.put(biome, weight);
-                            loadedBiomes++;
-                        } else {
-                            plugin.getLogger().warning("Invalid biome in config.yml (chunk-values): " + key);
-                            errorBiomes++;
+            plugin.getLogger().info("[ChunkValueRegistry] Loading biome weights...");
+            int loadedBiomes = 0;
+            int errorBiomes = 0;
+            
+            Map<String, Integer> biomeWeightsMap = blockValuesConfig.getBiomeWeights();
+            for (Map.Entry<String, Integer> entry : biomeWeightsMap.entrySet()) {
+                try {
+                    Biome biome = getBiomeFromString(entry.getKey());
+                    if (biome != null) {
+                        int weight = entry.getValue();
+                        if (weight < 0) {
+                            plugin.getLogger().warning("Negative weight for biome " + entry.getKey() + ", using 0");
+                            weight = 0;
                         }
-                    } catch (Exception e) {
-                        plugin.getLogger().warning("Error loading biome weight for: " + key + " - " + e.getMessage());
+                        biomeWeights.put(biome, weight);
+                        loadedBiomes++;
+                    } else {
+                        plugin.getLogger().warning("Invalid biome in block-values.yml: " + entry.getKey());
                         errorBiomes++;
                     }
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Error loading biome weight for: " + entry.getKey() + " - " + e.getMessage());
+                    errorBiomes++;
                 }
-                
-                plugin.getLogger().info("[ChunkValueRegistry] Loaded " + loadedBiomes + " biome weights" + 
-                    (errorBiomes > 0 ? " (" + errorBiomes + " errors)" : ""));
-            } else {
-                loadDefaultBiomeWeights();
             }
+            
+            plugin.getLogger().info("[ChunkValueRegistry] Loaded " + loadedBiomes + " biome weights" + 
+                (errorBiomes > 0 ? " (" + errorBiomes + " errors)" : ""));
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "Error loading biome weights, using defaults", e);
             loadDefaultBiomeWeights();
         }
     }
 
-    private void loadBlockWeights(ConfigurationSection config) {
+    private void loadBlockWeights() {
         try {
-            if (config.isConfigurationSection("blocks")) {
-                plugin.getLogger().info("[ChunkValueRegistry] Loading block weights...");
-                int loadedBlocks = 0;
-                int errorBlocks = 0;
-                
-                for (String key : config.getConfigurationSection("blocks").getKeys(false)) {
-                    try {
-                        Material material = Material.valueOf(key.toUpperCase());
-                        int weight = config.getInt("blocks." + key, 1);
-                        if (weight < 0) {
-                            plugin.getLogger().warning("Negative weight for block " + key + ", using 0");
-                            weight = 0;
-                        }
-                        blockWeights.put(material, weight);
-                        loadedBlocks++;
-                    } catch (IllegalArgumentException e) {
-                        plugin.getLogger().warning("Invalid block in config.yml (chunk-values): " + key);
-                        errorBlocks++;
-                    } catch (Exception e) {
-                        plugin.getLogger().warning("Error loading block weight for: " + key + " - " + e.getMessage());
-                        errorBlocks++;
+            plugin.getLogger().info("[ChunkValueRegistry] Loading block weights...");
+            int loadedBlocks = 0;
+            int errorBlocks = 0;
+            
+            Map<String, Integer> blockWeightsMap = blockValuesConfig.getBlockWeights();
+            for (Map.Entry<String, Integer> entry : blockWeightsMap.entrySet()) {
+                try {
+                    Material material = Material.valueOf(entry.getKey().toUpperCase());
+                    int weight = entry.getValue();
+                    if (weight < 0) {
+                        plugin.getLogger().warning("Negative weight for block " + entry.getKey() + ", using 0");
+                        weight = 0;
                     }
+                    blockWeights.put(material, weight);
+                    loadedBlocks++;
+                } catch (IllegalArgumentException e) {
+                    plugin.getLogger().warning("Invalid block in block-values.yml: " + entry.getKey());
+                    errorBlocks++;
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Error loading block weight for: " + entry.getKey() + " - " + e.getMessage());
+                    errorBlocks++;
                 }
-                
-                plugin.getLogger().info("[ChunkValueRegistry] Loaded " + loadedBlocks + " block weights" + 
-                    (errorBlocks > 0 ? " (" + errorBlocks + " errors)" : ""));
-            } else {
-                loadDefaultBlockWeights();
             }
+            
+            plugin.getLogger().info("[ChunkValueRegistry] Loaded " + loadedBlocks + " block weights" + 
+                (errorBlocks > 0 ? " (" + errorBlocks + " errors)" : ""));
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "Error loading block weights, using defaults", e);
             loadDefaultBlockWeights();
@@ -303,13 +287,24 @@ public class ChunkValueRegistry {
      */
     public boolean reloadConfiguration() {
         try {
+            // Reload modular config
+            if (blockValuesConfig != null) {
+                blockValuesConfig.load();
+            } else if (plugin instanceof ChunklockPlugin) {
+                blockValuesConfig = ((ChunklockPlugin) plugin).getConfigManager().getBlockValuesConfig();
+            } else {
+                blockValuesConfig = new BlockValuesConfig(plugin);
+            }
+            
             // Clear existing data
             biomeWeights.clear();
             blockWeights.clear();
             thresholds.clear();
             
-            // Reload from file
-            loadConfiguration();
+            // Reload from config
+            loadThresholds();
+            loadBiomeWeights();
+            loadBlockWeights();
             
             return !biomeWeights.isEmpty() && !thresholds.isEmpty();
         } catch (Exception e) {

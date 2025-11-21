@@ -4,8 +4,6 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Biome;
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -14,7 +12,6 @@ import me.chunklock.economy.items.ItemRequirement;
 import me.chunklock.economy.items.ItemRequirementFactory;
 import me.chunklock.economy.items.providers.CustomItemRegistry;
 
-import java.io.File;
 import java.util.*;
 
 public class BiomeUnlockRegistry {
@@ -46,13 +43,20 @@ public class BiomeUnlockRegistry {
     }
     
     private void loadBiomeUnlocks() {
-        File file = new File(plugin.getDataFolder(), "config.yml");
-        if (!file.exists()) {
-            file.getParentFile().mkdirs();
-            plugin.saveResource("config.yml", false);
+        // Use modular config system
+        me.chunklock.config.modular.BiomeUnlocksConfig biomeUnlocksConfig = null;
+        if (plugin instanceof ChunklockPlugin) {
+            biomeUnlocksConfig = ((ChunklockPlugin) plugin).getConfigManager().getBiomeUnlocksConfig();
+        } else {
+            biomeUnlocksConfig = new me.chunklock.config.modular.BiomeUnlocksConfig(plugin);
         }
-        FileConfiguration root = YamlConfiguration.loadConfiguration(file);
-        ConfigurationSection config = root.getConfigurationSection("biome-unlocks");
+        
+        if (biomeUnlocksConfig == null) {
+            plugin.getLogger().warning("Failed to load biome-unlocks.yml");
+            return;
+        }
+        
+        ConfigurationSection config = biomeUnlocksConfig.getRootSection();
         if (config == null) return;
         
         for (String biomeKey : config.getKeys(false)) {

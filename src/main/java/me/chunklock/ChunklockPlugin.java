@@ -212,7 +212,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
      */
     private boolean isDebugMode() {
         try {
-            return getConfig().getBoolean("debug-mode.enabled", false);
+            // Use modular debug config
+            me.chunklock.config.modular.DebugConfig debugConfig = getConfigManager().getDebugConfig();
+            return debugConfig != null ? debugConfig.isEnabled() : false;
         } catch (Exception e) {
             return false;
         }

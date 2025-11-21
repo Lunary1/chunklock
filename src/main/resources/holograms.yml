@@ -1,0 +1,32 @@
+# ===== HOLOGRAM CONFIGURATION =====
+# Hologram display settings for Chunklock plugin
+
+enabled: true
+provider: "FancyHolograms" # Force FancyHolograms only - ignore any other hologram plugins
+update-interval: 20 # ticks (1 second)
+view-distance: 64 # blocks (increased for better visibility)
+debug-logging: false # Enable debug logging for troubleshooting (set to true when needed)
+
+# Positioning Configuration
+positioning:
+  wall-offset: 0.5 # Distance outside chunk boundary (blocks)
+  center-offset: 8.0 # Position along wall (8.0 = center of 16-block chunk edge)
+  ground-clearance: 3.0 # Height above ground (blocks)
+  min-height: 64 # Minimum Y level for holograms
+
+# Performance Settings
+performance:
+  scan-range: 3 # Range to scan for chunks (3x3 around player)
+  max-holograms-per-player: 16 # Maximum holograms per player to prevent lag
+  cleanup-interval: 100 # ticks between hologram cleanup cycles
+  debounce-delay-ticks: 3 # Delay between rapid hologram updates to prevent spam
+  max-active-per-player: 100 # Maximum active holograms per player for distance culling
+  max-view-distance: 128.0 # Maximum view distance for holograms in blocks
+  culling-sweep-period: 60 # Ticks between distance culling sweeps (3 seconds)
+
+# Display Settings
+display:
+  wall-facing: true # Make holograms face toward the center of the chunk
+  fixed-billboard: true # Use FIXED billboard mode (no player following)
+  show-distance: true # Show distance info in debug logs
+

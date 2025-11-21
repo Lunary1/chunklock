@@ -45,18 +45,21 @@ public class SingleWorldManager {
     }
     
     /**
-     * Load configuration from config.yml
+     * Load configuration from worlds.yml
      */
     private void loadConfiguration() {
-        // Load world configuration
-        if (config.contains("worlds.world.name")) {
-            chunklockWorldName = config.getString("worlds.world.name", "chunklock_world");
-        }
-        if (config.contains("worlds.world.diameter")) {
-            worldDiameter = config.getInt("worlds.world.diameter", 30000);
-        }
-        if (config.contains("worlds.claims.min-distance-between-claims")) {
-            minDistanceBetweenClaims = config.getInt("worlds.claims.min-distance-between-claims", 2);
+        // Use modular config
+        me.chunklock.config.modular.WorldsConfig worldsConfig = plugin.getConfigManager().getWorldsConfig();
+        
+        if (worldsConfig != null) {
+            chunklockWorldName = worldsConfig.getWorldName();
+            worldDiameter = worldsConfig.getWorldDiameter();
+            minDistanceBetweenClaims = worldsConfig.getMinDistanceBetweenClaims();
+        } else {
+            // Fallback defaults
+            chunklockWorldName = "chunklock_world";
+            worldDiameter = 30000;
+            minDistanceBetweenClaims = 2;
         }
         
         // Check if world is already setup (either loaded in memory or exists on disk)

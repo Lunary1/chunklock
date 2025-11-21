@@ -1,0 +1,24 @@
+# ===== GLASS BORDER SYSTEM CONFIGURATION =====
+# Glass Border System Configuration for Chunklock Plugin
+
+# Visual Settings
+enabled: true # Enable/disable the glass border system
+use-full-height: true # Use full world height (bedrock to max height)
+border-height: 3 # How many blocks high (only used if use-full-height is false)
+min-y-offset: -2 # Blocks below base Y level (only used if use-full-height is false)
+max-y-offset: 4 # Blocks above base Y level (only used if use-full-height is false)
+
+# Performance Settings
+scan-range: 8 # How many chunks to scan around player for borders
+update-delay: 20 # Ticks to wait before updating borders (1 second = 20 ticks)
+update-cooldown: 2000 # Milliseconds between border updates per player (reduced for better responsiveness)
+
+# Behavior Settings
+show-for-bypass-players: false # Whether bypass players should see borders
+auto-update-on-movement: true # Update borders when players change chunks
+restore-original-blocks: true # Restore original blocks when removing borders
+debug-logging: false # Enable debug logging for border system
+
+# Block Settings
+border-material: LIGHT_GRAY_STAINED_GLASS # Material to use for borders
+
