@@ -78,6 +78,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private me.chunklock.services.AsyncCostCalculationService asyncCostCalculationService;
     private me.chunklock.services.ChunkCostDatabase costDatabase;
     
+    // Reward system
+    private RewardManager rewardManager;
+    
     // Dependency checker
     private DependencyChecker dependencyChecker;
 
@@ -251,6 +254,9 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             
             // Initialize economy manager after biome registry and chunk evaluator
             this.economyManager = new me.chunklock.economy.EconomyManager(this, biomeUnlockRegistry, progressTracker, chunkEvaluator);
+            
+            // Initialize reward system for chunk purchase milestones
+            this.rewardManager = new RewardManager(this);
             
             // Initialize chunk cost database for persistent caching
             this.costDatabase = new me.chunklock.services.ChunkCostDatabase(this);
@@ -642,6 +648,11 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     public me.chunklock.economy.EconomyManager getEconomyManager() {
         if (economyManager == null) throw new IllegalStateException("EconomyManager not initialized");
         return economyManager;
+    }
+    
+    public RewardManager getRewardManager() {
+        if (rewardManager == null) throw new IllegalStateException("RewardManager not initialized");
+        return rewardManager;
     }
 
     public me.chunklock.services.AsyncCostCalculationService getAsyncCostCalculationService() {

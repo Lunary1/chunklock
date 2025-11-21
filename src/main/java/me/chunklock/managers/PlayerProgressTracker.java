@@ -15,6 +15,10 @@ import java.util.UUID;
 public class PlayerProgressTracker {
     /** Counts unlocked chunks per team leader UUID. */
     private final Map<UUID, Integer> unlockedChunkCount = new HashMap<>();
+    
+    /** Tracks chunk purchases per biome per team leader. Structure: UUID -> (biome -> count) */
+    private final Map<UUID, Map<String, Integer>> biomeChunkCount = new HashMap<>();
+    
     private static class ContestedData {
         int count;
         long lastReset;
@@ -60,6 +64,19 @@ public class PlayerProgressTracker {
                 int contested = players.getInt(uuidString + ".progress.contested_claims.count", 0);
                 long reset = players.getLong(uuidString + ".progress.contested_claims.last_reset", System.currentTimeMillis());
                 contestedClaims.put(teamId, new ContestedData(contested, reset));
+                
+                // Load biome-based chunk counts
+                ConfigurationSection biomeSection = players.getConfigurationSection(uuidString + ".progress.biome_chunks");
+                if (biomeSection != null) {
+                    Map<String, Integer> biomeCounts = new HashMap<>();
+                    for (String biomeName : biomeSection.getKeys(false)) {
+                        int biomeCount = biomeSection.getInt(biomeName, 0);
+                        biomeCounts.put(biomeName, biomeCount);
+                    }
+                    if (!biomeCounts.isEmpty()) {
+                        biomeChunkCount.put(teamId, biomeCounts);
+                    }
+                }
             } catch (Exception e) {
                 plugin.getLogger().warning("Failed to load progress for UUID: " + uuidString);
             }
@@ -86,6 +103,14 @@ public class PlayerProgressTracker {
                 if (cd != null) {
                     config.set(key + ".progress.contested_claims.count", cd.count);
                     config.set(key + ".progress.contested_claims.last_reset", cd.lastReset);
+                }
+                
+                // Save biome-based chunk counts
+                Map<String, Integer> biomeCounts = biomeChunkCount.get(entry.getKey());
+                if (biomeCounts != null && !biomeCounts.isEmpty()) {
+                    for (Map.Entry<String, Integer> biomeEntry : biomeCounts.entrySet()) {
+                        config.set(key + ".progress.biome_chunks." + biomeEntry.getKey(), biomeEntry.getValue());
+                    }
                 }
             }
             
@@ -168,5 +193,30 @@ public class PlayerProgressTracker {
                 plugin.getLogger().warning("Could not save progress for team: " + teamId);
             }
         }
+    }
+    
+    /**
+     * Record a chunk purchase in a specific biome.
+     * Returns the new total purchase count for that biome.
+     */
+    public int recordBiomeChunkPurchase(UUID playerId, String biomeName) {
+        UUID teamId = teamManager.getTeamLeader(playerId);
+        Map<String, Integer> biomeCounts = biomeChunkCount.computeIfAbsent(teamId, k -> new HashMap<>());
+        int newCount = biomeCounts.getOrDefault(biomeName, 0) + 1;
+        biomeCounts.put(biomeName, newCount);
+        saveProgress(teamId);
+        return newCount;
+    }
+    
+    /**
+     * Get the total number of chunks purchased in a specific biome.
+     */
+    public int getBiomeChunkCount(UUID playerId, String biomeName) {
+        UUID teamId = teamManager.getTeamLeader(playerId);
+        Map<String, Integer> biomeCounts = biomeChunkCount.get(teamId);
+        if (biomeCounts == null) {
+            return 0;
+        }
+        return biomeCounts.getOrDefault(biomeName, 0);
     }
 }

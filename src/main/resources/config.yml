@@ -528,3 +528,39 @@ holograms:
     wall-facing: true # Make holograms face toward the center of the chunk
     fixed-billboard: true # Use FIXED billboard mode (no player following)
     show-distance: true # Show distance info in debug logs
+
+# ===== CHUNK PURCHASE REWARDS SYSTEM =====
+# Execute console commands when players reach chunk purchase milestones in specific biomes.
+# 
+# Structure:
+#   REWARDS:
+#     <BIOME_NAME>:
+#       <PURCHASE_MILESTONE>:
+#         - "<console_command_1>"
+#         - "<console_command_2>"
+#
+# Features:
+#   - Commands execute with console privileges
+#   - Supports %player_name% placeholder (other plugins handle their own placeholders)
+#   - Rewards trigger once per milestone when reached
+#   - Only applies to future purchases (new feature baseline)
+#
+# Example:
+#   REWARDS:
+#     PLAINS:
+#       1:
+#         - "say %player_name% unlocked their first Plains chunk!"
+#       10:
+#         - "give %player_name% diamond 1"
+#         - "say %player_name% reached 10 Plains chunks! Well done!"
+#     FOREST:
+#       5:
+#         - "announce %player_name% is a woodland master!"
+
+REWARDS:
+  # PLAINS:
+  #   1:
+  #     - "say %player_name% unlocked their first Plains chunk!"
+  #   10:
+  #     - "give %player_name% diamond 1"
+  #     - "say %player_name% reached 10 Plains chunks!"

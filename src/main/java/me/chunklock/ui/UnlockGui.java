@@ -553,6 +553,19 @@ public class UnlockGui {
             } catch (Exception e) {
                 ChunklockPlugin.getInstance().getLogger().fine("Team statistics recording failed: " + e.getMessage());
             }
+            
+            // Check and execute chunk purchase rewards
+            try {
+                String biomeName = state.biome.toString().toUpperCase();
+                int newBiomeCount = progressTracker.recordBiomeChunkPurchase(player.getUniqueId(), biomeName);
+                
+                var rewardManager = ChunklockPlugin.getInstance().getRewardManager();
+                if (rewardManager != null) {
+                    rewardManager.checkAndExecuteRewards(player, biomeName, newBiomeCount);
+                }
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().fine("Reward system error: " + e.getMessage());
+            }
 
             // Play success effects
             playUnlockSuccessEffects(player, state.chunk);
