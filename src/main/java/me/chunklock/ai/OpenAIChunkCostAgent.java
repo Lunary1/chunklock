@@ -275,12 +275,27 @@ public class OpenAIChunkCostAgent {
     // Helper methods and data structures
     
     private void loadConfiguration() {
-        FileConfiguration config = plugin.getConfig();
-        enabled = config.getBoolean("openai-agent.enabled", false);
-        apiKey = config.getString("openai-agent.api-key", "");
-        model = config.getString("openai-agent.model", "gpt-4o-mini");
-        maxTokens = config.getInt("openai-agent.max-tokens", 300);
-        temperature = config.getDouble("openai-agent.temperature", 0.3);
+        // Use modular config system
+        me.chunklock.config.modular.OpenAIConfig openAIConfig = null;
+        if (plugin instanceof me.chunklock.ChunklockPlugin) {
+            openAIConfig = ((me.chunklock.ChunklockPlugin) plugin).getConfigManager().getOpenAIConfig();
+        } else {
+            openAIConfig = new me.chunklock.config.modular.OpenAIConfig(plugin);
+        }
+        
+        if (openAIConfig != null) {
+            enabled = openAIConfig.isEnabled();
+            apiKey = openAIConfig.getApiKey();
+            model = openAIConfig.getModel();
+            maxTokens = openAIConfig.getMaxTokens();
+            temperature = openAIConfig.getTemperature();
+        } else {
+            enabled = false;
+            apiKey = "";
+            model = "gpt-4o-mini";
+            maxTokens = 300;
+            temperature = 0.3;
+        }
         
         if (enabled && (apiKey == null || apiKey.isEmpty())) {
             plugin.getLogger().warning("[OpenAI Agent] Enabled but no API key provided - disabling");

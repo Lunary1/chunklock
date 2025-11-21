@@ -1,0 +1,11 @@
+# ===== WORLD CONFIGURATION =====
+# World settings for Chunklock plugin
+
+# Single World System - Use this instead of per-player worlds
+world:
+  name: "chunklock_world" # Name of the dedicated ChunkLock world
+  diameter: 30000 # World diameter in blocks (set by setup command)
+
+claims:
+  min-distance-between-claims: 2 # Minimum chunks between player starting areas
+

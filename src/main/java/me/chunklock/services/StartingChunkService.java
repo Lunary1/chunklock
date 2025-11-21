@@ -47,9 +47,10 @@ public class StartingChunkService {
      * Load debug configuration from config.yml
      */
     private void loadDebugConfiguration() {
-        var config = ChunklockPlugin.getInstance().getConfig();
-        boolean masterDebug = config.getBoolean("debug-mode.enabled", false);
-        this.debugLogging = masterDebug && config.getBoolean("debug-mode.chunk-finding", false);
+        // Use modular debug config
+        me.chunklock.config.modular.DebugConfig debugConfig = ChunklockPlugin.getInstance().getConfigManager().getDebugConfig();
+        boolean masterDebug = debugConfig != null ? debugConfig.isEnabled() : false;
+        this.debugLogging = masterDebug && (debugConfig != null ? debugConfig.isChunkFindingDebug() : false);
     }
     
     /**

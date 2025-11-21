@@ -1,0 +1,49 @@
+# ===== BLOCK VALUES AND BIOME WEIGHTS =====
+# Configuration for chunk value calculation and scoring
+
+# Thresholds for score difficulty mapping
+thresholds:
+  easy: 30 # Slightly higher threshold for easier starting chunks in new worlds
+  normal: 50
+  hard: 80
+
+# How valuable each biome is (higher = more difficulty)
+biomes:
+  PLAINS: 5
+  FOREST: 8
+  DESERT: 10
+  JUNGLE: 20
+  WINDSWEPT_HILLS: 12
+  OCEAN: 15
+  SWAMP: 11
+  BADLANDS: 16
+  SAVANNA: 9
+  TAIGA: 10
+  SNOWY_PLAINS: 14
+  DEEP_OCEAN: 18
+
+# How much each block contributes to chunk score
+blocks:
+  OAK_LOG: 6
+  BIRCH_LOG: 6
+  SPRUCE_LOG: 7
+  ACACIA_LOG: 7
+  DARK_OAK_LOG: 7
+  JUNGLE_LOG: 8
+  WHEAT: 4
+  CARROTS: 4
+  POTATOES: 4
+  BEETROOTS: 3
+  WATER: 2
+  COAL_ORE: 5
+  IRON_ORE: 10
+  COPPER_ORE: 7
+  GOLD_ORE: 15
+  REDSTONE_ORE: 12
+  LAPIS_ORE: 12
+  DIAMOND_ORE: 25
+  EMERALD_ORE: 30
+  STONE: 1
+  DIRT: 1
+  GRASS_BLOCK: 1
+

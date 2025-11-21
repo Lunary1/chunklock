@@ -49,9 +49,15 @@ public class ChunkPreAllocationService {
      * Load debug configuration from config.yml
      */
     private void loadDebugConfiguration() {
-        var config = plugin.getConfig();
-        boolean masterDebug = config.getBoolean("debug-mode.enabled", false);
-        this.debugLogging = masterDebug && config.getBoolean("debug-mode.performance", false);
+        // Use modular debug config
+        me.chunklock.config.modular.DebugConfig debugConfig = null;
+        if (plugin instanceof me.chunklock.ChunklockPlugin) {
+            debugConfig = ((me.chunklock.ChunklockPlugin) plugin).getConfigManager().getDebugConfig();
+        } else {
+            debugConfig = new me.chunklock.config.modular.DebugConfig(plugin);
+        }
+        boolean masterDebug = debugConfig != null ? debugConfig.isEnabled() : false;
+        this.debugLogging = masterDebug && (debugConfig != null ? debugConfig.isPerformanceDebug() : false);
     }
     
     /**

@@ -1,0 +1,7 @@
+# ===== PERFORMANCE CONFIGURATION =====
+# Performance tuning settings for Chunklock plugin
+
+# Border update performance
+border-update-delay: 2 # Ticks between border updates
+max-border-updates-per-tick: 10 # Maximum border updates processed per tick
+

@@ -1,0 +1,42 @@
+# ===== ECONOMY CONFIGURATION =====
+# Economy and payment system settings for Chunklock plugin
+
+# Economy type: "materials" or "vault"
+# "materials" = Players pay with items/resources (default behavior)
+# "vault" = Players pay with money through Vault economy plugin
+type: "vault"
+
+# Vault economy settings (only used if type = "vault")
+vault:
+  # Base cost multiplier for vault payments
+  base-cost: 100.0
+  # Additional cost per unlocked chunk (progressive pricing)
+  cost-per-unlocked: 25.0
+  # Difficulty multipliers
+  difficulty-multipliers:
+    EASY: 0.5
+    NORMAL: 1.0
+    HARD: 2.0
+    IMPOSSIBLE: 4.0
+  # Biome-specific cost multipliers
+  biome-multipliers:
+    PLAINS: 1.0
+    FOREST: 1.2
+    DESERT: 1.5
+    JUNGLE: 2.0
+    OCEAN: 1.8
+    SWAMP: 1.6
+    BADLANDS: 2.2
+    SAVANNA: 1.3
+    TAIGA: 1.4
+    SNOWY_PLAINS: 1.7
+    DEEP_OCEAN: 2.5
+    # Add more biomes as needed
+
+# Material economy settings (only used if type = "materials")
+materials:
+  # Enable/disable material requirements
+  enabled: true
+  # Allow fallback to vault if materials not available
+  vault-fallback: false
+

@@ -104,25 +104,36 @@ public class EconomyManager {
     }
     
     /**
-     * Load economy configuration from config.yml
+     * Load economy configuration from modular config files
      */
     public void loadConfiguration() {
-        FileConfiguration config = plugin.getConfig();
+        // Use modular config system
+        me.chunklock.config.modular.EconomyConfig economyConfig = null;
+        me.chunklock.config.modular.OpenAIConfig openAIConfig = null;
+        
+        if (plugin instanceof me.chunklock.ChunklockPlugin) {
+            me.chunklock.config.ConfigManager configManager = ((me.chunklock.ChunklockPlugin) plugin).getConfigManager();
+            economyConfig = configManager.getModularEconomyConfig();
+            openAIConfig = configManager.getOpenAIConfig();
+        } else {
+            economyConfig = new me.chunklock.config.modular.EconomyConfig(plugin);
+            openAIConfig = new me.chunklock.config.modular.OpenAIConfig(plugin);
+        }
         
         // Get economy type
-        String typeString = config.getString("economy.type", "materials");
+        String typeString = economyConfig != null ? economyConfig.getEconomyType() : "materials";
         currentType = EconomyType.fromString(typeString);
         
         // Material settings
-        materialsEnabled = config.getBoolean("economy.materials.enabled", true);
-        vaultFallbackEnabled = config.getBoolean("economy.materials.vault-fallback", false);
+        materialsEnabled = economyConfig != null ? economyConfig.isMaterialsEnabled() : true;
+        vaultFallbackEnabled = economyConfig != null ? economyConfig.isVaultFallbackEnabled() : false;
         
         // Vault settings
-        baseCost = config.getDouble("economy.vault.base-cost", 100.0);
-        costPerUnlocked = config.getDouble("economy.vault.cost-per-unlocked", 25.0);
+        baseCost = economyConfig != null ? economyConfig.getVaultBaseCost() : 100.0;
+        costPerUnlocked = economyConfig != null ? economyConfig.getVaultCostPerUnlocked() : 25.0;
         
-        // AI settings - now consolidated under openai-agent
-        aiCostingEnabled = config.getBoolean("openai-agent.enabled", false);
+        // AI settings
+        aiCostingEnabled = openAIConfig != null ? openAIConfig.isEnabled() : false;
         
         plugin.getLogger().info("Economy Configuration:");
         plugin.getLogger().info("  Type: " + currentType.getConfigName());
@@ -133,15 +144,15 @@ public class EconomyManager {
         plugin.getLogger().info("  Cost per unlocked: $" + costPerUnlocked);
         
         // Check OpenAI configuration
-        if (aiCostingEnabled && openAIAgent != null) {
-            String apiKey = config.getString("openai-agent.api-key", "");
-            boolean transparencyEnabled = config.getBoolean("openai-agent.transparency", false);
+        if (aiCostingEnabled && openAIAgent != null && openAIConfig != null) {
+            String apiKey = openAIConfig.getApiKey();
+            boolean transparencyEnabled = openAIConfig.isTransparencyEnabled();
             plugin.getLogger().info("  OpenAI API key set: " + (!apiKey.isEmpty()));
             plugin.getLogger().info("  AI transparency enabled: " + transparencyEnabled);
             
             if (apiKey.isEmpty()) {
                 plugin.getLogger().warning("  ⚠️ OpenAI agent enabled but no API key provided!");
-                plugin.getLogger().warning("     Add your OpenAI API key to openai-agent.api-key in config.yml");
+                plugin.getLogger().warning("     Add your OpenAI API key to openai.yml");
                 aiCostingEnabled = false; // Disable if no API key
             }
         }
@@ -193,7 +204,13 @@ public class EconomyManager {
      */
     private PaymentRequirement calculateVaultRequirement(Player player, org.bukkit.Chunk chunk, Biome biome, 
                                                        ChunkEvaluator.ChunkValueData evaluation) {
-        FileConfiguration config = plugin.getConfig();
+        // Get modular config
+        me.chunklock.config.modular.EconomyConfig economyConfig = null;
+        if (plugin instanceof me.chunklock.ChunklockPlugin) {
+            economyConfig = ((me.chunklock.ChunklockPlugin) plugin).getConfigManager().getModularEconomyConfig();
+        } else {
+            economyConfig = new me.chunklock.config.modular.EconomyConfig(plugin);
+        }
         
         // Try OpenAI integration first if enabled and chunk is available
         if (aiCostingEnabled && openAIAgent != null && chunk != null) {
@@ -242,14 +259,14 @@ public class EconomyManager {
                 plugin.getLogger().fine("After progressive cost (+" + unlockedCount + " chunks, +" + progressiveCost + "): $" + cost);
                 
                 // Apply difficulty multiplier (reduced impact since AI accounts for this)
-                String difficultyPath = "economy.vault.difficulty-multipliers." + evaluation.difficulty.name();
-                double difficultyMultiplier = config.getDouble(difficultyPath, 1.0);
+                double difficultyMultiplier = economyConfig != null ? 
+                    economyConfig.getDifficultyMultiplier(evaluation.difficulty.name()) : 1.0;
                 cost *= Math.pow(difficultyMultiplier, 0.7); // Reduced power since AI considers difficulty
                 plugin.getLogger().fine("After difficulty multiplier (" + evaluation.difficulty.name() + " = " + difficultyMultiplier + "^0.7): $" + cost);
                 
                 // Apply biome multiplier (reduced impact since AI accounts for this)
-                String biomePath = "economy.vault.biome-multipliers." + biome.name();
-                double biomeMultiplier = config.getDouble(biomePath, 1.0);
+                double biomeMultiplier = economyConfig != null ? 
+                    economyConfig.getBiomeMultiplier(biome.name()) : 1.0;
                 cost *= Math.pow(biomeMultiplier, 0.7); // Reduced power since AI considers biome
                 plugin.getLogger().fine("After biome multiplier (" + biome.name() + " = " + biomeMultiplier + "^0.7): $" + cost);
                 
@@ -266,7 +283,14 @@ public class EconomyManager {
                 
                 // Send AI explanation to player for transparency if AI was actually used
                 if (aiResult.isAiProcessed() && !aiResult.getExplanation().isEmpty()) {
-                    boolean transparencyEnabled = config.getBoolean("openai-agent.transparency", false);
+                    // Get transparency from modular config
+                    me.chunklock.config.modular.OpenAIConfig openAIConfig = null;
+                    if (plugin instanceof me.chunklock.ChunklockPlugin) {
+                        openAIConfig = ((me.chunklock.ChunklockPlugin) plugin).getConfigManager().getOpenAIConfig();
+                    } else {
+                        openAIConfig = new me.chunklock.config.modular.OpenAIConfig(plugin);
+                    }
+                    boolean transparencyEnabled = openAIConfig != null ? openAIConfig.isTransparencyEnabled() : false;
                     if (transparencyEnabled) {
                         player.sendMessage(Component.text("💡 ")
                             .color(NamedTextColor.AQUA)
@@ -312,14 +336,14 @@ public class EconomyManager {
         plugin.getLogger().info("After progressive cost (+" + unlockedCount + " chunks): $" + cost);
         
         // Apply difficulty multiplier
-        String difficultyPath = "economy.vault.difficulty-multipliers." + evaluation.difficulty.name();
-        double difficultyMultiplier = config.getDouble(difficultyPath, 1.0);
+        double difficultyMultiplier = economyConfig != null ? 
+            economyConfig.getDifficultyMultiplier(evaluation.difficulty.name()) : 1.0;
         cost *= difficultyMultiplier;
         plugin.getLogger().info("After difficulty multiplier (" + evaluation.difficulty.name() + " = " + difficultyMultiplier + "): $" + cost);
         
         // Apply biome multiplier
-        String biomePath = "economy.vault.biome-multipliers." + biome.name();
-        double biomeMultiplier = config.getDouble(biomePath, 1.0);
+        double biomeMultiplier = economyConfig != null ? 
+            economyConfig.getBiomeMultiplier(biome.name()) : 1.0;
         cost *= biomeMultiplier;
         plugin.getLogger().info("After biome multiplier (" + biome.name() + " = " + biomeMultiplier + "): $" + cost);
         
