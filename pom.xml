@@ -1,0 +1,220 @@
+﻿<project xmlns="http://maven.apache.org/POM/4.0.0" 
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>me.chunklock</groupId>
+  <artifactId>chunklock</artifactId>
+  <version>2.0</version>
+  <packaging>jar</packaging>
+
+  <name>Chunklock-2.0</name>
+
+  <properties>
+    <java.version>17</java.version>
+    <paper.version>1.21.10-R0.1-SNAPSHOT</paper.version>
+    <maven.compiler.source>17</maven.compiler.source>
+    <maven.compiler.target>17</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <repositories>
+    <repository>
+      <id>papermc</id>
+      <url>https://repo.papermc.io/repository/maven-public/</url>
+    </repository>
+    <repository>
+      <id>jitpack.io</id>
+      <url>https://jitpack.io</url>
+    </repository>
+    <!-- bStats repository -->
+    <repository>
+      <id>CodeMC</id>
+      <url>https://repo.codemc.org/repository/maven-public</url>
+    </repository>
+    <!-- FancyHolograms repository -->
+    <repository>
+      <id>fancyinnovations-releases</id>
+      <name>FancyInnovations Repository</name>
+      <url>https://repo.fancyinnovations.com/releases</url>
+    </repository>
+    <!-- Vault repository -->
+    <repository>
+      <id>vault-repo</id>
+      <url>https://nexus.hc.to/content/repositories/pub_releases</url>
+    </repository>
+  </repositories>
+
+  <dependencies>
+    <!-- Paper API targeting 1.20.4 for Pufferfish compatibility -->
+    <dependency>
+      <groupId>io.papermc.paper</groupId>
+      <artifactId>paper-api</artifactId>
+      <version>${paper.version}</version>
+      <scope>provided</scope>
+    </dependency>
+  
+    <!-- FancyHolograms API -->
+    <dependency>
+      <groupId>de.oliver</groupId>
+      <artifactId>FancyHolograms</artifactId>
+      <version>2.4.2</version>
+      <scope>provided</scope>
+    </dependency>
+  
+    <!-- Vault API -->
+    <dependency>
+      <groupId>net.milkbowl.vault</groupId>
+      <artifactId>VaultAPI</artifactId>
+      <version>1.7</version>
+      <scope>provided</scope>
+    </dependency>
+  
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpcore</artifactId>
+      <version>4.4.11</version>
+    </dependency>
+    
+    <!-- Jackson JSON processing for OpenAI integration -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-core</artifactId>
+      <version>2.15.2</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.15.2</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-annotations</artifactId>
+      <version>2.15.2</version>
+      <scope>compile</scope>
+    </dependency>
+    
+    <!-- H2 Database for persistent cost caching (pure Java, much smaller than SQLite JDBC) -->
+    <!-- Using version 2.1.214 which supports Java 17 -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>2.1.214</version>
+      <scope>compile</scope>
+    </dependency>
+    
+    <!-- MapDB for embedded database storage -->
+    <dependency>
+      <groupId>org.mapdb</groupId>
+      <artifactId>mapdb</artifactId>
+      <version>3.0.9</version>
+      <scope>compile</scope>
+    </dependency>
+    
+    <!-- JUnit 5 for testing -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
+      <version>5.10.0</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-engine</artifactId>
+      <version>5.10.0</version>
+      <scope>test</scope>
+    </dependency>
+    
+    <!-- NOTE: MMOItems and Oraxen are used via reflection-based access (soft dependencies).
+         No compile-time dependency needed. Detection and integration happen at runtime.
+         See: me.chunklock.economy.items.providers.MMOItemsProvider
+         See: me.chunklock.economy.items.providers.OraxenProvider -->
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+        <configuration>
+          <release>${java.version}</release>
+          <encoding>UTF-8</encoding>
+          <proc>none</proc>
+        </configuration>
+      </plugin>
+
+      <!-- Maven Shade Plugin to bundle dependencies into JAR -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.4.1</version>
+        <configuration>
+          <createDependencyReducedPom>false</createDependencyReducedPom>
+          <relocations>
+            <!-- Relocate Jackson to avoid conflicts with other plugins -->
+            <relocation>
+              <pattern>com.fasterxml.jackson</pattern>
+              <shadedPattern>me.chunklock.libs.jackson</shadedPattern>
+            </relocation>
+            <!-- Relocate H2 Database to avoid conflicts -->
+            <relocation>
+              <pattern>org.h2</pattern>
+              <shadedPattern>me.chunklock.libs.h2</shadedPattern>
+            </relocation>
+            <!-- Relocate Apache HttpCore to avoid conflicts -->
+            <relocation>
+              <pattern>org.apache.http</pattern>
+              <shadedPattern>me.chunklock.libs.http</shadedPattern>
+            </relocation>
+            <!-- Relocate MapDB to avoid conflicts -->
+            <relocation>
+              <pattern>org.mapdb</pattern>
+              <shadedPattern>me.chunklock.libs.mapdb</shadedPattern>
+            </relocation>
+          </relocations>
+          <filters>
+            <filter>
+              <artifact>*:*</artifact>
+              <excludes>
+                <exclude>META-INF/*.SF</exclude>
+                <exclude>META-INF/*.DSA</exclude>
+                <exclude>META-INF/*.RSA</exclude>
+                <exclude>META-INF/MANIFEST.MF</exclude>
+              </excludes>
+            </filter>
+          </filters>
+        </configuration>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+      </plugin>
+
+      <!-- Maven Surefire Plugin for running tests -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.1.2</version>
+        <configuration>
+          <useSystemClassLoader>false</useSystemClassLoader>
+        </configuration>
+      </plugin>
+    </plugins>
+    <finalName>Chunklock</finalName>
+  </build>
+
+</project>

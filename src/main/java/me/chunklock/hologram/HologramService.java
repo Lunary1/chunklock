@@ -657,10 +657,65 @@ public final class HologramService {
             Chunk chunk = world.getChunkAt(hologramId.getChunkX(), hologramId.getChunkZ());
             var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), chunk);
             
-            List<String> lines;
+            // Calculate cost asynchronously to avoid blocking the main thread
+            // Use AsyncCostCalculationService if available, otherwise calculate on async thread
+            me.chunklock.services.AsyncCostCalculationService asyncService = 
+                ChunklockPlugin.getInstance().getAsyncCostCalculationService();
             
-            // Use unified cost calculation from EconomyManager (same as GUI)
-            var paymentRequirement = economyManager.calculateRequirement(player, chunk, evaluation.biome, evaluation);
+            if (asyncService != null) {
+                // Use async service for non-blocking calculation
+                asyncService.getCostAsync(player, chunk).thenAccept(paymentRequirement -> {
+                    // Schedule hologram update on main thread
+                    Bukkit.getScheduler().runTask(ChunklockPlugin.getInstance(), () -> {
+                        if (paymentRequirement != null) {
+                            createHologramWithRequirement(hologramId, player, chunk, evaluation, paymentRequirement);
+                        } else {
+                            // Fallback to default if async calculation fails
+                            createHologramWithFallback(hologramId, player, chunk, evaluation);
+                        }
+                    });
+                }).exceptionally(throwable -> {
+                    ChunklockPlugin.getInstance().getLogger().log(Level.WARNING,
+                        "Async cost calculation failed for hologram " + hologramId, throwable);
+                    // Fallback on main thread
+                    Bukkit.getScheduler().runTask(ChunklockPlugin.getInstance(), () -> {
+                        createHologramWithFallback(hologramId, player, chunk, evaluation);
+                    });
+                    return null;
+                });
+            } else {
+                // Fallback: calculate on async thread if service not available
+                Bukkit.getScheduler().runTaskAsynchronously(ChunklockPlugin.getInstance(), () -> {
+                    try {
+                        var paymentRequirement = economyManager.calculateRequirement(player, chunk, evaluation.biome, evaluation);
+                        // Update hologram on main thread
+                        Bukkit.getScheduler().runTask(ChunklockPlugin.getInstance(), () -> {
+                            createHologramWithRequirement(hologramId, player, chunk, evaluation, paymentRequirement);
+                        });
+                    } catch (Exception e) {
+                        ChunklockPlugin.getInstance().getLogger().log(Level.WARNING,
+                            "Async cost calculation failed for hologram " + hologramId, e);
+                        Bukkit.getScheduler().runTask(ChunklockPlugin.getInstance(), () -> {
+                            createHologramWithFallback(hologramId, player, chunk, evaluation);
+                        });
+                    }
+                });
+            }
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                "Error creating hologram for chunk " + hologramId, e);
+        }
+    }
+    
+    /**
+     * Create hologram with calculated payment requirement
+     */
+    private void createHologramWithRequirement(HologramId hologramId, Player player, Chunk chunk,
+                                               me.chunklock.managers.ChunkEvaluator.ChunkValueData evaluation,
+                                               me.chunklock.economy.EconomyManager.PaymentRequirement paymentRequirement) {
+        try {
+            List<String> lines;
             
             // Check if we should use Vault economy or materials
             if (economyManager != null && economyManager.getCurrentType() == me.chunklock.economy.EconomyManager.EconomyType.VAULT 
@@ -692,8 +747,31 @@ public final class HologramService {
             createNewHologram(hologramId, location, lines);
             
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
-                "Error creating hologram for chunk " + hologramId, e);
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING,
+                "Error creating hologram with requirement for " + hologramId, e);
+        }
+    }
+    
+    /**
+     * Create hologram with fallback/default cost (used when async calculation fails or times out)
+     */
+    private void createHologramWithFallback(HologramId hologramId, Player player, Chunk chunk,
+                                           me.chunklock.managers.ChunkEvaluator.ChunkValueData evaluation) {
+        try {
+            // Use a simple fallback - show default material requirement
+            Material defaultMaterial = Material.DIRT;
+            int defaultAmount = 1;
+            
+            List<String> lines = me.chunklock.hologram.util.HologramTextUtils.createChunkHologramLines(
+                me.chunklock.hologram.util.HologramTextUtils.formatMaterialName(defaultMaterial),
+                false, 0, defaultAmount);
+            
+            Location location = getOrComputeWallLocation(chunk, hologramId.getSide());
+            createNewHologram(hologramId, location, lines);
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING,
+                "Error creating fallback hologram for " + hologramId, e);
         }
     }
     
@@ -708,9 +786,48 @@ public final class HologramService {
             Chunk chunk = world.getChunkAt(hologramId.getChunkX(), hologramId.getChunkZ());
             var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), chunk);
             
-            // Use unified cost calculation from EconomyManager (same as GUI)
-            var paymentRequirement = economyManager.calculateRequirement(player, chunk, evaluation.biome, evaluation);
+            // Calculate cost asynchronously to avoid blocking the main thread
+            me.chunklock.services.AsyncCostCalculationService asyncService = 
+                ChunklockPlugin.getInstance().getAsyncCostCalculationService();
             
+            if (asyncService != null) {
+                asyncService.getCostAsync(player, chunk).thenAccept(paymentRequirement -> {
+                    Bukkit.getScheduler().runTask(ChunklockPlugin.getInstance(), () -> {
+                        if (paymentRequirement != null) {
+                            updateHologramContentWithRequirement(hologramId, player, chunk, evaluation, paymentRequirement);
+                        }
+                    });
+                }).exceptionally(throwable -> {
+                    ChunklockPlugin.getInstance().getLogger().fine("Async cost update failed for hologram " + hologramId);
+                    return null;
+                });
+            } else {
+                // Fallback: calculate on async thread
+                Bukkit.getScheduler().runTaskAsynchronously(ChunklockPlugin.getInstance(), () -> {
+                    try {
+                        var paymentRequirement = economyManager.calculateRequirement(player, chunk, evaluation.biome, evaluation);
+                        Bukkit.getScheduler().runTask(ChunklockPlugin.getInstance(), () -> {
+                            updateHologramContentWithRequirement(hologramId, player, chunk, evaluation, paymentRequirement);
+                        });
+                    } catch (Exception e) {
+                        ChunklockPlugin.getInstance().getLogger().fine("Async cost update failed for hologram " + hologramId);
+                    }
+                });
+            }
+            
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING,
+                "Error updating hologram content for " + hologramId, e);
+        }
+    }
+    
+    /**
+     * Update hologram content with calculated payment requirement
+     */
+    private void updateHologramContentWithRequirement(HologramId hologramId, Player player, Chunk chunk,
+                                                      me.chunklock.managers.ChunkEvaluator.ChunkValueData evaluation,
+                                                      me.chunklock.economy.EconomyManager.PaymentRequirement paymentRequirement) {
+        try {
             List<String> newLines;
             
             // Check if we should use Vault economy or materials

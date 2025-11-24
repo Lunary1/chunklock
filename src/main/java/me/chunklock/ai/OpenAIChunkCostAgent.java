@@ -18,6 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 
 /**
@@ -120,14 +123,49 @@ public class OpenAIChunkCostAgent {
     
     /**
      * Synchronous version for immediate results (uses cache when possible)
+     * WARNING: This method blocks the calling thread. Use with timeout or on async threads only.
      */
     public OpenAICostResult calculateOptimizedCost(Player player, Chunk chunk) {
         try {
-            return calculateOptimizedCostAsync(player, chunk).get();
-        } catch (Exception e) {
-            plugin.getLogger().log(Level.WARNING, "Sync OpenAI call failed", e);
+            // Get timeout from config (default 3 seconds to prevent server lag)
+            int timeoutSeconds = 3;
+            try {
+                me.chunklock.config.modular.OpenAIConfig openAIConfig = 
+                    ((me.chunklock.ChunklockPlugin) plugin).getConfigManager().getOpenAIConfig();
+                if (openAIConfig != null) {
+                    timeoutSeconds = openAIConfig.getRequestTimeoutSeconds();
+                }
+            } catch (Exception e) {
+                // Use default timeout if config unavailable
+            }
             
-            // Fallback
+            return calculateOptimizedCostAsync(player, chunk)
+                .get(timeoutSeconds, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            plugin.getLogger().warning("OpenAI cost calculation timed out, using fallback");
+            
+            // Fallback to traditional calculation
+            ChunkEvaluator.ChunkValueData baseEvaluation = chunkEvaluator.evaluateChunk(player.getUniqueId(), chunk);
+            BiomeUnlockRegistry.UnlockRequirement baseRequirement = 
+                biomeRegistry.calculateRequirement(player, baseEvaluation.biome, baseEvaluation.score);
+            
+            return new OpenAICostResult(baseRequirement.material(), baseRequirement.amount(), 
+                baseEvaluation.score, "Sync call failed - using base calculation", 1.0, false);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            plugin.getLogger().warning("OpenAI cost calculation interrupted, using fallback");
+            
+            // Fallback to traditional calculation
+            ChunkEvaluator.ChunkValueData baseEvaluation = chunkEvaluator.evaluateChunk(player.getUniqueId(), chunk);
+            BiomeUnlockRegistry.UnlockRequirement baseRequirement = 
+                biomeRegistry.calculateRequirement(player, baseEvaluation.biome, baseEvaluation.score);
+            
+            return new OpenAICostResult(baseRequirement.material(), baseRequirement.amount(), 
+                baseEvaluation.score, "Sync call interrupted - using base calculation", 1.0, false);
+        } catch (ExecutionException e) {
+            plugin.getLogger().log(Level.WARNING, "OpenAI cost calculation execution failed, using fallback", e);
+            
+            // Fallback to traditional calculation
             ChunkEvaluator.ChunkValueData baseEvaluation = chunkEvaluator.evaluateChunk(player.getUniqueId(), chunk);
             BiomeUnlockRegistry.UnlockRequirement baseRequirement = 
                 biomeRegistry.calculateRequirement(player, baseEvaluation.biome, baseEvaluation.score);

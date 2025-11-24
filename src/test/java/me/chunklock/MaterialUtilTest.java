@@ -30,7 +30,8 @@ public class MaterialUtilTest {
     public void testFormatMaterialNameWithMultipleWords() {
         // Test materials with multiple words
         assertEquals("Oak Wood", me.chunklock.util.item.MaterialUtil.formatMaterialName(Material.OAK_WOOD));
-        assertEquals("Red Stone", me.chunklock.util.item.MaterialUtil.formatMaterialName(Material.REDSTONE));
+        // REDSTONE has no underscore, so it formats as a single word
+        assertEquals("Redstone", me.chunklock.util.item.MaterialUtil.formatMaterialName(Material.REDSTONE));
     }
     
     @Test

@@ -5,17 +5,26 @@ import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.ChunklockPlugin;
+import me.chunklock.economy.calculation.CostCalculationStrategy;
+import me.chunklock.economy.calculation.TraditionalVaultStrategy;
+import me.chunklock.economy.calculation.AIVaultStrategy;
+import me.chunklock.economy.calculation.TraditionalMaterialStrategy;
+import me.chunklock.economy.calculation.AIMaterialStrategy;
 import me.chunklock.util.world.BiomeUtil;
 import me.chunklock.util.item.MaterialUtil;
+import me.chunklock.economy.items.ItemRequirement;
+import me.chunklock.economy.items.VanillaItemRequirement;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.block.Biome;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.logging.Level;
 
 /**
@@ -49,34 +58,81 @@ public class EconomyManager {
     }
     
     /**
-     * Represents a payment requirement for unlocking a chunk
+     * Represents a payment requirement for unlocking a chunk.
+     * Supports both material-based (multiple items) and vault-based payments.
      */
     public static class PaymentRequirement {
         private final EconomyType type;
-        private final Material material;
-        private final int materialAmount;
-        private final double vaultCost;
+        private final List<ItemRequirement> itemRequirements; // For materials mode
+        private final double vaultCost; // For vault mode
         
-        // Material-based requirement
+        // Material-based requirement with multiple items
+        public PaymentRequirement(List<ItemRequirement> itemRequirements) {
+            this.type = EconomyType.MATERIALS;
+            this.itemRequirements = itemRequirements != null ? new ArrayList<>(itemRequirements) : new ArrayList<>();
+            this.vaultCost = 0.0;
+        }
+        
+        // Material-based requirement (backward compatibility - single material)
         public PaymentRequirement(Material material, int amount) {
             this.type = EconomyType.MATERIALS;
-            this.material = material;
-            this.materialAmount = amount;
+            this.itemRequirements = new ArrayList<>();
+            if (material != null && amount > 0) {
+                this.itemRequirements.add(new VanillaItemRequirement(material, amount));
+            }
             this.vaultCost = 0.0;
         }
         
         // Vault-based requirement
         public PaymentRequirement(double cost) {
             this.type = EconomyType.VAULT;
-            this.material = null;
-            this.materialAmount = 0;
+            this.itemRequirements = Collections.emptyList();
             this.vaultCost = cost;
         }
         
         public EconomyType getType() { return type; }
-        public Material getMaterial() { return material; }
-        public int getMaterialAmount() { return materialAmount; }
         public double getVaultCost() { return vaultCost; }
+        
+        /**
+         * Get all item requirements (for materials mode)
+         */
+        public List<ItemRequirement> getItemRequirements() {
+            return Collections.unmodifiableList(itemRequirements);
+        }
+        
+        /**
+         * Get primary display material for backward compatibility.
+         * Returns the first vanilla material found, or null if none.
+         */
+        public Material getMaterial() {
+            for (ItemRequirement req : itemRequirements) {
+                if (req instanceof VanillaItemRequirement) {
+                    return ((VanillaItemRequirement) req).getMaterial();
+                }
+            }
+            return null;
+        }
+        
+        /**
+         * Get primary display amount for backward compatibility.
+         * Returns the amount of the first vanilla material found, or 0 if none.
+         */
+        public int getMaterialAmount() {
+            for (ItemRequirement req : itemRequirements) {
+                if (req instanceof VanillaItemRequirement) {
+                    return req.getAmount();
+                }
+            }
+            return 0;
+        }
+        
+        /**
+         * Get primary display requirement for backward compatibility.
+         * Returns the first item requirement, or null if none.
+         */
+        public ItemRequirement getPrimaryDisplay() {
+            return itemRequirements.isEmpty() ? null : itemRequirements.get(0);
+        }
     }
     
     private final ChunklockPlugin plugin;
@@ -84,6 +140,16 @@ public class EconomyManager {
     private final BiomeUnlockRegistry biomeRegistry;
     private final PlayerProgressTracker progressTracker;
     private final OpenAIChunkCostAgent openAIAgent; // OpenAI ChatGPT integration
+    
+    // Config objects stored as fields for efficient access
+    private me.chunklock.config.modular.EconomyConfig economyConfig;
+    private me.chunklock.config.modular.OpenAIConfig openAIConfig;
+    
+    // Material-to-vault converter
+    private MaterialVaultConverter materialConverter;
+    
+    // Calculation strategy (selected based on economy type and AI enabled state)
+    private CostCalculationStrategy calculationStrategy;
     
     private EconomyType currentType;
     private boolean materialsEnabled;
@@ -102,6 +168,14 @@ public class EconomyManager {
         this.vaultService = new VaultEconomyService(plugin);
         this.openAIAgent = new OpenAIChunkCostAgent(plugin, chunkEvaluator, biomeRegistry);
         
+        // Load configs once from ConfigManager
+        me.chunklock.config.ConfigManager configManager = plugin.getConfigManager();
+        this.economyConfig = configManager.getModularEconomyConfig();
+        this.openAIConfig = configManager.getOpenAIConfig();
+        
+        // Initialize material converter
+        this.materialConverter = new MaterialVaultConverter(plugin, economyConfig);
+        
         loadConfiguration();
     }
     
@@ -109,18 +183,10 @@ public class EconomyManager {
      * Load economy configuration from modular config files
      */
     public void loadConfiguration() {
-        // Use modular config system
-        me.chunklock.config.modular.EconomyConfig economyConfig = null;
-        me.chunklock.config.modular.OpenAIConfig openAIConfig = null;
-        
-        if (plugin instanceof me.chunklock.ChunklockPlugin) {
-            me.chunklock.config.ConfigManager configManager = ((me.chunklock.ChunklockPlugin) plugin).getConfigManager();
-            economyConfig = configManager.getModularEconomyConfig();
-            openAIConfig = configManager.getOpenAIConfig();
-        } else {
-            economyConfig = new me.chunklock.config.modular.EconomyConfig(plugin);
-            openAIConfig = new me.chunklock.config.modular.OpenAIConfig(plugin);
-        }
+        // Reload configs if they were updated
+        me.chunklock.config.ConfigManager configManager = plugin.getConfigManager();
+        this.economyConfig = configManager.getModularEconomyConfig();
+        this.openAIConfig = configManager.getOpenAIConfig();
         
         // Get economy type
         String typeString = economyConfig != null ? economyConfig.getEconomyType() : "materials";
@@ -146,9 +212,9 @@ public class EconomyManager {
         plugin.getLogger().info("  Cost per unlocked: $" + costPerUnlocked);
         
         // Check OpenAI configuration
-        if (aiCostingEnabled && openAIAgent != null && openAIConfig != null) {
-            String apiKey = openAIConfig.getApiKey();
-            boolean transparencyEnabled = openAIConfig.isTransparencyEnabled();
+        if (aiCostingEnabled && openAIAgent != null && this.openAIConfig != null) {
+            String apiKey = this.openAIConfig.getApiKey();
+            boolean transparencyEnabled = this.openAIConfig.isTransparencyEnabled();
             plugin.getLogger().info("  OpenAI API key set: " + (!apiKey.isEmpty()));
             plugin.getLogger().info("  AI transparency enabled: " + transparencyEnabled);
             
@@ -159,10 +225,35 @@ public class EconomyManager {
             }
         }
         
+        // Select appropriate calculation strategy
+        selectCalculationStrategy();
+        
         plugin.getLogger().info("Economy type set to: " + currentType.getConfigName() + 
             (currentType == EconomyType.VAULT && !vaultService.isVaultAvailable() ? 
                 " (Vault not available, falling back to materials)" : "") +
             (aiCostingEnabled ? " with OpenAI ChatGPT optimization" : ""));
+    }
+    
+    /**
+     * Select the appropriate calculation strategy based on economy type and AI enabled state
+     */
+    private void selectCalculationStrategy() {
+        if (currentType == EconomyType.VAULT) {
+            if (aiCostingEnabled && openAIAgent != null) {
+                calculationStrategy = new AIVaultStrategy(plugin, economyConfig, biomeRegistry, 
+                    progressTracker, baseCost, costPerUnlocked, openAIAgent, openAIConfig, materialConverter);
+            } else {
+                calculationStrategy = new TraditionalVaultStrategy(plugin, economyConfig, 
+                    biomeRegistry, progressTracker, baseCost, costPerUnlocked);
+            }
+        } else {
+            if (aiCostingEnabled && openAIAgent != null) {
+                calculationStrategy = new AIMaterialStrategy(plugin, biomeRegistry, 
+                    progressTracker, openAIAgent, openAIConfig);
+            } else {
+                calculationStrategy = new TraditionalMaterialStrategy(plugin, biomeRegistry, progressTracker);
+            }
+        }
     }
     
     /**
@@ -175,6 +266,17 @@ public class EconomyManager {
         if (currentType == EconomyType.VAULT && !vaultService.isVaultAvailable()) {
             plugin.getLogger().warning("Vault economy selected but not available, falling back to materials");
             effectiveType = EconomyType.MATERIALS;
+            // Temporarily switch strategy for this calculation
+            CostCalculationStrategy originalStrategy = calculationStrategy;
+            if (aiCostingEnabled && openAIAgent != null) {
+                calculationStrategy = new AIMaterialStrategy(plugin, biomeRegistry, 
+                    progressTracker, openAIAgent, openAIConfig);
+            } else {
+                calculationStrategy = new TraditionalMaterialStrategy(plugin, biomeRegistry, progressTracker);
+            }
+            PaymentRequirement result = calculationStrategy.calculate(player, chunk, biome, evaluation);
+            calculationStrategy = originalStrategy;
+            return result;
         }
         
         plugin.getLogger().fine("Calculating requirement for " + player.getName() + 
@@ -183,280 +285,27 @@ public class EconomyManager {
             ", Difficulty: " + evaluation.difficulty.name() + 
             ", Score: " + evaluation.score);
         
-        if (effectiveType == EconomyType.VAULT) {
-            return calculateVaultRequirement(player, chunk, biome, evaluation);
-        } else {
-            return calculateMaterialRequirement(player, chunk, biome, evaluation);
-        }
+        // Use strategy pattern for calculation
+        return calculationStrategy.calculate(player, chunk, biome, evaluation);
     }
     
-    /**
-     * Legacy compatibility method - calculates requirement without AI features
-     */
-    public PaymentRequirement calculateRequirement(Player player, Biome biome, 
-                                                 ChunkEvaluator.ChunkValueData evaluation) {
-        // For legacy calls, we won't use AI features since we don't have chunk context
-        BiomeUnlockRegistry.UnlockRequirement requirement = 
-            biomeRegistry.calculateRequirement(player, biome, evaluation.score);
-        return new PaymentRequirement(requirement.material(), requirement.amount());
-    }
     
-    /**
-     * Calculate vault-based payment requirement with optional chunk parameter for OpenAI
-     */
-    private PaymentRequirement calculateVaultRequirement(Player player, org.bukkit.Chunk chunk, Biome biome, 
-                                                       ChunkEvaluator.ChunkValueData evaluation) {
-        // Get modular config
-        me.chunklock.config.modular.EconomyConfig economyConfig = null;
-        if (plugin instanceof me.chunklock.ChunklockPlugin) {
-            economyConfig = ((me.chunklock.ChunklockPlugin) plugin).getConfigManager().getModularEconomyConfig();
-        } else {
-            economyConfig = new me.chunklock.config.modular.EconomyConfig(plugin);
-        }
-        
-        // Try OpenAI integration first if enabled and chunk is available
-        if (aiCostingEnabled && openAIAgent != null && chunk != null) {
-            try {
-                // First, check if we have a cached result from database
-                me.chunklock.ChunklockPlugin pluginInstance = (me.chunklock.ChunklockPlugin) plugin;
-                me.chunklock.services.ChunkCostDatabase costDatabase = pluginInstance.getCostDatabase();
-                String configHash = costDatabase.generateConfigHash();
-                
-                // Check database cache first (async but should be very fast for recent calculations)
-                try {
-                    PaymentRequirement cachedResult = costDatabase.getCachedCost(player, chunk, configHash).get();
-                    if (cachedResult != null) {
-                        plugin.getLogger().fine("Using cached cost from database for player " + player.getName() + ": $" + cachedResult.getVaultCost());
-                        return cachedResult;
-                    }
-                } catch (Exception e) {
-                    plugin.getLogger().fine("Database cache miss for player " + player.getName() + ": " + e.getMessage());
-                }
-                
-                // If no cache available, proceed with synchronous calculation
-                plugin.getLogger().fine("No cached cost available, calculating synchronously for player " + player.getName());
-                plugin.getLogger().fine("No cached cost available, calculating synchronously for player " + player.getName());
-                plugin.getLogger().fine("Attempting OpenAI vault cost calculation for player " + player.getName());
-                
-                OpenAIChunkCostAgent.OpenAICostResult aiResult = openAIAgent.calculateOptimizedCost(player, chunk);
-                
-                plugin.getLogger().fine("OpenAI result: Material=" + MaterialUtil.getMaterialName(aiResult.getMaterial()) + 
-                    ", Amount=" + aiResult.getAmount() + ", AI Processed=" + aiResult.isAiProcessed() + 
-                    ", Explanation=" + aiResult.getExplanation());
-                
-                // Convert material cost to vault cost using conversion rate
-                double baseVaultCost = convertMaterialToVaultCost(aiResult.getMaterial(), aiResult.getAmount());
-                
-                plugin.getLogger().fine("Converted material cost to vault: " + aiResult.getAmount() + " " + 
-                    MaterialUtil.getMaterialName(aiResult.getMaterial()) + " = $" + baseVaultCost);
-                
-                // Apply vault-specific multipliers to the AI-suggested base cost
-                double cost = baseVaultCost;
-                plugin.getLogger().fine("Starting vault cost calculation with base: $" + cost);
-                
-                // Add progressive cost based on unlocked chunks
-                int unlockedCount = progressTracker.getUnlockedChunkCount(player.getUniqueId());
-                double progressiveCost = unlockedCount * (costPerUnlocked * 0.5); // Reduced since AI already accounts for difficulty
-                cost += progressiveCost;
-                plugin.getLogger().fine("After progressive cost (+" + unlockedCount + " chunks, +" + progressiveCost + "): $" + cost);
-                
-                // Apply difficulty multiplier (reduced impact since AI accounts for this)
-                double difficultyMultiplier = economyConfig != null ? 
-                    economyConfig.getDifficultyMultiplier(evaluation.difficulty.name()) : 1.0;
-                cost *= Math.pow(difficultyMultiplier, 0.7); // Reduced power since AI considers difficulty
-                plugin.getLogger().fine("After difficulty multiplier (" + evaluation.difficulty.name() + " = " + difficultyMultiplier + "^0.7): $" + cost);
-                
-                // Apply biome multiplier (reduced impact since AI accounts for this)
-                double biomeMultiplier = economyConfig != null ? 
-                    economyConfig.getBiomeMultiplier(BiomeUtil.getBiomeName(biome)) : 1.0;
-                cost *= Math.pow(biomeMultiplier, 0.7); // Reduced power since AI considers biome
-                plugin.getLogger().fine("After biome multiplier (" + BiomeUtil.getBiomeName(biome) + " = " + biomeMultiplier + "^0.7): $" + cost);
-                
-                // Apply team multiplier if available
-                if (biomeRegistry.isTeamIntegrationActive()) {
-                    double teamMultiplier = biomeRegistry.getTeamCostMultiplier(player);
-                    cost *= teamMultiplier;
-                    plugin.getLogger().fine("After team multiplier (" + teamMultiplier + "): $" + cost);
-                }
-                
-                // Ensure minimum cost
-                cost = Math.max(cost, 10.0); // Minimum $10
-                plugin.getLogger().fine("Final AI-optimized vault cost: $" + cost);
-                
-                // Send AI explanation to player for transparency if AI was actually used
-                if (aiResult.isAiProcessed() && !aiResult.getExplanation().isEmpty()) {
-                    // Get transparency from modular config
-                    me.chunklock.config.modular.OpenAIConfig openAIConfig = null;
-                    if (plugin instanceof me.chunklock.ChunklockPlugin) {
-                        openAIConfig = ((me.chunklock.ChunklockPlugin) plugin).getConfigManager().getOpenAIConfig();
-                    } else {
-                        openAIConfig = new me.chunklock.config.modular.OpenAIConfig(plugin);
-                    }
-                    boolean transparencyEnabled = openAIConfig != null ? openAIConfig.isTransparencyEnabled() : false;
-                    if (transparencyEnabled) {
-                        player.sendMessage(Component.text("💡 ")
-                            .color(NamedTextColor.AQUA)
-                            .append(Component.text("AI Cost Analysis: " + aiResult.getExplanation())
-                                .color(NamedTextColor.YELLOW))
-                            .decoration(TextDecoration.ITALIC, false));
-                    }
-                }
-                
-                PaymentRequirement calculatedResult = new PaymentRequirement(cost);
-                
-                // Store the calculated result in database cache for future use
-                try {
-                costDatabase.storeCost(player, chunk, calculatedResult, 
-                    BiomeUtil.getBiomeName(biome), evaluation.difficulty.name(), evaluation.score, 
-                    aiResult.isAiProcessed(), aiResult.getExplanation(), configHash);
-                    plugin.getLogger().fine("Stored AI-calculated cost in database cache for player " + player.getName());
-                } catch (Exception e) {
-                    plugin.getLogger().warning("Failed to store cost in database cache: " + e.getMessage());
-                }
-                
-                return calculatedResult;
-                
-            } catch (Exception e) {
-                plugin.getLogger().log(Level.WARNING, "OpenAI vault cost calculation failed, using traditional method", e);
-                // Fall through to traditional calculation
-            }
-        } else {
-            plugin.getLogger().fine("OpenAI vault cost calculation skipped - aiCostingEnabled=" + aiCostingEnabled + 
-                ", openAIAgent=" + (openAIAgent != null) + ", chunk=" + (chunk != null));
-        }
-        
-        // Traditional vault calculation (fallback or when AI disabled)
-        plugin.getLogger().info("Using traditional vault cost calculation");
-        
-        // Base calculation
-        double cost = baseCost;
-        plugin.getLogger().info("Base cost: $" + cost);
-        
-        // Add progressive cost based on unlocked chunks
-        int unlockedCount = progressTracker.getUnlockedChunkCount(player.getUniqueId());
-        cost += unlockedCount * costPerUnlocked;
-        plugin.getLogger().info("After progressive cost (+" + unlockedCount + " chunks): $" + cost);
-        
-        // Apply difficulty multiplier
-        double difficultyMultiplier = economyConfig != null ? 
-            economyConfig.getDifficultyMultiplier(evaluation.difficulty.name()) : 1.0;
-        cost *= difficultyMultiplier;
-        plugin.getLogger().info("After difficulty multiplier (" + evaluation.difficulty.name() + " = " + difficultyMultiplier + "): $" + cost);
-        
-        // Apply biome multiplier
-        double biomeMultiplier = economyConfig != null ? 
-            economyConfig.getBiomeMultiplier(BiomeUtil.getBiomeName(biome)) : 1.0;
-        cost *= biomeMultiplier;
-        plugin.getLogger().info("After biome multiplier (" + BiomeUtil.getBiomeName(biome) + " = " + biomeMultiplier + "): $" + cost);
-        
-        // Apply team multiplier if available
-        if (biomeRegistry.isTeamIntegrationActive()) {
-            double teamMultiplier = biomeRegistry.getTeamCostMultiplier(player);
-            cost *= teamMultiplier;
-            plugin.getLogger().info("After team multiplier (" + teamMultiplier + "): $" + cost);
-        }
-        
-        // Ensure minimum cost
-        cost = Math.max(cost, 1.0); // Minimum $1
-        plugin.getLogger().info("Final traditional vault cost: $" + cost);
-        
-        PaymentRequirement traditionalResult = new PaymentRequirement(cost);
-        
-        // Store the traditional calculation result in database cache if chunk is available
-        if (chunk != null) {
-            try {
-                me.chunklock.ChunklockPlugin pluginInstance = (me.chunklock.ChunklockPlugin) plugin;
-                me.chunklock.services.ChunkCostDatabase costDatabase = pluginInstance.getCostDatabase();
-                String configHash = costDatabase.generateConfigHash();
-                
-                costDatabase.storeCost(player, chunk, traditionalResult, 
-                    BiomeUtil.getBiomeName(biome), evaluation.difficulty.name(), evaluation.score, 
-                    false, "", configHash);
-                plugin.getLogger().fine("Stored traditional cost in database cache for player " + player.getName());
-            } catch (Exception e) {
-                plugin.getLogger().warning("Failed to store traditional cost in database cache: " + e.getMessage());
-            }
-        }
-        
-        return traditionalResult;
-    }
-    
-    /**
-     * Convert material cost to equivalent vault cost
-     */
-    private double convertMaterialToVaultCost(Material material, int amount) {
-        // Simple conversion based on material rarity/value
-        // This could be made configurable in the future
-        double baseValue = switch (material) {
-            case DIAMOND -> 50.0;
-            case EMERALD -> 45.0;
-            case GOLD_INGOT -> 25.0;
-            case IRON_INGOT -> 10.0;
-            case COPPER_INGOT -> 5.0;
-            case COAL -> 2.0;
-            case COBBLESTONE -> 0.5;
-            default -> 5.0; // Default value for unknown materials
-        };
-        
-        return baseValue * amount;
-    }
-    
-    /**
-     * Calculate material-based payment requirement with optional OpenAI optimization
-     * NOTE: This returns the first vanilla material for backward compatibility, but
-     * hasRequiredItems() should be called to validate ALL items (vanilla + custom)
-     */
-    private PaymentRequirement calculateMaterialRequirement(Player player, org.bukkit.Chunk chunk, Biome biome, 
-                                                          ChunkEvaluator.ChunkValueData evaluation) {
-        if (aiCostingEnabled && openAIAgent != null) {
-            // Use OpenAI ChatGPT for intelligent cost calculation
-            try {
-                OpenAIChunkCostAgent.OpenAICostResult aiResult = openAIAgent.calculateOptimizedCost(player, chunk);
-                
-                // Create enhanced payment requirement with AI explanation
-                PaymentRequirement requirement = new PaymentRequirement(aiResult.getMaterial(), aiResult.getAmount());
-                
-                // Send AI explanation to player for transparency if AI was actually used
-                if (aiResult.isAiProcessed() && !aiResult.getExplanation().isEmpty()) {
-                    boolean transparencyEnabled = plugin.getConfig().getBoolean("openai-agent.transparency", false);
-                    if (transparencyEnabled) {
-                        player.sendMessage(Component.text("💡 ")
-                            .color(NamedTextColor.AQUA)
-                            .append(Component.text(aiResult.getExplanation())
-                                .color(NamedTextColor.YELLOW))
-                            .decoration(TextDecoration.ITALIC, false));
-                    }
-                }
-                
-                return requirement;
-                
-            } catch (Exception e) {
-                plugin.getLogger().log(Level.WARNING, "OpenAI cost calculation failed, using fallback", e);
-                // Fall through to traditional calculation
-            }
-        }
-        
-        // Traditional calculation (fallback or when AI disabled)
-        // Returns the first vanilla material for backward compatibility display
-        BiomeUnlockRegistry.UnlockRequirement requirement = 
-            biomeRegistry.calculateRequirement(player, biome, evaluation.score);
-        return new PaymentRequirement(requirement.material(), requirement.amount());
-    }
     
     /**
      * Check if player can afford the payment.
-     * For material-based economy, this now validates ALL requirements (vanilla + custom items).
-     * The PaymentRequirement is a simplified view; the actual check uses BiomeUnlockRegistry's
-     * complete ItemRequirement list.
+     * For material-based economy, validates ALL requirements (vanilla + custom items).
      */
     public boolean canAfford(Player player, PaymentRequirement requirement) {
         if (requirement.getType() == EconomyType.VAULT) {
             return vaultService.hasEnoughMoney(player, requirement.getVaultCost());
         } else {
-            // For materials, we can do a quick check with the first material shown
-            // but in practice, the unlock system will check ALL items via BiomeUnlockRegistry.hasRequiredItems()
-            ItemStack required = new ItemStack(requirement.getMaterial(), requirement.getMaterialAmount());
-            return player.getInventory().containsAtLeast(required, requirement.getMaterialAmount());
+            // Check all item requirements
+            for (ItemRequirement req : requirement.getItemRequirements()) {
+                if (!req.hasInInventory(player)) {
+                    return false;
+                }
+            }
+            return true;
         }
     }
     
@@ -481,13 +330,21 @@ public class EconomyManager {
     
     /**
      * Process material payment and record OpenAI learning data.
-     * Consumes ALL required items (vanilla + custom) via BiomeUnlockRegistry.
+     * Consumes ALL required items from PaymentRequirement.
      * This is an all-or-nothing operation: if any item is missing, it fails.
      */
     private boolean processMaterialPayment(Player player, PaymentRequirement requirement, 
                                          Biome biome, ChunkEvaluator.ChunkValueData evaluation) {
+        // First verify all items are available
+        if (!canAfford(player, requirement)) {
+            return false;
+        }
+        
         try {
-            biomeRegistry.consumeRequiredItem(player, biome, evaluation.score);
+            // Consume all items from PaymentRequirement
+            for (ItemRequirement req : requirement.getItemRequirements()) {
+                req.consumeFromInventory(player);
+            }
             
             // Record OpenAI learning data for success
             if (aiCostingEnabled && openAIAgent != null) {
@@ -503,15 +360,7 @@ public class EconomyManager {
                 recordPaymentForOpenAI(player, requirement, false, 0, false);
             }
             
-            // Fallback: Manual item removal (only for first vanilla item shown in PaymentRequirement)
-            ItemStack requiredStack = new ItemStack(requirement.getMaterial(), requirement.getMaterialAmount());
-            boolean fallbackSuccess = player.getInventory().removeItem(requiredStack).isEmpty();
-            
-            if (fallbackSuccess && aiCostingEnabled && openAIAgent != null) {
-                recordPaymentForOpenAI(player, requirement, true, 0, false);
-            }
-            
-            return fallbackSuccess;
+            return false;
         }
     }
     
@@ -615,6 +464,9 @@ public class EconomyManager {
     public void reload() {
         loadConfiguration();
         vaultService.reload();
+        if (materialConverter != null) {
+            materialConverter.reload();
+        }
     }
     
     /**

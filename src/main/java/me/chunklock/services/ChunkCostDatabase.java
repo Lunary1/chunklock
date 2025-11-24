@@ -14,8 +14,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 /**
- * Persistent SQLite database for storing chunk cost calculations.
+ * Persistent H2 database for storing chunk cost calculations.
  * Dramatically improves performance by avoiding repeated AI calculations.
+ * Uses H2 (pure Java) instead of SQLite for smaller plugin size.
  */
 public class ChunkCostDatabase {
     
@@ -29,7 +30,8 @@ public class ChunkCostDatabase {
     
     public ChunkCostDatabase(ChunklockPlugin plugin) {
         this.plugin = plugin;
-        this.databaseFile = new File(plugin.getDataFolder(), "chunk_costs.db");
+        // H2 creates .mv.db file automatically, but we specify base name
+        this.databaseFile = new File(plugin.getDataFolder(), "chunk_costs");
     }
     
     /**
@@ -42,8 +44,22 @@ public class ChunkCostDatabase {
                 plugin.getDataFolder().mkdirs();
             }
             
-            // Create database connection
-            String url = "jdbc:sqlite:" + databaseFile.getAbsolutePath();
+            // Explicitly load H2 driver (needed after shading/relocation)
+            try {
+                // Try relocated package first (after Maven Shade relocation)
+                Class.forName("me.chunklock.libs.h2.Driver");
+            } catch (ClassNotFoundException e) {
+                // Fallback to standard package if not relocated
+                try {
+                    Class.forName("org.h2.Driver");
+                } catch (ClassNotFoundException e2) {
+                    plugin.getLogger().warning("H2 driver class not found in either location");
+                    throw new SQLException("H2 JDBC driver not found", e2);
+                }
+            }
+            
+            // Create database connection (H2 format: jdbc:h2:file:path)
+            String url = "jdbc:h2:file:" + databaseFile.getAbsolutePath() + ";AUTO_SERVER=TRUE";
             connection = DriverManager.getConnection(url);
             
             // Create the table
@@ -53,7 +69,14 @@ public class ChunkCostDatabase {
             return true;
             
         } catch (SQLException e) {
-            plugin.getLogger().severe("Failed to initialize chunk cost database: " + e.getMessage());
+            plugin.getLogger().severe("❌ Failed to initialize chunk cost database: " + e.getMessage());
+            e.printStackTrace();
+            connection = null; // Ensure connection is null on failure
+            return false;
+        } catch (Exception e) {
+            plugin.getLogger().severe("❌ Unexpected error initializing chunk cost database: " + e.getMessage());
+            e.printStackTrace();
+            connection = null; // Ensure connection is null on failure
             return false;
         }
     }
@@ -62,25 +85,25 @@ public class ChunkCostDatabase {
      * Create the database tables
      */
     private void createTables() throws SQLException {
-        String createTableSQL = """
+            String createTableSQL = """
             CREATE TABLE IF NOT EXISTS chunk_costs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                world_name TEXT NOT NULL,
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                world_name VARCHAR(255) NOT NULL,
                 chunk_x INTEGER NOT NULL,
                 chunk_z INTEGER NOT NULL,
-                player_id TEXT NOT NULL,
-                biome TEXT NOT NULL,
-                difficulty TEXT NOT NULL,
+                player_id VARCHAR(36) NOT NULL,
+                biome VARCHAR(255) NOT NULL,
+                difficulty VARCHAR(50) NOT NULL,
                 score INTEGER NOT NULL,
-                cost_type TEXT NOT NULL,
-                vault_cost REAL,
-                material_type TEXT,
+                cost_type VARCHAR(50) NOT NULL,
+                vault_cost DOUBLE,
+                material_type VARCHAR(255),
                 material_amount INTEGER,
                 ai_processed BOOLEAN NOT NULL,
-                ai_explanation TEXT,
-                calculated_at INTEGER NOT NULL,
-                config_hash TEXT NOT NULL,
-                UNIQUE(world_name, chunk_x, chunk_z, player_id, config_hash)
+                ai_explanation VARCHAR(1000),
+                calculated_at BIGINT NOT NULL,
+                config_hash VARCHAR(255) NOT NULL,
+                CONSTRAINT unique_chunk_cost UNIQUE(world_name, chunk_x, chunk_z, player_id, config_hash)
             )
         """;
         
@@ -106,6 +129,12 @@ public class ChunkCostDatabase {
             if (memoryCached != null && !memoryCached.isExpired() && memoryCached.configHash.equals(configHash)) {
                 plugin.getLogger().fine("Retrieved cost from memory cache for " + cacheKey);
                 return memoryCached.requirement;
+            }
+            
+            // Check if database connection is available
+            if (connection == null) {
+                plugin.getLogger().fine("Database connection not available, skipping cache lookup for " + cacheKey);
+                return null; // Return null to indicate cache miss, calculation will proceed
             }
             
             // Check database
@@ -157,9 +186,19 @@ public class ChunkCostDatabase {
                          String aiExplanation, String configHash) {
         
         CompletableFuture.runAsync(() -> {
+            // Check if database connection is available
+            if (connection == null) {
+                plugin.getLogger().fine("Database connection not available, skipping cost storage");
+                // Still cache in memory even if database is unavailable
+                String cacheKey = getCacheKey(chunk, player.getUniqueId());
+                memoryCache.put(cacheKey, new CachedChunkCost(requirement, configHash, System.currentTimeMillis()));
+                return;
+            }
+            
             try {
+                // H2 uses MERGE instead of INSERT OR REPLACE
                 String sql = """
-                    INSERT OR REPLACE INTO chunk_costs 
+                    MERGE INTO chunk_costs 
                     (world_name, chunk_x, chunk_z, player_id, biome, difficulty, score, cost_type, 
                      vault_cost, material_type, material_amount, ai_processed, ai_explanation, 
                      calculated_at, config_hash)
@@ -202,6 +241,12 @@ public class ChunkCostDatabase {
      */
     public void cleanupOldCosts() {
         CompletableFuture.runAsync(() -> {
+            // Check if database connection is available
+            if (connection == null) {
+                plugin.getLogger().fine("Database connection not available, skipping cleanup");
+                return;
+            }
+            
             try {
                 long cutoff = System.currentTimeMillis() - (24 * 60 * 60 * 1000); // 24 hours
                 

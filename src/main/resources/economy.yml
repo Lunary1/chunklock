@@ -40,3 +40,15 @@ materials:
   # Allow fallback to vault if materials not available
   vault-fallback: false
 
+# Material-to-vault conversion values (used when AI converts material costs to vault)
+# Values represent vault cost per unit of material
+material-values:
+  DIAMOND: 50.0
+  EMERALD: 45.0
+  GOLD_INGOT: 25.0
+  IRON_INGOT: 10.0
+  COPPER_INGOT: 5.0
+  COAL: 2.0
+  COBBLESTONE: 0.5
+  # Add more materials as needed
+
