@@ -60,7 +60,6 @@ When updating from v1.1 or earlier, the plugin automatically migrates legacy YAM
 | ------------------------------ | -------------------------------------------- |
 | `/chunklock status`            | View your progress and current location      |
 | `/chunklock start`             | Begin your chunk progression journey         |
-| `/chunklock unlock`            | Unlock the chunk you're standing in          |
 | `/chunklock spawn`             | Return to your starting chunk                |
 | `/chunklock team <subcommand>` | Team management (create, invite, join, etc.) |
 | `/chunklock help`              | Show available commands                      |
@@ -69,7 +68,7 @@ When updating from v1.1 or earlier, the plugin automatically migrates legacy YAM
 
 | Command                           | Description                                   |
 | --------------------------------- | --------------------------------------------- |
-| `/chunklock setup <world> <size>` | Initialize a new Chunklock world              |
+| `/chunklock setup <size>`         | Initialize a new Chunklock world              |
 | `/chunklock reset <player>`       | Reset a player's progress                     |
 | `/chunklock resetall`             | Reset all player data (requires confirmation) |
 | `/chunklock bypass [player]`      | Toggle movement restriction bypass            |
