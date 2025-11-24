@@ -195,7 +195,6 @@ public class SingleWorldManager {
             world.setDifficulty(Difficulty.NORMAL);
             world.setPVP(false);
             world.setSpawnFlags(true, false); // Spawn animals but not monsters at spawn
-            world.setKeepSpawnInMemory(true);
             
             // Set world border
             WorldBorder border = world.getWorldBorder();

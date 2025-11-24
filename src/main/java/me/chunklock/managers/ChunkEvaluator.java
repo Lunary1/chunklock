@@ -16,22 +16,24 @@ public class ChunkEvaluator {
 
     private final PlayerDataManager playerDataManager;
     private final ChunkValueRegistry chunkValueRegistry;
+    private final java.util.logging.Logger logger;
 
-    public ChunkEvaluator(PlayerDataManager playerDataManager, ChunkValueRegistry chunkValueRegistry) {
+    public ChunkEvaluator(PlayerDataManager playerDataManager, ChunkValueRegistry chunkValueRegistry, java.util.logging.Logger logger) {
         this.playerDataManager = playerDataManager;
         this.chunkValueRegistry = chunkValueRegistry;
+        this.logger = logger;
     }
 
     public ChunkValueData evaluateChunk(UUID playerId, Chunk chunk) {
         try {
             if (chunk == null) {
-                ChunklockPlugin.getInstance().getLogger().warning("Attempted to evaluate null chunk" + 
+                logger.warning("Attempted to evaluate null chunk" + 
                     (playerId != null ? " for player " + playerId : ""));
                 return new ChunkValueData(0, Difficulty.EASY, Biome.PLAINS);
             }
 
             if (chunk.getWorld() == null) {
-                ChunklockPlugin.getInstance().getLogger().warning("Chunk has null world" + 
+                logger.warning("Chunk has null world" + 
                     (playerId != null ? " for player " + playerId : ""));
                 return new ChunkValueData(0, Difficulty.EASY, Biome.PLAINS);
             }
@@ -46,13 +48,13 @@ public class ChunkEvaluator {
                 int distance = Math.abs(dx) + Math.abs(dz);
                 score += distance * 5;
             } catch (IllegalArgumentException e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid argument calculating distance for chunk evaluation", e);
+                logger.log(Level.FINE, "Invalid argument calculating distance for chunk evaluation", e);
                 // Continue with score = 0 for distance
             } catch (IllegalStateException e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid state calculating distance for chunk evaluation", e);
+                logger.log(Level.FINE, "Invalid state calculating distance for chunk evaluation", e);
                 // Continue with score = 0 for distance
             } catch (Exception e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Unexpected error calculating distance for chunk evaluation", e);
+                logger.log(Level.WARNING, "Unexpected error calculating distance for chunk evaluation", e);
                 // Continue with score = 0 for distance
             }
 
@@ -62,13 +64,13 @@ public class ChunkEvaluator {
                 biome = getBiomeSafely(chunk);
                 score += chunkValueRegistry.getBiomeWeight(biome);
             } catch (IllegalArgumentException e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid biome data for chunk evaluation", e);
+                logger.log(Level.FINE, "Invalid biome data for chunk evaluation", e);
                 score += chunkValueRegistry.getBiomeWeight(Biome.PLAINS);
             } catch (IllegalStateException e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid world state getting biome for chunk evaluation", e);
+                logger.log(Level.FINE, "Invalid world state getting biome for chunk evaluation", e);
                 score += chunkValueRegistry.getBiomeWeight(Biome.PLAINS);
             } catch (Exception e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Unexpected error getting biome for chunk evaluation", e);
+                logger.log(Level.WARNING, "Unexpected error getting biome for chunk evaluation", e);
                 score += chunkValueRegistry.getBiomeWeight(Biome.PLAINS);
             }
 
@@ -76,13 +78,13 @@ public class ChunkEvaluator {
             try {
                 score += scanSurfaceBlocks(chunk);
             } catch (IllegalArgumentException e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid arguments scanning surface blocks for chunk evaluation", e);
+                logger.log(Level.FINE, "Invalid arguments scanning surface blocks for chunk evaluation", e);
                 // Continue without surface block score
             } catch (IllegalStateException e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid world state scanning surface blocks for chunk evaluation", e);
+                logger.log(Level.FINE, "Invalid world state scanning surface blocks for chunk evaluation", e);
                 // Continue without surface block score
             } catch (Exception e) {
-                ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Unexpected error scanning surface blocks for chunk evaluation", e);
+                logger.log(Level.WARNING, "Unexpected error scanning surface blocks for chunk evaluation", e);
                 // Continue without surface block score
             }
 
@@ -92,7 +94,7 @@ public class ChunkEvaluator {
             return new ChunkValueData(score, difficulty, biome);
 
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.SEVERE, "Critical error in chunk evaluation" + 
+            logger.log(Level.SEVERE, "Critical error in chunk evaluation" + 
                 (playerId != null ? " for player " + playerId : ""), e);
             return new ChunkValueData(0, Difficulty.EASY, Biome.PLAINS);
         }
@@ -107,13 +109,13 @@ public class ChunkEvaluator {
                 }
             }
         } catch (IllegalArgumentException e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid player ID or spawn data for player " + playerId, e);
+            logger.log(Level.FINE, "Invalid player ID or spawn data for player " + playerId, e);
             throw e;
         } catch (IllegalStateException e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid world state getting origin chunk for player " + playerId, e);
+            logger.log(Level.FINE, "Invalid world state getting origin chunk for player " + playerId, e);
             throw e;
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Unexpected error getting origin chunk for player " + playerId, e);
+            logger.log(Level.WARNING, "Unexpected error getting origin chunk for player " + playerId, e);
         }
         
         if (fallbackChunk == null) {
@@ -142,13 +144,13 @@ public class ChunkEvaluator {
                 return centerBlock.getBiome();
             }
         } catch (IllegalArgumentException e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid block coordinates getting biome", e);
+            logger.log(Level.FINE, "Invalid block coordinates getting biome", e);
             // Fall through to fallback
         } catch (IllegalStateException e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid world state getting surface biome", e);
+            logger.log(Level.FINE, "Invalid world state getting surface biome", e);
             // Fall through to fallback
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Error getting surface biome", e);
+            logger.log(Level.FINE, "Error getting surface biome", e);
             // Fall through to fallback
         }
 
@@ -159,13 +161,13 @@ public class ChunkEvaluator {
                 return fallbackBlock.getBiome();
             }
         } catch (IllegalArgumentException e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid fallback block coordinates", e);
+            logger.log(Level.FINE, "Invalid fallback block coordinates", e);
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Error getting fallback biome", e);
+            logger.log(Level.FINE, "Error getting fallback biome", e);
         }
 
         // Final fallback
-        ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Failed to get biome from chunk, using PLAINS as fallback");
+        logger.log(Level.WARNING, "Failed to get biome from chunk, using PLAINS as fallback");
         return Biome.PLAINS;
     }
 
@@ -195,20 +197,20 @@ public class ChunkEvaluator {
                         successfulScans++;
                     }
                 } catch (IllegalArgumentException e) {
-                    ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid block coordinates at " + x + "," + z + " in chunk", e);
+                    logger.log(Level.FINE, "Invalid block coordinates at " + x + "," + z + " in chunk", e);
                     // Continue with other blocks
                 } catch (IllegalStateException e) {
-                    ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Invalid world state scanning block at " + x + "," + z + " in chunk", e);
+                    logger.log(Level.FINE, "Invalid world state scanning block at " + x + "," + z + " in chunk", e);
                     // Continue with other blocks
                 } catch (Exception e) {
-                    ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Error scanning block at " + x + "," + z + " in chunk", e);
+                    logger.log(Level.FINE, "Error scanning block at " + x + "," + z + " in chunk", e);
                     // Continue with other blocks
                 }
             }
         }
         
         if (successfulScans == 0) {
-            ChunklockPlugin.getInstance().getLogger().warning("No blocks could be scanned in chunk surface scan");
+            logger.warning("No blocks could be scanned in chunk surface scan");
         }
         
         return score;
@@ -217,7 +219,7 @@ public class ChunkEvaluator {
     private Difficulty calculateDifficulty(int score) {
         try {
             if (chunkValueRegistry == null) {
-                ChunklockPlugin.getInstance().getLogger().warning("ChunkValueRegistry is null, using NORMAL difficulty as fallback");
+                logger.warning("ChunkValueRegistry is null, using NORMAL difficulty as fallback");
                 return Difficulty.NORMAL;
             }
 
@@ -227,7 +229,7 @@ public class ChunkEvaluator {
 
             // Validate thresholds are in order
             if (easyMax >= normalMax || normalMax >= hardMax) {
-                ChunklockPlugin.getInstance().getLogger().warning("Invalid difficulty thresholds, using defaults");
+                logger.warning("Invalid difficulty thresholds, using defaults");
                 return score < 30 ? Difficulty.EASY : 
                        score < 60 ? Difficulty.NORMAL : 
                        score < 90 ? Difficulty.HARD : Difficulty.IMPOSSIBLE;
@@ -243,7 +245,7 @@ public class ChunkEvaluator {
                 return Difficulty.IMPOSSIBLE;
             }
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error calculating difficulty, using NORMAL as fallback", e);
+            logger.log(Level.WARNING, "Error calculating difficulty, using NORMAL as fallback", e);
             return Difficulty.NORMAL;
         }
     }
@@ -260,13 +262,13 @@ public class ChunkEvaluator {
             int x = chunk.getX();
             int z = chunk.getZ();
             if (Math.abs(x) > 30000 || Math.abs(z) > 30000) {
-                ChunklockPlugin.getInstance().getLogger().warning("Chunk coordinates out of reasonable range: " + x + "," + z);
+                logger.warning("Chunk coordinates out of reasonable range: " + x + "," + z);
                 return false;
             }
             
             return true;
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error validating chunk evaluation parameters", e);
+            logger.log(Level.WARNING, "Error validating chunk evaluation parameters", e);
             return false;
         }
     }
@@ -303,27 +305,27 @@ public class ChunkEvaluator {
                             }
                         }
                     } catch (Exception e) {
-                        ChunklockPlugin.getInstance().getLogger().log(Level.FINE, "Error checking block at " + x + "," + z + " for spawn suitability", e);
+                        logger.log(Level.FINE, "Error checking block at " + x + "," + z + " for spawn suitability", e);
                         // Continue with other blocks
                     }
                 }
             }
             
             if (totalBlocks == 0) {
-                ChunklockPlugin.getInstance().getLogger().warning("No blocks could be scanned for spawn suitability check");
+                logger.warning("No blocks could be scanned for spawn suitability check");
                 return false; // If we can't scan, assume unsafe
             }
             
             double waterPercentage = (double) waterBlocks / totalBlocks;
             boolean suitable = waterPercentage < 0.90; // Less than 90% water
             
-            ChunklockPlugin.getInstance().getLogger().fine("Chunk spawn suitability: " + waterBlocks + "/" + totalBlocks + 
+            logger.fine("Chunk spawn suitability: " + waterBlocks + "/" + totalBlocks + 
                 " water blocks (" + String.format("%.1f", waterPercentage * 100) + "%) - " + (suitable ? "SUITABLE" : "TOO MUCH WATER"));
             
             return suitable;
             
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error checking chunk spawn suitability", e);
+            logger.log(Level.WARNING, "Error checking chunk spawn suitability", e);
             return false; // If error, assume unsafe
         }
     }
@@ -338,8 +340,8 @@ public class ChunkEvaluator {
                material == Material.SEAGRASS ||
                material == Material.TALL_SEAGRASS ||
                material == Material.SEA_PICKLE ||
-               material.name().contains("CORAL") ||
-               material.name().contains("SPONGE");
+               me.chunklock.util.item.MaterialUtil.getMaterialName(material).contains("CORAL") ||
+               me.chunklock.util.item.MaterialUtil.getMaterialName(material).contains("SPONGE");
     }
 
     /**
@@ -376,7 +378,7 @@ public class ChunkEvaluator {
             return new ChunkValueData(score, difficulty, biome);
 
         } catch (Exception e) {
-            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error in cached chunk evaluation", e);
+            logger.log(Level.WARNING, "Error in cached chunk evaluation", e);
             return new ChunkValueData(0, Difficulty.EASY, Biome.PLAINS);
         }
     }

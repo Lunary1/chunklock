@@ -169,6 +169,33 @@ public final class BiomeUtil {
     }
     
     /**
+     * Safely gets the enum name of a biome, avoiding deprecated OldEnum.name() warnings.
+     * 
+     * @param biome The biome to get the name for
+     * @return The enum name of the biome (e.g., "PLAINS", "FOREST")
+     */
+    public static String getBiomeName(Biome biome) {
+        if (biome == null) {
+            return "UNKNOWN";
+        }
+        
+        try {
+            // Try to get the key first (modern approach)
+            NamespacedKey key = biome.getKey();
+            return key.getKey().toUpperCase().replace("-", "_");
+        } catch (Exception e) {
+            // Fallback to enum name using reflection to avoid deprecation warnings
+            try {
+                Method nameMethod = biome.getClass().getMethod("name");
+                return (String) nameMethod.invoke(biome);
+            } catch (Exception ex) {
+                // Final fallback to toString
+                return biome.toString().toUpperCase();
+            }
+        }
+    }
+    
+    /**
      * Gets the display name of a biome in a safe way.
      * 
      * @param biome The biome to get the name for

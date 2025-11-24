@@ -176,7 +176,7 @@ public class ChunkCostDatabase {
                     stmt.setInt(7, score);
                     stmt.setString(8, requirement.getType().getConfigName());
                     stmt.setDouble(9, requirement.getVaultCost());
-                    stmt.setString(10, requirement.getMaterial() != null ? requirement.getMaterial().name() : null);
+                    stmt.setString(10, requirement.getMaterial() != null ? me.chunklock.util.item.MaterialUtil.getMaterialName(requirement.getMaterial()) : null);
                     stmt.setInt(11, requirement.getMaterialAmount());
                     stmt.setBoolean(12, aiProcessed);
                     stmt.setString(13, aiExplanation);

@@ -271,7 +271,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.progressTracker = new PlayerProgressTracker(this, teamManager);
             this.playerDataManager = new PlayerDataManager(this);
             this.biomeUnlockRegistry = new BiomeUnlockRegistry(this, progressTracker);
-            this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry);
+            this.chunkEvaluator = new ChunkEvaluator(playerDataManager, chunkValueRegistry, getLogger());
             this.chunkLockManager = new ChunkLockManager(chunkEvaluator, this, teamManager);
             
             // NEW: Initialize chunk pre-allocation service BEFORE SingleWorldManager (it needs this service)
@@ -300,7 +300,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             this.startingChunkService.setPreAllocationService(chunkPreAllocationService);
             
             this.progressionValidationService = new me.chunklock.services.ProgressionValidationService(this);
-            this.unlockGui = new UnlockGui(chunkLockManager, biomeUnlockRegistry, progressTracker, teamManager, economyManager);
+            this.unlockGui = new UnlockGui(this, chunkLockManager, biomeUnlockRegistry, progressTracker, teamManager, economyManager);
             this.hologramService = me.chunklock.hologram.HologramService.create(chunkLockManager, biomeUnlockRegistry, worldManager);
             this.playerListener = new PlayerListener(chunkLockManager, progressTracker, playerDataManager, unlockGui);
             this.chunkBorderManager = new ChunkBorderManager(chunkLockManager, unlockGui, teamManager, progressTracker);

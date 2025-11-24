@@ -134,7 +134,7 @@ public final class HologramLocationUtils {
         while (y > world.getMinHeight()) {
             Block block = world.getBlockAt(x, y, z);
             Material type = block.getType();
-            if (type != Material.BARRIER && !type.name().contains("GLASS") && type.isSolid()) {
+            if (type != Material.BARRIER && !me.chunklock.util.item.MaterialUtil.getMaterialName(type).contains("GLASS") && type.isSolid()) {
                 return y;
             }
             y--;

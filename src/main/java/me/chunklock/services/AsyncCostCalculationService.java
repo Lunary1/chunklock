@@ -101,7 +101,7 @@ public class AsyncCostCalculationService {
                             plugin.getLogger().fine("Pre-calculated cost for chunk " + adjX + "," + adjZ + 
                                 " - " + (requirement.getType() == EconomyManager.EconomyType.VAULT ? 
                                 "$" + requirement.getVaultCost() : 
-                                requirement.getMaterialAmount() + "x " + requirement.getMaterial().name()));
+                                requirement.getMaterialAmount() + "x " + me.chunklock.util.item.MaterialUtil.getMaterialName(requirement.getMaterial())));
                                 
                         } catch (Exception e) {
                             plugin.getLogger().log(Level.WARNING, "Failed to pre-calculate cost for chunk " + 

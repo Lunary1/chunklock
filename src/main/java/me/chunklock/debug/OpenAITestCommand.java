@@ -61,7 +61,7 @@ public class OpenAITestCommand extends SubCommand {
                 plugin.getChunkEvaluator().evaluateChunk(player.getUniqueId(), currentChunk);
             
             sender.sendMessage("┬º7Current chunk analysis:");
-            sender.sendMessage("§7  • Biome: " + evaluation.biome.name());
+            sender.sendMessage("§7  • Biome: " + me.chunklock.util.world.BiomeUtil.getBiomeName(evaluation.biome));
             sender.sendMessage("§7  • Difficulty: " + evaluation.difficulty.name());
             sender.sendMessage("§7  • Score: " + evaluation.score);
             
@@ -72,7 +72,7 @@ public class OpenAITestCommand extends SubCommand {
             if (requirement.getType() == me.chunklock.economy.EconomyManager.EconomyType.VAULT) {
                 sender.sendMessage("§a✅ Vault cost calculation: $" + requirement.getVaultCost());
             } else {
-                sender.sendMessage("§a✅ Material cost calculation: " + requirement.getMaterialAmount() + "x " + requirement.getMaterial().name());
+                sender.sendMessage("§a✅ Material cost calculation: " + requirement.getMaterialAmount() + "x " + me.chunklock.util.item.MaterialUtil.getMaterialName(requirement.getMaterial()));
             }
             
             sender.sendMessage("§a✅ OpenAI integration test completed successfully!");

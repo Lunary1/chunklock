@@ -96,7 +96,7 @@ public class ItemRequirementFactory {
                     int amount = biomeSection.getInt(key, 1);
                     if (amount > 0) {
                         requirements.add(new VanillaItemRequirement(material, amount));
-                        plugin.getLogger().fine("  Added vanilla requirement: " + material.name() + " x" + amount);
+                        plugin.getLogger().fine("  Added vanilla requirement: " + me.chunklock.util.item.MaterialUtil.getMaterialName(material) + " x" + amount);
                     }
                 } catch (IllegalArgumentException e) {
                     plugin.getLogger().fine("Skipping non-material key in " + biomeName + ": " + key);
