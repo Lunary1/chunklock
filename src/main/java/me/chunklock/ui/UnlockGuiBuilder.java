@@ -529,16 +529,7 @@ public class UnlockGuiBuilder {
     }
 
     private String formatMaterialName(Material material) {
-        String name = me.chunklock.util.item.MaterialUtil.formatMaterialName(material);
-        String[] words = name.split(" ");
-        StringBuilder formatted = new StringBuilder();
-        
-        for (String word : words) {
-            if (formatted.length() > 0) formatted.append(" ");
-            formatted.append(word.substring(0, 1).toUpperCase()).append(word.substring(1));
-        }
-        
-        return formatted.toString();
+        return me.chunklock.util.item.MaterialUtil.formatMaterialName(material);
     }
 
     private NamedTextColor getDifficultyColor(Difficulty difficulty) {

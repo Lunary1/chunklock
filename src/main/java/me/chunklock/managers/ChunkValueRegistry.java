@@ -266,7 +266,7 @@ public class ChunkValueRegistry {
             NamespacedKey key = biome.getKey();
             return key.getKey().replace("_", " ");
         } catch (Exception e) {
-            return me.chunklock.util.world.BiomeUtil.getBiomeName(biome).replace("_", " ");
+            return biome.name().replace("_", " ");
         }
     }
 
