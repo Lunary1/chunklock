@@ -1,10 +1,12 @@
 package me.chunklock.services;
 
 import me.chunklock.ChunklockPlugin;
+import me.chunklock.config.LanguageKeys;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.PlayerDataManager;
+import me.chunklock.util.message.MessageUtil;
 import me.chunklock.util.chunk.ChunkUtils;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
@@ -12,6 +14,8 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import java.util.Random;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -233,14 +237,30 @@ public class StartingChunkService {
     private void sendChunkInfoToPlayer(Player player, Chunk startChunk, Location centerSpawn) {
         try {
             ChunkEvaluator.ChunkValueData evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), startChunk);
-            player.sendMessage("§aYou have been assigned a starting chunk at " + startChunk.getX() + ", " + startChunk.getZ());
-            player.sendMessage("§7Spawning at center coordinates: " + (int)centerSpawn.getX() + ", " + (int)centerSpawn.getZ());
+            Map<String, String> placeholders = new HashMap<>();
+            placeholders.put("x", String.valueOf(startChunk.getX()));
+            placeholders.put("z", String.valueOf(startChunk.getZ()));
+            String assignedMsg = MessageUtil.getMessage(LanguageKeys.UNLOCK_STARTING_CHUNK_ASSIGNED, placeholders);
+            player.sendMessage(assignedMsg);
+            
+            placeholders.put("x", String.valueOf((int)centerSpawn.getX()));
+            placeholders.put("z", String.valueOf((int)centerSpawn.getZ()));
+            String spawnMsg = MessageUtil.getMessage(LanguageKeys.UNLOCK_SPAWN_COORDS, placeholders);
+            player.sendMessage(spawnMsg);
             
             String biomeName = BiomeUnlockRegistry.getBiomeDisplayName(evaluation.biome);
-            player.sendMessage("§7Chunk difficulty: " + evaluation.difficulty + " | Score: " + evaluation.score + " | Biome: " + biomeName);
+            placeholders.put("difficulty", evaluation.difficulty.toString());
+            placeholders.put("score", String.valueOf(evaluation.score));
+            placeholders.put("biome", biomeName);
+            String infoMsg = MessageUtil.getMessage(LanguageKeys.UNLOCK_CHUNK_INFO, placeholders);
+            player.sendMessage(infoMsg);
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error sending chunk info to player", e);
-            player.sendMessage("§aYou have been assigned a starting chunk at " + startChunk.getX() + ", " + startChunk.getZ());
+            Map<String, String> placeholders = new HashMap<>();
+            placeholders.put("x", String.valueOf(startChunk.getX()));
+            placeholders.put("z", String.valueOf(startChunk.getZ()));
+            String assignedMsg = MessageUtil.getMessage(LanguageKeys.UNLOCK_STARTING_CHUNK_ASSIGNED, placeholders);
+            player.sendMessage(assignedMsg);
         }
     }
     

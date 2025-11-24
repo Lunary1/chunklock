@@ -2,7 +2,9 @@
 package me.chunklock.commands;
 
 import me.chunklock.ChunklockPlugin;
+import me.chunklock.config.LanguageKeys;
 import me.chunklock.managers.PlayerDataManager;
+import me.chunklock.util.message.MessageUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Chunk;
@@ -42,15 +44,15 @@ public class SpawnCommand extends SubCommand {
         try {
             // Validate PlayerDataManager is still available
             if (playerDataManager == null) {
-                player.sendMessage(Component.text("Error: Player data manager not available.")
-                    .color(NamedTextColor.RED));
+                String errorMsg = MessageUtil.getMessage(LanguageKeys.ERROR_GENERIC);
+                player.sendMessage(Component.text(errorMsg).color(NamedTextColor.RED));
                 return true;
             }
             
             Location savedLoc = playerDataManager.getChunkSpawn(player.getUniqueId());
             if (savedLoc == null) {
-                player.sendMessage(Component.text("No starting chunk recorded.")
-                    .color(NamedTextColor.RED));
+                String errorMsg = MessageUtil.getMessage(LanguageKeys.ERROR_GENERIC);
+                player.sendMessage(Component.text(errorMsg).color(NamedTextColor.RED));
                 return true;
             }
             
@@ -61,6 +63,7 @@ public class SpawnCommand extends SubCommand {
                 // Teleport to exact center
                 Location centerLoc = ChunkUtils.getChunkCenter(savedLoc.getChunk());
                 player.teleport(centerLoc);
+                String message = MessageUtil.getMessage(LanguageKeys.SUCCESS_CHUNK_UNLOCKED);
                 player.sendMessage(Component.text("Teleported to center of your starting chunk.")
                     .color(NamedTextColor.GREEN));
             } else {

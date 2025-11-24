@@ -40,6 +40,7 @@ public class ConfigManager {
     private HologramsConfig hologramsConfig;
     private DebugConfig debugConfig;
     private PerformanceConfig performanceConfig;
+    private LanguageManager languageManager;
     
     public ConfigManager(Plugin plugin) {
         this.plugin = plugin;
@@ -84,6 +85,7 @@ public class ConfigManager {
             hologramsConfig = new HologramsConfig(plugin);
             debugConfig = new DebugConfig(plugin);
             performanceConfig = new PerformanceConfig(plugin);
+            languageManager = new LanguageManager(plugin);
             
             logger.info("Modular configuration loaded successfully");
         } catch (Exception e) {
@@ -105,6 +107,10 @@ public class ConfigManager {
      */
     public void reloadConfiguration() {
         loadConfiguration();
+        // Reload language files
+        if (languageManager != null) {
+            languageManager.reload();
+        }
         logger.info("Configuration reloaded");
     }
     
@@ -165,6 +171,10 @@ public class ConfigManager {
     
     public PerformanceConfig getPerformanceConfig() {
         return performanceConfig;
+    }
+    
+    public LanguageManager getLanguageManager() {
+        return languageManager;
     }
     
     /**

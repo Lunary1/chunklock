@@ -21,12 +21,15 @@ import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.event.vehicle.VehicleDestroyEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
+import me.chunklock.ChunklockPlugin;
+import me.chunklock.config.LanguageKeys;
+import me.chunklock.managers.ChunkBorderManager;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.WorldManager;
 import me.chunklock.ui.UnlockGui;
-import me.chunklock.managers.ChunkBorderManager;
-import me.chunklock.ChunklockPlugin;
+import me.chunklock.util.message.MessageUtil;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -501,8 +504,11 @@ public class BlockProtectionListener implements Listener {
             player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
             
             // Send warning message
+            Map<String, String> placeholders = new HashMap<>();
+            placeholders.put("action", action);
+            String message = MessageUtil.getMessage(LanguageKeys.PROTECTION_CHUNK_LOCKED, placeholders);
             player.sendMessage(Component.text("✋ ", NamedTextColor.RED)
-                .append(Component.text("You cannot " + action + " in locked chunks!", NamedTextColor.RED)));
+                .append(Component.text(message, NamedTextColor.RED)));
             
             lastProtectionWarning.put(playerId, now);
         }

@@ -188,52 +188,83 @@ public class EnhancedTeamManager {
         playerToTeam.put(requesterId, team.getTeamId());
         saveTeams();
         
-        notifyPlayer(requesterId, "§aYour request to join " + team.getTeamName() + " was accepted!");
-        notifyTeamMembers(team, "§a" + playerName + " joined the team!");
+        java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+        placeholders.put("team", team.getTeamName());
+        String acceptMsg = me.chunklock.util.message.MessageUtil.getMessage(
+            me.chunklock.config.LanguageKeys.TEAM_JOIN_REQUEST_ACCEPTED, placeholders);
+        notifyPlayer(requesterId, acceptMsg);
         
-        return TeamResult.success("Accepted " + playerName + "'s join request!");
+        placeholders.put("player", playerName);
+        String joinedMsg = me.chunklock.util.message.MessageUtil.getMessage(
+            me.chunklock.config.LanguageKeys.TEAM_PLAYER_JOINED, placeholders);
+        notifyTeamMembers(team, joinedMsg);
+        
+        String adminMsg = me.chunklock.util.message.MessageUtil.getMessage(
+            me.chunklock.config.LanguageKeys.TEAM_JOIN_ACCEPTED_ADMIN, placeholders);
+        return TeamResult.success(adminMsg);
     }
     
     public TeamResult denyJoinRequest(UUID officerId, String playerName) {
         Team team = getPlayerTeam(officerId);
         if (team == null) {
-            return TeamResult.error("You are not in a team");
+            return TeamResult.error(me.chunklock.util.message.MessageUtil.getMessage(
+                me.chunklock.config.LanguageKeys.TEAM_NOT_IN_TEAM));
         }
         
         if (!team.canManageTeam(officerId)) {
-            return TeamResult.error("You don't have permission to deny join requests");
+            java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+            placeholders.put("action", "deny join requests");
+            return TeamResult.error(me.chunklock.util.message.MessageUtil.getMessage(
+                me.chunklock.config.LanguageKeys.TEAM_NO_PERMISSION, placeholders));
         }
         
         UUID requesterId = getPlayerUUID(playerName);
         if (requesterId == null) {
-            return TeamResult.error("Player not found");
+            return TeamResult.error(me.chunklock.util.message.MessageUtil.getMessage(
+                me.chunklock.config.LanguageKeys.ERROR_PLAYER_NOT_FOUND));
         }
         
         if (!team.getJoinRequests().containsKey(requesterId)) {
-            return TeamResult.error("No pending join request from " + playerName);
+            java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+            placeholders.put("player", playerName);
+            return TeamResult.error(me.chunklock.util.message.MessageUtil.getMessage(
+                me.chunklock.config.LanguageKeys.TEAM_JOIN_REQUEST_NO_PENDING, placeholders));
         }
         
         team.removeJoinRequest(requesterId);
         saveTeams();
         
-        notifyPlayer(requesterId, "§cYour request to join " + team.getTeamName() + " was denied.");
+        java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+        placeholders.put("team", team.getTeamName());
+        String denyMsg = me.chunklock.util.message.MessageUtil.getMessage(
+            me.chunklock.config.LanguageKeys.TEAM_JOIN_REQUEST_DENIED, placeholders);
+        notifyPlayer(requesterId, denyMsg);
         
-        return TeamResult.success("Denied " + playerName + "'s join request.");
+        placeholders.put("player", playerName);
+        String adminMsg = me.chunklock.util.message.MessageUtil.getMessage(
+            me.chunklock.config.LanguageKeys.TEAM_JOIN_DENIED_ADMIN, placeholders);
+        return TeamResult.success(adminMsg);
     }
     
     // Team Chat System
     public TeamResult sendTeamMessage(UUID senderId, String message) {
         Team team = getPlayerTeam(senderId);
         if (team == null) {
-            return TeamResult.error("You are not in a team");
+            return TeamResult.error(me.chunklock.util.message.MessageUtil.getMessage(
+                me.chunklock.config.LanguageKeys.TEAM_NOT_IN_TEAM));
         }
         
         if (!team.getSettings().isTeamChatEnabled()) {
-            return TeamResult.error("Team chat is disabled for your team");
+            return TeamResult.error(me.chunklock.util.message.MessageUtil.getMessage(
+                me.chunklock.config.LanguageKeys.TEAM_CHAT_DISABLED));
         }
         
         String senderName = getPlayerName(senderId);
-        String formattedMessage = "§b[TEAM] §f" + senderName + "§7: §f" + message;
+        java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+        placeholders.put("sender", senderName);
+        placeholders.put("message", message);
+        String formattedMessage = me.chunklock.util.message.MessageUtil.getMessage(
+            me.chunklock.config.LanguageKeys.TEAM_CHAT_FORMAT, placeholders);
         
         // Send to all online team members
         for (UUID memberId : team.getMembers()) {

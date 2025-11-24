@@ -1,0 +1,284 @@
+# ===== CHUNKLOCK PLUGIN - LANGUAGE FILE =====
+# Default English language file
+# Version 2.0.0
+# 
+# This file contains all customizable messages for the Chunklock plugin.
+# You can modify any message here to customize the plugin's text.
+# 
+# Placeholders:
+#   %player% - Player name
+#   %target_player% - Target player name
+#   %cost% - Unlock cost
+#   %chunk% - Chunk coordinates (x,z)
+#   %chunk_x% - Chunk X coordinate
+#   %chunk_z% - Chunk Z coordinate
+#   %world% - World name
+#   %material% - Material/item name
+#   %item% - Item name
+#   %amount% - Item amount
+#   %balance% - Player balance
+#   %team% - Team name
+#   %team_name% - Team name
+#   %difficulty% - Chunk difficulty
+#   %biome% - Biome name
+#   %x% - X coordinate
+#   %z% - Z coordinate
+#   %multiplier% - Cost multiplier
+#   %needed% - Amount needed
+#   %unlocked% - Number of unlocked chunks
+#   %total% - Total chunks
+#   %percentage% - Percentage value
+#   %sender% - Message sender name
+#   %message% - Message content
+#   %action% - Action description
+#   %error% - Error message
+#   %command% - Command name
+#   %usage% - Command usage
+#   %description% - Command description
+#   %permission% - Permission node
+#   %location% - Location coordinates
+#   %have% - Amount player has
+#   %required% - Required amount
+#   %missing% - Missing amount
+#   %required_count% - Required count
+#   %player_count% - Player count
+#   %currency% - Currency name
+#   %more% - Additional amount
+#   %score% - Chunk score
+#   %members% - Number of team members
+
+# ===== COMMAND MESSAGES =====
+
+commands:
+  unlock:
+    usage: "Usage: /chunklock unlock <player> [x] [z] [world]"
+    usage-details:
+      - "  - If x, z, world not specified, unlocks player's current chunk"
+      - "  - Use 'here' as player name to unlock your current chunk"
+    console-error: "Console cannot use 'here' - specify coordinates"
+    player-not-found: "Player '%player%' not found or offline"
+    world-not-found: "World '%world%' not found"
+    invalid-coords: "Invalid coordinates. Use integers for x and z"
+    already-unlocked: "Chunk %chunk% in %world% is already unlocked"
+    success-admin: "✓ Successfully unlocked chunk %chunk% in %world% for %player%"
+    success-player: "🎉 Chunk %chunk% in %world% has been unlocked by an admin!"
+    error: "Error unlocking chunk: %error%"
+  
+  help:
+    title: "Chunklock Help"
+    basic-header: "═══ Basic Commands ═══"
+    status: "/chunklock status - View your unlocked chunks"
+    spawn: "/chunklock spawn - Return to your starting chunk"
+    team: "/chunklock team - Team management commands"
+    tip: "💡 Right-click a block to open the unlock GUI"
+    admin-header: "═══ Admin Commands ═══"
+    unlock: "/chunklock unlock <player> - Force unlock chunk for player"
+    reset: "/chunklock reset <player> - Reset player progress"
+    bypass: "/chunklock bypass [player] - Toggle bypass mode"
+    reload: "/chunklock reload - Reload plugin configuration"
+    detailed: "Use '/chunklock help <command>' for detailed help"
+    team-tip: "💡 Teams share unlocked chunks and affect costs!"
+    unknown: "Unknown command: %command%"
+    no-permission: "You don't have permission to view help for this command."
+    command-help: "Help for: %command%"
+    usage: "Usage: %usage%"
+    description: "Description: %description%"
+    permission: "Permission: %permission%"
+  
+  status:
+    title: "Chunklock Status"
+    chunks: "Unlocked Chunks: %unlocked%"
+    spawn: "Spawn Chunk: %chunk%"
+    team: "Team: %team%"
+  
+  reset:
+    confirm: "Are you sure you want to reset %player%? This cannot be undone!"
+    success: "Successfully reset player %player%"
+    error: "Error resetting player: %error%"
+  
+  reload:
+    success: "Configuration reloaded successfully"
+    error: "Error reloading configuration: %error%"
+
+# ===== GUI MESSAGES =====
+
+gui:
+  unlock:
+    title: "🔓 Unlock Chunk"
+    help-title: "📖 How to Unlock Chunks"
+    help-process-title: "🔓 Unlocking Process:"
+    help-step-1: "  1. Gather required materials"
+    help-step-2: "  2. Right-click the border glass"
+    help-step-3: "  3. Click the green unlock button"
+    help-tips-title: "💡 Tips:"
+    help-tip-1: "  • Different biomes cost different items"
+    help-tip-2: "  • Harder chunks require more resources"
+    help-tip-3: "  • Team members share unlocked chunks"
+    help-tip-4: "  • Contested chunks cost 2x resources!"
+    
+    contested-title: "⚔ Contested Chunk!"
+    contested-multiplier: "Cost multiplied by x%multiplier%"
+    
+    session-expired: "❌ Unlock session expired. Please try again."
+    already-unlocked: "✅ Chunk already unlocked!"
+    contested-limit: "❌ Contested claim limit reached for today."
+    contested-limit-tip: "💡 You can claim more contested chunks tomorrow!"
+    missing-item: "❌ Missing required custom item: %item%"
+    error: "❌ An error occurred while unlocking the chunk."
+    
+    insufficient-funds-title: "   💸 INSUFFICIENT FUNDS"
+    insufficient-funds-required: "💰 Required: %cost%"
+    insufficient-funds-balance: "🏦 Your balance: %balance%"
+    insufficient-funds-missing: "❗ Missing: %needed%"
+    insufficient-funds-tip: "💡 Tip: Earn more resources or wait for your balance to increase!"
+    insufficient-funds-action: "Earn more money and try again!"
+    
+    payment-failed: "❌ Payment failed. Please try again."
+    payment-processing-failed: "❌ Payment processing failed. Please try again."
+    
+    insufficient-resources-title: "   ❌ INSUFFICIENT RESOURCES"
+    insufficient-resources-required: "📦 Required: %required%x %material%"
+    insufficient-resources-have: "🎒 You have: %have%x"
+    insufficient-resources-missing: "❗ Missing: %missing%x"
+    insufficient-resources-tip: "💡 Tip: Find more %material% and try again!"
+    
+    failed-complete: "❌ Failed to complete unlock. Please try again."
+    
+    success-title: "   🎉 CHUNK UNLOCKED!"
+    success-location: "📍 Location: %location%"
+    success-biome: "🌿 Biome: %biome%"
+    success-consumed: "📦 Consumed: %amount%x %material%"
+    success-contested: "⚔ Contested chunk claimed!"
+    success-message: "✨ You can now build and explore in this chunk!"
+  
+  builder:
+    chunk-info-title: "📍 Chunk Information"
+    chunk-info-location: "📌 Location: %location%"
+    chunk-info-biome: "🌿 Biome: %biome%"
+    chunk-info-difficulty: "⚔ Difficulty: %difficulty%"
+    chunk-info-score: "📊 Score: %score% points"
+    chunk-info-difficulty-note: "ℹ Difficulty affects the amount"
+    chunk-info-difficulty-note-2: "  of resources required to unlock"
+    
+    progress-title: "📈 Progress: %percentage%%"
+    progress-items: "Items: %have% / %required%"
+    progress-need: "Need %needed% more"
+    
+    required-title: "💎 Required: %item%"
+    required-total: "📦 Total Required: %amount%"
+    required-have: "🎒 You Have: %have%"
+    required-all: "📋 All Requirements:"
+    required-missing: "⚠ Missing: %missing%"
+    required-tip: "💡 Tip: Gather more %item%"
+    required-all-items: "✅ You have all required items!"
+    required-enough: "✅ You have enough items!"
+    
+    unlock-button-ready: "🎯 CLICK TO UNLOCK!"
+    unlock-button-requirements-met: "✅ All requirements met!"
+    unlock-button-consume: "📦 %amount%x %material% will be consumed"
+    unlock-button-click: "➤ Click to unlock this chunk"
+    unlock-button-not-ready: "❌ CANNOT UNLOCK YET"
+    unlock-button-missing: "⚠ Missing required items!"
+    unlock-button-need-more: "Need %amount% more %material%"
+    unlock-button-gather: "💡 Gather the required items first"
+    
+    help-title: "📖 How to Unlock Chunks"
+    help-process-title: "🔓 Unlocking Process:"
+    help-step-1: "  1. Gather required materials"
+    help-step-2: "  2. Right-click the border glass"
+    help-step-3: "  3. Click the green unlock button"
+    help-tips-title: "💡 Tips:"
+    help-tip-1: "  • Different biomes cost different items"
+    help-tip-2: "  • Harder chunks require more resources"
+    help-tip-3: "  • Team members share unlocked chunks"
+    
+    team-title: "👥 Team Status"
+    team-unlock: "🏆 Your team can unlock chunks together"
+    team-resources: "📊 Team resources are shared"
+    
+    money-progress-title: "💰 Balance: %percentage%%"
+    money-progress-balance: "Balance: %balance%"
+    money-progress-required: "Required: %required%"
+    money-progress-need: "Need %needed% more"
+    
+    money-required-title: "💎 Required: %cost%"
+    money-required-mode: "Economy Mode: Vault"
+    money-required-currency: "Currency: %currency%"
+    money-required-can-afford: "✓ You can afford this chunk!"
+    money-required-cannot-afford: "✗ Insufficient funds"
+    money-required-click: "Right-click to unlock with money"
+    
+    money-unlock-button-ready: "💰 UNLOCK FOR %cost%"
+    money-unlock-button-not-ready: "💸 INSUFFICIENT FUNDS"
+    money-unlock-button-click: "Click to spend %cost%"
+    money-unlock-button-click-2: "and unlock this chunk!"
+    money-unlock-button-balance: "Your balance: %balance%"
+    money-unlock-button-need: "Need %needed% more"
+    
+    stack-part: "Part of total requirement"
+    stack-more: "+%more% more stacks..."
+
+# ===== HOLOGRAM MESSAGES =====
+
+holograms:
+  locked-title: "§c§l LOCKED CHUNK"
+  material-line: "§7%material%"
+  status-have: "§a✓ §a§l%player_count%§7/§l%required_count%"
+  status-missing: "§c✗ §a§l%player_count%§7/§l%required_count%"
+  click-to-unlock: "§a§l RIGHT-CLICK TO UNLOCK"
+  cost-line: "§6💰 Cost: %cost%"
+  can-afford: "§a✓ You can afford this"
+  cannot-afford: "§c✗ Insufficient funds"
+
+# ===== ERROR MESSAGES =====
+
+errors:
+  player-not-found: "Player not found"
+  chunk-already-unlocked: "This chunk is already unlocked"
+  insufficient-funds: "You don't have enough funds to unlock this chunk"
+  missing-items: "You don't have the required items to unlock this chunk"
+  no-permission: "You don't have permission to do this"
+  invalid-chunk: "Invalid chunk"
+  not-adjacent: "This chunk is not adjacent to your unlocked chunks"
+  generic: "An error occurred: %error%"
+
+# ===== SUCCESS MESSAGES =====
+
+success:
+  chunk-unlocked: "✅ Chunk unlocked successfully!"
+  payment-processed: "✅ Payment processed successfully"
+
+# ===== ECONOMY MESSAGES =====
+
+economy:
+  cost-display: "Cost: %cost%"
+  balance-display: "Balance: %balance%"
+  missing-amount: "Missing: %amount%"
+
+# ===== TEAM MESSAGES =====
+
+team:
+  not-in-team: "You are not in a team"
+  no-permission: "You don't have permission to %action%"
+  join-request-accepted: "§aYour request to join %team% was accepted!"
+  join-request-denied: "§cYour request to join %team% was denied."
+  join-request-no-pending: "No pending join request from %player%"
+  chat-disabled: "Team chat is disabled for your team"
+  chat-format: "§b[TEAM] §f%sender%§7: §f%message%"
+  player-joined: "§a%player% joined the team!"
+  join-accepted-admin: "Accepted %player%'s join request!"
+  join-denied-admin: "Denied %player%'s join request."
+
+# ===== UNLOCK MESSAGES =====
+
+unlock:
+  starting-chunk-assigned: "§aYou have been assigned a starting chunk at %x%, %z%"
+  spawn-coords: "§7Spawning at center coordinates: %x%, %z%"
+  chunk-info: "§7Chunk difficulty: %difficulty% | Score: %score% | Biome: %biome%"
+
+# ===== PROTECTION MESSAGES =====
+
+protection:
+  chunk-locked: "✋ You cannot %action% in locked chunks!"
+  not-owner: "You are not the owner of this chunk"
+  team-member: "You are a team member of this chunk"

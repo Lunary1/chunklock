@@ -9,13 +9,17 @@ import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import me.chunklock.ChunklockPlugin;
+import me.chunklock.config.LanguageKeys;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.managers.TeamManager;
 import me.chunklock.managers.ChunkBorderManager;
+import me.chunklock.util.message.MessageUtil;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -40,20 +44,22 @@ public class UnlockCommand extends SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(Component.text("Usage: /chunklock unlock <player> [x] [z] [world]")
-                .color(NamedTextColor.YELLOW));
-            sender.sendMessage(Component.text("  - If x, z, world not specified, unlocks player's current chunk")
-                .color(NamedTextColor.GRAY));
-            sender.sendMessage(Component.text("  - Use 'here' as player name to unlock your current chunk")
-                .color(NamedTextColor.GRAY));
+            String usage = MessageUtil.getMessage(LanguageKeys.COMMAND_UNLOCK_USAGE);
+            List<String> details = ChunklockPlugin.getInstance().getConfigManager()
+                .getLanguageManager().getMessageList(LanguageKeys.COMMAND_UNLOCK_USAGE_DETAILS);
+            
+            sender.sendMessage(Component.text(usage).color(NamedTextColor.YELLOW));
+            for (String detail : details) {
+                sender.sendMessage(Component.text(detail).color(NamedTextColor.GRAY));
+            }
             return true;
         }
         
         // Handle special "here" case for admin convenience
         if (args[0].equalsIgnoreCase("here")) {
             if (!(sender instanceof Player adminPlayer)) {
-                sender.sendMessage(Component.text("Console cannot use 'here' - specify coordinates")
-                    .color(NamedTextColor.RED));
+                String message = MessageUtil.getMessage(LanguageKeys.COMMAND_UNLOCK_CONSOLE_ERROR);
+                sender.sendMessage(Component.text(message).color(NamedTextColor.RED));
                 return true;
             }
             return unlockCurrentChunk(sender, adminPlayer);
@@ -62,8 +68,10 @@ public class UnlockCommand extends SubCommand {
         // Find target player
         Player targetPlayer = Bukkit.getPlayer(args[0]);
         if (targetPlayer == null) {
-            sender.sendMessage(Component.text("Player '" + args[0] + "' not found or offline")
-                .color(NamedTextColor.RED));
+            Map<String, String> placeholders = new HashMap<>();
+            placeholders.put("player", args[0]);
+            String message = MessageUtil.getMessage(LanguageKeys.COMMAND_UNLOCK_PLAYER_NOT_FOUND, placeholders);
+            sender.sendMessage(Component.text(message).color(NamedTextColor.RED));
             return true;
         }
         
@@ -79,16 +87,18 @@ public class UnlockCommand extends SubCommand {
                 
                 var world = Bukkit.getWorld(worldName);
                 if (world == null) {
-                    sender.sendMessage(Component.text("World '" + worldName + "' not found")
-                        .color(NamedTextColor.RED));
+                    Map<String, String> placeholders = new HashMap<>();
+                    placeholders.put("world", worldName);
+                    String message = MessageUtil.getMessage(LanguageKeys.COMMAND_UNLOCK_WORLD_NOT_FOUND, placeholders);
+                    sender.sendMessage(Component.text(message).color(NamedTextColor.RED));
                     return true;
                 }
                 
                 targetChunk = world.getChunkAt(chunkX, chunkZ);
                 
             } catch (NumberFormatException e) {
-                sender.sendMessage(Component.text("Invalid coordinates. Use integers for x and z")
-                    .color(NamedTextColor.RED));
+                String message = MessageUtil.getMessage(LanguageKeys.COMMAND_UNLOCK_INVALID_COORDS);
+                sender.sendMessage(Component.text(message).color(NamedTextColor.RED));
                 return true;
             }
         } else {
@@ -115,9 +125,11 @@ public class UnlockCommand extends SubCommand {
         try {
             // Check if chunk is already unlocked
             if (!chunkLockManager.isLocked(chunk)) {
-                sender.sendMessage(Component.text("Chunk " + chunk.getX() + "," + chunk.getZ() + 
-                    " in " + chunk.getWorld().getName() + " is already unlocked")
-                    .color(NamedTextColor.YELLOW));
+                Map<String, String> placeholders = new HashMap<>();
+                placeholders.put("chunk", chunk.getX() + "," + chunk.getZ());
+                placeholders.put("world", chunk.getWorld().getName());
+                String message = MessageUtil.getMessage(LanguageKeys.COMMAND_UNLOCK_ALREADY_UNLOCKED, placeholders);
+                sender.sendMessage(Component.text(message).color(NamedTextColor.YELLOW));
                 return true;
             }
             
@@ -146,11 +158,16 @@ public class UnlockCommand extends SubCommand {
             // Send success messages
             String chunkInfo = chunk.getX() + "," + chunk.getZ() + " in " + chunk.getWorld().getName();
             
-            sender.sendMessage(Component.text("✓ Successfully unlocked chunk " + chunkInfo + " for " + targetPlayer.getName())
-                .color(NamedTextColor.GREEN));
+            Map<String, String> adminPlaceholders = new HashMap<>();
+            adminPlaceholders.put("chunk", chunkInfo);
+            adminPlaceholders.put("player", targetPlayer.getName());
+            String adminMessage = MessageUtil.getMessage(LanguageKeys.COMMAND_UNLOCK_SUCCESS_ADMIN, adminPlaceholders);
+            sender.sendMessage(Component.text(adminMessage).color(NamedTextColor.GREEN));
             
-            targetPlayer.sendMessage(Component.text("🎉 Chunk " + chunkInfo + " has been unlocked by an admin!")
-                .color(NamedTextColor.GREEN));
+            Map<String, String> playerPlaceholders = new HashMap<>();
+            playerPlaceholders.put("chunk", chunkInfo);
+            String playerMessage = MessageUtil.getMessage(LanguageKeys.COMMAND_UNLOCK_SUCCESS_PLAYER, playerPlaceholders);
+            targetPlayer.sendMessage(Component.text(playerMessage).color(NamedTextColor.GREEN));
             
             // Log the action
             ChunklockPlugin.getInstance().getLogger().info("Admin " + sender.getName() + 
@@ -159,8 +176,10 @@ public class UnlockCommand extends SubCommand {
             return true;
             
         } catch (Exception e) {
-            sender.sendMessage(Component.text("Error unlocking chunk: " + e.getMessage())
-                .color(NamedTextColor.RED));
+            Map<String, String> placeholders = new HashMap<>();
+            placeholders.put("error", e.getMessage());
+            String message = MessageUtil.getMessage(LanguageKeys.COMMAND_UNLOCK_ERROR, placeholders);
+            sender.sendMessage(Component.text(message).color(NamedTextColor.RED));
             ChunklockPlugin.getInstance().getLogger().warning("Error in admin unlock command: " + e.getMessage());
             return true;
         }

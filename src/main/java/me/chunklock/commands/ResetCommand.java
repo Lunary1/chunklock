@@ -1,12 +1,14 @@
 package me.chunklock.commands;
 
 import me.chunklock.ChunklockPlugin;
+import me.chunklock.config.LanguageKeys;
 import me.chunklock.managers.ChunkBorderManager;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.PlayerDataManager;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.util.chunk.ChunkUtils;
+import me.chunklock.util.message.MessageUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -17,7 +19,9 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 
@@ -46,12 +50,13 @@ public class ResetCommand extends SubCommand {
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (!hasPermission(sender)) {
-            sender.sendMessage(Component.text("You don't have permission to use this command.")
-                .color(NamedTextColor.RED));
+            String message = MessageUtil.getMessage(LanguageKeys.ERROR_NO_PERMISSION);
+            sender.sendMessage(Component.text(message).color(NamedTextColor.RED));
             return true;
         }
 
         if (args.length < 1) {
+            String usage = MessageUtil.getMessage(LanguageKeys.COMMAND_RESET_CONFIRM);
             sender.sendMessage(Component.text("Usage: /chunklock reset <player>")
                 .color(NamedTextColor.YELLOW));
             return true;
@@ -59,8 +64,10 @@ public class ResetCommand extends SubCommand {
 
         Player target = Bukkit.getPlayer(args[0]);
         if (target == null) {
-            sender.sendMessage(Component.text("Player '" + args[0] + "' not found or not online.")
-                .color(NamedTextColor.RED));
+            Map<String, String> placeholders = new HashMap<>();
+            placeholders.put("player", args[0]);
+            String message = MessageUtil.getMessage(LanguageKeys.ERROR_PLAYER_NOT_FOUND, placeholders);
+            sender.sendMessage(Component.text(message).color(NamedTextColor.RED));
             return true;
         }
 
@@ -118,10 +125,12 @@ public class ResetCommand extends SubCommand {
         int unlockedAfter = chunkLockManager.getTotalUnlockedChunks();
 
         // Send success messages
-        sender.sendMessage(Component.text("✓ Complete reset performed for " + target.getName() + "!")
-            .color(NamedTextColor.GREEN));
-        sender.sendMessage(Component.text("Player progress reset for " + target.getName())
-            .color(NamedTextColor.GREEN));
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put("player", target.getName());
+        String successMsg = MessageUtil.getMessage(LanguageKeys.COMMAND_RESET_SUCCESS, placeholders);
+        sender.sendMessage(Component.text(successMsg).color(NamedTextColor.GREEN));
+        
+        // Additional info messages (keep as-is for now, can be moved to language file later)
         sender.sendMessage(Component.text("Chunks locked: " + (unlockedBefore - unlockedAfter) +
                 " (from " + unlockedBefore + " to " + unlockedAfter + ")")
             .color(NamedTextColor.GRAY));
@@ -133,10 +142,13 @@ public class ResetCommand extends SubCommand {
             .color(NamedTextColor.RED));
         target.sendMessage(Component.text("All previously unlocked chunks have been locked again.")
             .color(NamedTextColor.RED));
-        target.sendMessage(Component.text("New starting chunk: " + newChunk.getX() + ", " + newChunk.getZ())
-            .color(NamedTextColor.GREEN));
-        target.sendMessage(Component.text("Spawning at center: " + (int) centerSpawn.getX() + ", " + (int) centerSpawn.getZ())
-            .color(NamedTextColor.GRAY));
+        placeholders.put("chunk", newChunk.getX() + ", " + newChunk.getZ());
+        String newChunkMsg = MessageUtil.getMessage(LanguageKeys.UNLOCK_STARTING_CHUNK_ASSIGNED, placeholders);
+        target.sendMessage(Component.text(newChunkMsg).color(NamedTextColor.GREEN));
+        placeholders.put("x", String.valueOf((int) centerSpawn.getX()));
+        placeholders.put("z", String.valueOf((int) centerSpawn.getZ()));
+        String spawnMsg = MessageUtil.getMessage(LanguageKeys.UNLOCK_SPAWN_COORDS, placeholders);
+        target.sendMessage(Component.text(spawnMsg).color(NamedTextColor.GRAY));
 
         // Regenerate borders for the player immediately
         ChunkBorderManager borderManager = ChunklockPlugin.getInstance().getChunkBorderManager();

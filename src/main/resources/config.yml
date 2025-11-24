@@ -22,3 +22,8 @@ config-version: 2
 
 # First run flag (automatically set to false after first load)
 first-run: true
+
+# Language setting (language file must exist in lang/ directory)
+# Available languages: en (English), de (German), fr (French), etc.
+# Default: en
+language: "en"

@@ -1,11 +1,13 @@
 // src/main/java/me/chunklock/commands/StatusCommand.java
 package me.chunklock.commands;
 
+import me.chunklock.ChunklockPlugin;
+import me.chunklock.config.LanguageKeys;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.managers.ChunkLockManager;
-import me.chunklock.ChunklockPlugin;
 import me.chunklock.managers.PlayerProgressTracker;
+import me.chunklock.util.message.MessageUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Chunk;
@@ -13,7 +15,9 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Handles the status command - shows player's chunk progress and current chunk info.
@@ -39,8 +43,10 @@ public class StatusCommand extends SubCommand {
         try {
             // Show unlocked chunk count
             int unlocked = progressTracker.getUnlockedChunkCount(player.getUniqueId());
-            player.sendMessage(Component.text("You have unlocked " + unlocked + " chunks.")
-                .color(NamedTextColor.GREEN));
+            Map<String, String> placeholders = new HashMap<>();
+            placeholders.put("unlocked", String.valueOf(unlocked));
+            String message = MessageUtil.getMessage(LanguageKeys.COMMAND_STATUS_CHUNKS, placeholders);
+            player.sendMessage(Component.text(message).color(NamedTextColor.GREEN));
             
             // Show current chunk info
             showCurrentChunkInfo(player);
@@ -51,8 +57,11 @@ public class StatusCommand extends SubCommand {
             return true;
             
         } catch (Exception e) {
-            player.sendMessage(Component.text("Error retrieving status information.")
-                .color(NamedTextColor.RED));
+            String errorMsg = MessageUtil.getMessage(LanguageKeys.ERROR_GENERIC);
+            Map<String, String> placeholders = new HashMap<>();
+            placeholders.put("error", e.getMessage());
+            String message = MessageUtil.getMessage(LanguageKeys.ERROR_GENERIC, placeholders);
+            player.sendMessage(Component.text(message).color(NamedTextColor.RED));
             ChunklockPlugin.getInstance().getLogger().warning(
                 "Error in status command for " + player.getName() + ": " + e.getMessage());
             return true;

@@ -1,9 +1,11 @@
 package me.chunklock.ui;
 
+import me.chunklock.config.LanguageKeys;
 import me.chunklock.economy.items.ItemRequirement;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.models.Difficulty;
+import me.chunklock.util.message.MessageUtil;
 import me.chunklock.util.player.EnchantmentUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -47,9 +49,10 @@ public class UnlockGuiBuilder {
                            me.chunklock.economy.EconomyManager.PaymentRequirement paymentRequirement,
                            me.chunklock.economy.EconomyManager economyManager,
                            BiomeUnlockRegistry biomeRegistry) {
-        Inventory inv = Bukkit.createInventory(null, GUI_SIZE, 
-            Component.text("🔓 Unlock Chunk (" + chunk.getX() + ", " + chunk.getZ() + ")")
-                .color(NamedTextColor.GOLD));
+        String guiTitleBase = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_TITLE);
+        String guiTitle = guiTitleBase + " (" + chunk.getX() + ", " + chunk.getZ() + ")";
+        Inventory inv = Bukkit.createInventory(null, GUI_SIZE,
+            Component.text(guiTitle).color(NamedTextColor.GOLD));
         
         // Add decorative borders
         addBorderDecoration(inv);
@@ -138,33 +141,36 @@ public class UnlockGuiBuilder {
 
         if (meta == null) return; // Safety check
 
-        meta.displayName(Component.text("📍 Chunk Information")
+        String infoTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_CHUNK_INFO_TITLE);
+        meta.displayName(Component.text(infoTitle)
             .color(NamedTextColor.AQUA)
             .decoration(TextDecoration.ITALIC, false)
             .decoration(TextDecoration.BOLD, true));
 
         List<Component> lore = new ArrayList<>();
         lore.add(Component.empty());
-        lore.add(Component.text("📌 Location: ").color(NamedTextColor.GRAY)
-            .append(Component.text(chunk.getX() + ", " + chunk.getZ()).color(NamedTextColor.WHITE))
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("🌿 Biome: ").color(NamedTextColor.GRAY)
-            .append(Component.text(BiomeUnlockRegistry.getBiomeDisplayName(eval.biome)).color(NamedTextColor.YELLOW))
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("⚔ Difficulty: ").color(NamedTextColor.GRAY)
-            .append(Component.text(eval.difficulty.toString()).color(getDifficultyColor(eval.difficulty)))
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("📊 Score: ").color(NamedTextColor.GRAY)
-            .append(Component.text(eval.score + " points").color(NamedTextColor.WHITE))
-            .decoration(TextDecoration.ITALIC, false));
+        java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+        placeholders.put("location", chunk.getX() + ", " + chunk.getZ());
+        String locationMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_CHUNK_INFO_LOCATION, placeholders);
+        lore.add(Component.text(locationMsg).color(NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false));
+        
+        placeholders.put("biome", BiomeUnlockRegistry.getBiomeDisplayName(eval.biome));
+        String biomeMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_CHUNK_INFO_BIOME, placeholders);
+        lore.add(Component.text(biomeMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
+        
+        placeholders.put("difficulty", eval.difficulty.toString());
+        String difficultyMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_CHUNK_INFO_DIFFICULTY, placeholders);
+        lore.add(Component.text(difficultyMsg).color(getDifficultyColor(eval.difficulty)).decoration(TextDecoration.ITALIC, false));
+        
+        placeholders.put("score", String.valueOf(eval.score));
+        String scoreMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_CHUNK_INFO_SCORE, placeholders);
+        lore.add(Component.text(scoreMsg).color(NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false));
 
         lore.add(Component.empty());
-        lore.add(Component.text("ℹ Difficulty affects the amount")
-            .color(NamedTextColor.DARK_GRAY)
-            .decoration(TextDecoration.ITALIC, true));
-        lore.add(Component.text("  of resources required to unlock")
-            .color(NamedTextColor.DARK_GRAY)
-            .decoration(TextDecoration.ITALIC, true));
+        String note1 = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_CHUNK_INFO_DIFFICULTY_NOTE);
+        lore.add(Component.text(note1).color(NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, true));
+        String note2 = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_CHUNK_INFO_DIFFICULTY_NOTE_2);
+        lore.add(Component.text(note2).color(NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, true));
 
         meta.lore(lore);
         chunkInfo.setItemMeta(meta);
@@ -181,7 +187,10 @@ public class UnlockGuiBuilder {
         ItemStack progressItem = new ItemStack(Material.EXPERIENCE_BOTTLE);
         ItemMeta meta = progressItem.getItemMeta();
         
-        meta.displayName(Component.text("📈 Progress: " + String.format("%.1f%%", percentage))
+        java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+        placeholders.put("percentage", String.format("%.1f", percentage));
+        String progressTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_PROGRESS_TITLE, placeholders);
+        meta.displayName(Component.text(progressTitle)
             .color(percentage >= 100 ? NamedTextColor.GREEN : NamedTextColor.YELLOW)
             .decoration(TextDecoration.ITALIC, false)
             .decoration(TextDecoration.BOLD, true));
@@ -203,14 +212,15 @@ public class UnlockGuiBuilder {
         lore.add(Component.text(progressBar.toString())
             .decoration(TextDecoration.ITALIC, false));
         lore.add(Component.empty());
-        lore.add(Component.text("Items: " + playerHas + " / " + required)
-            .color(NamedTextColor.WHITE)
-            .decoration(TextDecoration.ITALIC, false));
+        placeholders.put("have", String.valueOf(playerHas));
+        placeholders.put("required", String.valueOf(required));
+        String itemsMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_PROGRESS_ITEMS, placeholders);
+        lore.add(Component.text(itemsMsg).color(NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false));
             
         if (playerHas < required) {
-            lore.add(Component.text("Need " + (required - playerHas) + " more")
-                .color(NamedTextColor.YELLOW)
-                .decoration(TextDecoration.ITALIC, false));
+            placeholders.put("needed", String.valueOf(required - playerHas));
+            String needMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_PROGRESS_NEED, placeholders);
+            lore.add(Component.text(needMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
         }
         
         meta.lore(lore);
@@ -250,7 +260,10 @@ public class UnlockGuiBuilder {
         }
         
         String itemDisplayName = firstReq.getDisplayName();
-        meta.displayName(Component.text("💎 Required: " + itemDisplayName)
+        java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+        placeholders.put("item", itemDisplayName);
+        String requiredTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_TITLE, placeholders);
+        meta.displayName(Component.text(requiredTitle)
             .color(hasEnough ? NamedTextColor.GREEN : NamedTextColor.RED)
             .decoration(TextDecoration.ITALIC, false)
             .decoration(TextDecoration.BOLD, true));
@@ -265,19 +278,21 @@ public class UnlockGuiBuilder {
         
         List<Component> lore = new ArrayList<>();
         lore.add(Component.empty());
-        lore.add(Component.text("📦 Total Required: " + requiredAmount)
-            .color(NamedTextColor.WHITE)
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("🎒 You Have: " + playerHas)
-            .color(hasEnough ? NamedTextColor.GREEN : NamedTextColor.RED)
+        placeholders.clear();
+        placeholders.put("amount", String.valueOf(requiredAmount));
+        String totalMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_TOTAL, placeholders);
+        lore.add(Component.text(totalMsg).color(NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false));
+        
+        placeholders.put("have", String.valueOf(playerHas));
+        String haveMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_HAVE, placeholders);
+        lore.add(Component.text(haveMsg).color(hasEnough ? NamedTextColor.GREEN : NamedTextColor.RED)
             .decoration(TextDecoration.ITALIC, false));
         
         // Show all requirements if multiple items needed
         if (allRequirements.size() > 1) {
             lore.add(Component.empty());
-            lore.add(Component.text("📋 All Requirements:")
-                .color(NamedTextColor.YELLOW)
-                .decoration(TextDecoration.ITALIC, false));
+            String allReqMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_ALL);
+            lore.add(Component.text(allReqMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
             for (ItemRequirement req : allRequirements) {
                 boolean hasReq = req.hasInInventory(player);
                 lore.add(Component.text("  • " + req.getDisplayName())
@@ -288,18 +303,17 @@ public class UnlockGuiBuilder {
             
         if (!hasEnough) {
             lore.add(Component.empty());
-            lore.add(Component.text("⚠ Missing: " + (requiredAmount - playerHas))
-                .color(NamedTextColor.YELLOW)
-                .decoration(TextDecoration.ITALIC, false));
+            placeholders.put("missing", String.valueOf(requiredAmount - playerHas));
+            String missingMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_MISSING, placeholders);
+            lore.add(Component.text(missingMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.empty());
-            lore.add(Component.text("💡 Tip: Gather more " + itemDisplayName)
-                .color(NamedTextColor.GRAY)
-                .decoration(TextDecoration.ITALIC, true));
+            placeholders.put("item", itemDisplayName);
+            String tipMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_TIP, placeholders);
+            lore.add(Component.text(tipMsg).color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, true));
         } else {
             lore.add(Component.empty());
-            lore.add(Component.text("✅ You have all required items!")
-                .color(NamedTextColor.GREEN)
-                .decoration(TextDecoration.ITALIC, false));
+            String allItemsMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_ALL_ITEMS);
+            lore.add(Component.text(allItemsMsg).color(NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false));
         }
         
         meta.lore(lore);
@@ -324,7 +338,10 @@ public class UnlockGuiBuilder {
         ItemStack mainDisplay = new ItemStack(requirement.material(), Math.min(64, requiredAmount));
         ItemMeta meta = mainDisplay.getItemMeta();
         
-        meta.displayName(Component.text("💎 Required: " + formatMaterialName(requirement.material()))
+        java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+        placeholders.put("item", formatMaterialName(requirement.material()));
+        String requiredTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_TITLE, placeholders);
+        meta.displayName(Component.text(requiredTitle)
             .color(hasEnough ? NamedTextColor.GREEN : NamedTextColor.RED)
             .decoration(TextDecoration.ITALIC, false)
             .decoration(TextDecoration.BOLD, true));
@@ -339,27 +356,27 @@ public class UnlockGuiBuilder {
         
         List<Component> lore = new ArrayList<>();
         lore.add(Component.empty());
-        lore.add(Component.text("📦 Total Required: " + requiredAmount)
-            .color(NamedTextColor.WHITE)
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("🎒 You Have: " + playerHas)
-            .color(hasEnough ? NamedTextColor.GREEN : NamedTextColor.RED)
+        placeholders.put("amount", String.valueOf(requiredAmount));
+        String totalMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_TOTAL, placeholders);
+        lore.add(Component.text(totalMsg).color(NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false));
+        
+        placeholders.put("have", String.valueOf(playerHas));
+        String haveMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_HAVE, placeholders);
+        lore.add(Component.text(haveMsg).color(hasEnough ? NamedTextColor.GREEN : NamedTextColor.RED)
             .decoration(TextDecoration.ITALIC, false));
             
         if (!hasEnough) {
             lore.add(Component.empty());
-            lore.add(Component.text("⚠ Missing: " + (requiredAmount - playerHas))
-                .color(NamedTextColor.YELLOW)
-                .decoration(TextDecoration.ITALIC, false));
+            placeholders.put("missing", String.valueOf(requiredAmount - playerHas));
+            String missingMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_MISSING, placeholders);
+            lore.add(Component.text(missingMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.empty());
-            lore.add(Component.text("💡 Tip: Gather more " + formatMaterialName(requirement.material()))
-                .color(NamedTextColor.GRAY)
-                .decoration(TextDecoration.ITALIC, true));
+            String tipMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_TIP, placeholders);
+            lore.add(Component.text(tipMsg).color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, true));
         } else {
             lore.add(Component.empty());
-            lore.add(Component.text("✅ You have enough items!")
-                .color(NamedTextColor.GREEN)
-                .decoration(TextDecoration.ITALIC, false));
+            String enoughMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_ENOUGH);
+            lore.add(Component.text(enoughMsg).color(NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false));
         }
         
         meta.lore(lore);
@@ -398,14 +415,14 @@ public class UnlockGuiBuilder {
                 
             List<Component> lore = new ArrayList<>();
             if (i < stacksToShow - 1 || fullStacks > 4) {
-                lore.add(Component.text("Part of total requirement")
-                    .color(NamedTextColor.GRAY)
-                    .decoration(TextDecoration.ITALIC, false));
+                String partMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_STACK_PART);
+                lore.add(Component.text(partMsg).color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
             }
             if (fullStacks > 4 && i == 3) {
-                lore.add(Component.text("+" + (fullStacks - 3) + " more stacks...")
-                    .color(NamedTextColor.YELLOW)
-                    .decoration(TextDecoration.ITALIC, true));
+                java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+                placeholders.put("more", String.valueOf(fullStacks - 3));
+                String moreMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_STACK_MORE, placeholders);
+                lore.add(Component.text(moreMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, true));
             }
             
             meta.lore(lore);
@@ -420,11 +437,13 @@ public class UnlockGuiBuilder {
         ItemStack unlockButton;
         ItemMeta meta;
         
+        java.util.Map<String, String> placeholders = new java.util.HashMap<>();
         if (hasEnough) {
             unlockButton = new ItemStack(Material.EMERALD_BLOCK);
             meta = unlockButton.getItemMeta();
             
-            meta.displayName(Component.text("🎯 CLICK TO UNLOCK!")
+            String readyTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_READY);
+            meta.displayName(Component.text(readyTitle)
                 .color(NamedTextColor.GREEN)
                 .decoration(TextDecoration.ITALIC, false)
                 .decoration(TextDecoration.BOLD, true));
@@ -437,39 +456,40 @@ public class UnlockGuiBuilder {
             
             List<Component> lore = new ArrayList<>();
             lore.add(Component.empty());
-            lore.add(Component.text("✅ All requirements met!")
-                .color(NamedTextColor.GREEN)
-                .decoration(TextDecoration.ITALIC, false));
-            lore.add(Component.text("📦 " + requirement.amount() + "x " + formatMaterialName(requirement.material()) + " will be consumed")
-                .color(NamedTextColor.YELLOW)
-                .decoration(TextDecoration.ITALIC, false));
+            String metMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_REQUIREMENTS_MET);
+            lore.add(Component.text(metMsg).color(NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false));
+            
+            placeholders.put("amount", String.valueOf(requirement.amount()));
+            placeholders.put("material", formatMaterialName(requirement.material()));
+            String consumeMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_CONSUME, placeholders);
+            lore.add(Component.text(consumeMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.empty());
-            lore.add(Component.text("➤ Click to unlock this chunk")
-                .color(NamedTextColor.AQUA)
-                .decoration(TextDecoration.ITALIC, false));
+            String clickMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_CLICK);
+            lore.add(Component.text(clickMsg).color(NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false));
             
             meta.lore(lore);
         } else {
             unlockButton = new ItemStack(Material.REDSTONE_BLOCK);
             meta = unlockButton.getItemMeta();
             
-            meta.displayName(Component.text("❌ CANNOT UNLOCK YET")
+            String notReadyTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_NOT_READY);
+            meta.displayName(Component.text(notReadyTitle)
                 .color(NamedTextColor.RED)
                 .decoration(TextDecoration.ITALIC, false)
                 .decoration(TextDecoration.BOLD, true));
                 
             List<Component> lore = new ArrayList<>();
             lore.add(Component.empty());
-            lore.add(Component.text("⚠ Missing required items!")
-                .color(NamedTextColor.RED)
-                .decoration(TextDecoration.ITALIC, false));
-            lore.add(Component.text("Need " + (requirement.amount() - countPlayerItems(player, requirement.material())) + " more " + formatMaterialName(requirement.material()))
-                .color(NamedTextColor.YELLOW)
-                .decoration(TextDecoration.ITALIC, false));
+            String missingMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_MISSING);
+            lore.add(Component.text(missingMsg).color(NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
+            
+            placeholders.put("amount", String.valueOf(requirement.amount() - countPlayerItems(player, requirement.material())));
+            placeholders.put("material", formatMaterialName(requirement.material()));
+            String needMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_NEED_MORE, placeholders);
+            lore.add(Component.text(needMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.empty());
-            lore.add(Component.text("💡 Gather the required items first")
-                .color(NamedTextColor.GRAY)
-                .decoration(TextDecoration.ITALIC, true));
+            String gatherMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_GATHER);
+            lore.add(Component.text(gatherMsg).color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, true));
             
             meta.lore(lore);
         }
@@ -482,39 +502,34 @@ public class UnlockGuiBuilder {
         ItemStack helpBook = new ItemStack(Material.BOOK);
         ItemMeta meta = helpBook.getItemMeta();
         
-        meta.displayName(Component.text("📖 How to Unlock Chunks")
+        String helpTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_HELP_TITLE);
+        meta.displayName(Component.text(helpTitle)
             .color(NamedTextColor.LIGHT_PURPLE)
             .decoration(TextDecoration.ITALIC, false)
             .decoration(TextDecoration.BOLD, true));
             
         List<Component> lore = new ArrayList<>();
         lore.add(Component.empty());
-        lore.add(Component.text("🔓 Unlocking Process:")
-            .color(NamedTextColor.YELLOW)
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("  1. Gather required materials")
-            .color(NamedTextColor.WHITE)
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("  2. Right-click the border glass")
-            .color(NamedTextColor.WHITE)
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("  3. Click the green unlock button")
-            .color(NamedTextColor.WHITE)
-            .decoration(TextDecoration.ITALIC, false));
+        String processTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_HELP_PROCESS_TITLE);
+        lore.add(Component.text(processTitle).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
+        
+        String step1 = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_HELP_STEP_1);
+        lore.add(Component.text(step1).color(NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false));
+        String step2 = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_HELP_STEP_2);
+        lore.add(Component.text(step2).color(NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false));
+        String step3 = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_HELP_STEP_3);
+        lore.add(Component.text(step3).color(NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false));
             
         lore.add(Component.empty());
-        lore.add(Component.text("💡 Tips:")
-            .color(NamedTextColor.AQUA)
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("  • Different biomes cost different items")
-            .color(NamedTextColor.GRAY)
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("  • Harder chunks require more resources")
-            .color(NamedTextColor.GRAY)
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("  • Team members share unlocked chunks")
-            .color(NamedTextColor.GRAY)
-            .decoration(TextDecoration.ITALIC, false));
+        String tipsTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_HELP_TIPS_TITLE);
+        lore.add(Component.text(tipsTitle).color(NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false));
+        
+        String tip1 = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_HELP_TIP_1);
+        lore.add(Component.text(tip1).color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+        String tip2 = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_HELP_TIP_2);
+        lore.add(Component.text(tip2).color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+        String tip3 = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_HELP_TIP_3);
+        lore.add(Component.text(tip3).color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
             
         meta.lore(lore);
         helpBook.setItemMeta(meta);
@@ -526,19 +541,18 @@ public class UnlockGuiBuilder {
         ItemStack teamBanner = new ItemStack(Material.WHITE_BANNER);
         ItemMeta meta = teamBanner.getItemMeta();
         
-        meta.displayName(Component.text("👥 Team Status")
+        String teamTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_TEAM_TITLE);
+        meta.displayName(Component.text(teamTitle)
             .color(NamedTextColor.GOLD)
             .decoration(TextDecoration.ITALIC, false)
             .decoration(TextDecoration.BOLD, true));
             
         List<Component> lore = new ArrayList<>();
         lore.add(Component.empty());
-        lore.add(Component.text("🏆 Your team can unlock chunks together")
-            .color(NamedTextColor.YELLOW)
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("📊 Team resources are shared")
-            .color(NamedTextColor.GRAY)
-            .decoration(TextDecoration.ITALIC, false));
+        String unlockMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_TEAM_UNLOCK);
+        lore.add(Component.text(unlockMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
+        String resourcesMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_TEAM_RESOURCES);
+        lore.add(Component.text(resourcesMsg).color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
             
         meta.lore(lore);
         teamBanner.setItemMeta(meta);
@@ -586,7 +600,10 @@ public class UnlockGuiBuilder {
         
         double percentage = Math.min(100.0, (playerBalance / requiredCost) * 100.0);
         
-        meta.displayName(Component.text("💰 Balance: " + String.format("%.1f%%", percentage))
+        java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+        placeholders.put("percentage", String.format("%.1f", percentage));
+        String progressTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_PROGRESS_TITLE, placeholders);
+        meta.displayName(Component.text(progressTitle)
             .color(canAfford ? NamedTextColor.GREEN : NamedTextColor.RED)
             .decoration(TextDecoration.ITALIC, false)
             .decoration(TextDecoration.BOLD, true));
@@ -612,19 +629,20 @@ public class UnlockGuiBuilder {
         String formattedBalance = economyManager.getVaultService().format(playerBalance);
         String formattedCost = economyManager.getVaultService().format(requiredCost);
         
-        lore.add(Component.text("Balance: " + formattedBalance)
-            .color(NamedTextColor.WHITE)
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("Required: " + formattedCost)
-            .color(NamedTextColor.WHITE)
-            .decoration(TextDecoration.ITALIC, false));
+        placeholders.put("balance", formattedBalance);
+        String balanceMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_PROGRESS_BALANCE, placeholders);
+        lore.add(Component.text(balanceMsg).color(NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false));
+        
+        placeholders.put("required", formattedCost);
+        String requiredMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_PROGRESS_REQUIRED, placeholders);
+        lore.add(Component.text(requiredMsg).color(NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false));
             
         if (!canAfford) {
             double needed = requiredCost - playerBalance;
             String formattedNeeded = economyManager.getVaultService().format(needed);
-            lore.add(Component.text("Need " + formattedNeeded + " more")
-                .color(NamedTextColor.YELLOW)
-                .decoration(TextDecoration.ITALIC, false));
+            placeholders.put("needed", formattedNeeded);
+            String needMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_PROGRESS_NEED, placeholders);
+            lore.add(Component.text(needMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
         }
         
         meta.lore(lore);
@@ -646,35 +664,35 @@ public class UnlockGuiBuilder {
         String formattedCost = economyManager.getVaultService().format(requiredCost);
         String currencyName = economyManager.getVaultService().getCurrencyName();
         
-        meta.displayName(Component.text("💎 Required: " + formattedCost)
+        java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+        placeholders.put("cost", formattedCost);
+        String requiredTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_REQUIRED_TITLE, placeholders);
+        meta.displayName(Component.text(requiredTitle)
             .color(canAfford ? NamedTextColor.GREEN : NamedTextColor.RED)
             .decoration(TextDecoration.ITALIC, false)
             .decoration(TextDecoration.BOLD, true));
             
         List<Component> lore = new ArrayList<>();
         lore.add(Component.empty());
-        lore.add(Component.text("Economy Mode: Vault")
-            .color(NamedTextColor.AQUA)
-            .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("Currency: " + currencyName)
-            .color(NamedTextColor.GRAY)
-            .decoration(TextDecoration.ITALIC, false));
+        String modeMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_REQUIRED_MODE);
+        lore.add(Component.text(modeMsg).color(NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false));
+        
+        placeholders.put("currency", currencyName);
+        String currencyMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_REQUIRED_CURRENCY, placeholders);
+        lore.add(Component.text(currencyMsg).color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
         lore.add(Component.empty());
         
         if (canAfford) {
-            lore.add(Component.text("✓ You can afford this chunk!")
-                .color(NamedTextColor.GREEN)
-                .decoration(TextDecoration.ITALIC, false));
+            String canAffordMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_REQUIRED_CAN_AFFORD);
+            lore.add(Component.text(canAffordMsg).color(NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false));
         } else {
-            lore.add(Component.text("✗ Insufficient funds")
-                .color(NamedTextColor.RED)
-                .decoration(TextDecoration.ITALIC, false));
+            String cannotAffordMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_REQUIRED_CANNOT_AFFORD);
+            lore.add(Component.text(cannotAffordMsg).color(NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
         }
         
         lore.add(Component.empty());
-        lore.add(Component.text("Right-click to unlock with money")
-            .color(NamedTextColor.YELLOW)
-            .decoration(TextDecoration.ITALIC, false));
+        String clickMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_REQUIRED_CLICK);
+        lore.add(Component.text(clickMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
             
         meta.lore(lore);
         mainDisplay.setItemMeta(meta);
@@ -694,13 +712,18 @@ public class UnlockGuiBuilder {
         
         String formattedCost = economyManager.getVaultService().format(requiredCost);
         
+        java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+        placeholders.put("cost", formattedCost);
+        
         if (canAfford) {
-            meta.displayName(Component.text("💰 UNLOCK FOR " + formattedCost)
+            String readyTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_UNLOCK_BUTTON_READY, placeholders);
+            meta.displayName(Component.text(readyTitle)
                 .color(NamedTextColor.GREEN)
                 .decoration(TextDecoration.ITALIC, false)
                 .decoration(TextDecoration.BOLD, true));
         } else {
-            meta.displayName(Component.text("💸 INSUFFICIENT FUNDS")
+            String notReadyTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_UNLOCK_BUTTON_NOT_READY);
+            meta.displayName(Component.text(notReadyTitle)
                 .color(NamedTextColor.RED)
                 .decoration(TextDecoration.ITALIC, false)
                 .decoration(TextDecoration.BOLD, true));
@@ -710,26 +733,24 @@ public class UnlockGuiBuilder {
         lore.add(Component.empty());
         
         if (canAfford) {
-            lore.add(Component.text("Click to spend " + formattedCost)
-                .color(NamedTextColor.YELLOW)
-                .decoration(TextDecoration.ITALIC, false));
-            lore.add(Component.text("and unlock this chunk!")
-                .color(NamedTextColor.YELLOW)
-                .decoration(TextDecoration.ITALIC, false));
+            String clickMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_UNLOCK_BUTTON_CLICK, placeholders);
+            lore.add(Component.text(clickMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
+            String clickMsg2 = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_UNLOCK_BUTTON_CLICK_2);
+            lore.add(Component.text(" " + clickMsg2).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
             
             // Add enchant effect if affordable (use UNBREAKING instead of deprecated DURABILITY)
             meta.addEnchant(org.bukkit.enchantments.Enchantment.UNBREAKING, 1, true);
             meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
         } else {
             String formattedBalance = economyManager.getVaultService().format(playerBalance);
-            lore.add(Component.text("Your balance: " + formattedBalance)
-                .color(NamedTextColor.GRAY)
-                .decoration(TextDecoration.ITALIC, false));
+            placeholders.put("balance", formattedBalance);
+            String balanceMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_UNLOCK_BUTTON_BALANCE, placeholders);
+            lore.add(Component.text(balanceMsg).color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
             double needed = requiredCost - playerBalance;
             String formattedNeeded = economyManager.getVaultService().format(needed);
-            lore.add(Component.text("Need " + formattedNeeded + " more")
-                .color(NamedTextColor.RED)
-                .decoration(TextDecoration.ITALIC, false));
+            placeholders.put("needed", formattedNeeded);
+            String needMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_MONEY_UNLOCK_BUTTON_NEED, placeholders);
+            lore.add(Component.text(needMsg).color(NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
         }
         
         meta.lore(lore);
