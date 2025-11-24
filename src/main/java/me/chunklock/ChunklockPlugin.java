@@ -78,6 +78,11 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private me.chunklock.services.AsyncCostCalculationService asyncCostCalculationService;
     private me.chunklock.services.ChunkCostDatabase costDatabase;
     
+    // Database system
+    private me.chunklock.services.ChunkDatabase chunkDatabase;
+    private me.chunklock.services.PlayerDatabase playerDatabase;
+    private me.chunklock.services.DataMigrationService dataMigrationService;
+    
     // Dependency checker
     private DependencyChecker dependencyChecker;
 
@@ -231,6 +236,30 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             if (isDebugMode()) {
                 getLogger().info("⚙️ Server Compatibility Check:");
                 getLogger().info("  " + me.chunklock.util.ServerCompatibility.getCompatibilitySummary().replace("\n", "\n  "));
+            }
+            
+            // Initialize databases FIRST (before managers that depend on them)
+            logSection("Database System", "💾");
+            this.chunkDatabase = new me.chunklock.services.ChunkDatabase(this);
+            this.playerDatabase = new me.chunklock.services.PlayerDatabase(this);
+            
+            if (!chunkDatabase.initialize()) {
+                getLogger().severe("❌ Failed to initialize ChunkDatabase - plugin cannot continue");
+                return false;
+            }
+            
+            if (!playerDatabase.initialize()) {
+                getLogger().severe("❌ Failed to initialize PlayerDatabase - plugin cannot continue");
+                return false;
+            }
+            
+            // Run data migration if needed
+            this.dataMigrationService = new me.chunklock.services.DataMigrationService(this, chunkDatabase, playerDatabase);
+            if (dataMigrationService.needsMigration()) {
+                getLogger().info("📦 Migrating data from YAML to MapDB...");
+                if (!dataMigrationService.migrate()) {
+                    getLogger().warning("⚠️ Data migration had issues - check logs");
+                }
             }
             
             // Initialize in dependency order
@@ -542,8 +571,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private void saveAllData() {
         int saveErrors = 0;
         
-        try { if (playerDataManager != null) playerDataManager.saveAll(); } 
-        catch (Exception e) { getLogger().log(Level.SEVERE, "Error saving player data", e); saveErrors++; }
+        // Databases auto-save on commit, but we ensure they're closed properly
+        // Note: ChunkDatabase and PlayerDatabase use MapDB which auto-commits
         
         try { if (teamManager != null) teamManager.saveAll(); } 
         catch (Exception e) { getLogger().log(Level.SEVERE, "Error saving team data", e); saveErrors++; }
@@ -551,11 +580,12 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         try { if (enhancedTeamManager != null) enhancedTeamManager.saveTeams(); } 
         catch (Exception e) { getLogger().log(Level.SEVERE, "Error saving enhanced team data", e); saveErrors++; }
         
-        try { if (chunkLockManager != null) chunkLockManager.saveAll(); } 
-        catch (Exception e) { getLogger().log(Level.SEVERE, "Error saving chunk data", e); saveErrors++; }
+        // Close databases
+        try { if (chunkDatabase != null) chunkDatabase.close(); } 
+        catch (Exception e) { getLogger().log(Level.SEVERE, "Error closing ChunkDatabase", e); saveErrors++; }
         
-        try { if (progressTracker != null) progressTracker.saveAll(); } 
-        catch (Exception e) { getLogger().log(Level.SEVERE, "Error saving progress data", e); saveErrors++; }
+        try { if (playerDatabase != null) playerDatabase.close(); } 
+        catch (Exception e) { getLogger().log(Level.SEVERE, "Error closing PlayerDatabase", e); saveErrors++; }
         
         if (saveErrors > 0) {
             getLogger().warning("Encountered " + saveErrors + " errors while saving data");
@@ -589,6 +619,16 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     public PlayerDataManager getPlayerDataManager() {
         if (playerDataManager == null) throw new IllegalStateException("PlayerDataManager not initialized");
         return playerDataManager;
+    }
+
+    public me.chunklock.services.ChunkDatabase getChunkDatabase() {
+        if (chunkDatabase == null) throw new IllegalStateException("ChunkDatabase not initialized");
+        return chunkDatabase;
+    }
+
+    public me.chunklock.services.PlayerDatabase getPlayerDatabase() {
+        if (playerDatabase == null) throw new IllegalStateException("PlayerDatabase not initialized");
+        return playerDatabase;
     }
 
     public TeamManager getTeamManager() {

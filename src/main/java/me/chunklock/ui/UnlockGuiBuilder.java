@@ -36,6 +36,17 @@ public class UnlockGuiBuilder {
                            BiomeUnlockRegistry.UnlockRequirement requirement,
                            me.chunklock.economy.EconomyManager economyManager,
                            BiomeUnlockRegistry biomeRegistry) {
+        // Legacy signature - calculate paymentRequirement here for backward compatibility
+        me.chunklock.economy.EconomyManager.PaymentRequirement paymentRequirement = 
+            economyManager.calculateRequirement(player, chunk, eval.biome, eval);
+        return build(player, chunk, eval, requirement, paymentRequirement, economyManager, biomeRegistry);
+    }
+    
+    public Inventory build(Player player, Chunk chunk, ChunkEvaluator.ChunkValueData eval,
+                           BiomeUnlockRegistry.UnlockRequirement requirement,
+                           me.chunklock.economy.EconomyManager.PaymentRequirement paymentRequirement,
+                           me.chunklock.economy.EconomyManager economyManager,
+                           BiomeUnlockRegistry biomeRegistry) {
         Inventory inv = Bukkit.createInventory(null, GUI_SIZE, 
             Component.text("🔓 Unlock Chunk (" + chunk.getX() + ", " + chunk.getZ() + ")")
                 .color(NamedTextColor.GOLD));
@@ -49,13 +60,19 @@ public class UnlockGuiBuilder {
         // Check if we should use Vault economy or materials
         if (economyManager != null && economyManager.getCurrentType() == me.chunklock.economy.EconomyManager.EconomyType.VAULT 
             && economyManager.isVaultAvailable()) {
-            // Use money-based UI
-            var paymentRequirement = economyManager.calculateRequirement(player, eval.biome, eval);
+            // Use money-based UI with unified cost calculation
             addMoneyProgressBar(inv, player, paymentRequirement, economyManager);
             addMoneyRequirementDisplay(inv, player, paymentRequirement, economyManager);
             addMoneyUnlockButton(inv, player, paymentRequirement, economyManager);
         } else {
-            // Use material-based UI (default)
+            // Use material-based UI (default) - use paymentRequirement for consistency
+            if (paymentRequirement.getType() == me.chunklock.economy.EconomyManager.EconomyType.MATERIALS) {
+                // Update requirement from paymentRequirement to ensure consistency
+                requirement = new BiomeUnlockRegistry.UnlockRequirement(
+                    paymentRequirement.getMaterial(), 
+                    paymentRequirement.getMaterialAmount()
+                );
+            }
             addProgressBar(inv, player, requirement);
             addRequirementDisplay(inv, player, requirement, eval.biome, biomeRegistry);
             addUnlockButton(inv, player, requirement);

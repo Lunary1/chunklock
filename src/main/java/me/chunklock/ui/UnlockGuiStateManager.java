@@ -25,6 +25,7 @@ public class UnlockGuiStateManager {
         public final BiomeUnlockRegistry.UnlockRequirement requirement;
         public final boolean contested;
         public final long timestamp;
+        private me.chunklock.economy.EconomyManager.PaymentRequirement paymentRequirement;
         
         public PendingUnlock(Chunk chunk, Biome biome, BiomeUnlockRegistry.UnlockRequirement requirement, boolean contested) {
             this.chunk = chunk;
@@ -32,6 +33,14 @@ public class UnlockGuiStateManager {
             this.requirement = requirement;
             this.contested = contested;
             this.timestamp = System.currentTimeMillis();
+        }
+        
+        public void setPaymentRequirement(me.chunklock.economy.EconomyManager.PaymentRequirement paymentRequirement) {
+            this.paymentRequirement = paymentRequirement;
+        }
+        
+        public me.chunklock.economy.EconomyManager.PaymentRequirement getPaymentRequirement() {
+            return paymentRequirement;
         }
         
         public boolean isExpired() {
