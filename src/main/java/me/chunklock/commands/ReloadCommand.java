@@ -2,7 +2,9 @@
 package me.chunklock.commands;
 
 import me.chunklock.ChunklockPlugin;
+import me.chunklock.config.LanguageKeys;
 import me.chunklock.managers.ChunkBorderManager;
+import me.chunklock.util.message.MessageUtil;
 import me.chunklock.util.validation.ConfigValidator;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -11,7 +13,9 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 
 /**
@@ -93,10 +97,12 @@ public class ReloadCommand extends SubCommand {
 
             // Send completion message
             if (success) {
-                sender.sendMessage(Component.text("✅ Chunklock plugin reloaded successfully!")
-                    .color(NamedTextColor.GREEN));
-                sender.sendMessage(Component.text("⏱️ Reload completed in " + duration + "ms")
-                    .color(NamedTextColor.GRAY));
+                String successMsg = MessageUtil.getMessage(LanguageKeys.COMMAND_RELOAD_SUCCESS);
+                sender.sendMessage(Component.text(successMsg).color(NamedTextColor.GREEN));
+                Map<String, String> placeholders = new HashMap<>();
+                placeholders.put("duration", String.valueOf(duration));
+                String durationMsg = "⏱️ Reload completed in " + duration + "ms";
+                sender.sendMessage(Component.text(durationMsg).color(NamedTextColor.GRAY));
                 
                 // ENHANCED: Force border regeneration after reload
                 postReloadBorderFix(sender, plugin);
@@ -120,8 +126,10 @@ public class ReloadCommand extends SubCommand {
 
         } catch (Exception e) {
             // Handle critical reload failures
-            sender.sendMessage(Component.text("❌ Reload failed: " + e.getMessage())
-                .color(NamedTextColor.RED));
+            Map<String, String> placeholders = new HashMap<>();
+            placeholders.put("error", e.getMessage());
+            String errorMsg = MessageUtil.getMessage(LanguageKeys.COMMAND_RELOAD_ERROR, placeholders);
+            sender.sendMessage(Component.text(errorMsg).color(NamedTextColor.RED));
             sender.sendMessage(Component.text("Check console for full error details.")
                 .color(NamedTextColor.GRAY));
             

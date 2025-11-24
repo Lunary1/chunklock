@@ -1,8 +1,13 @@
 package me.chunklock.hologram.util;
 
-import org.bukkit.Material;
+import me.chunklock.config.LanguageKeys;
 import me.chunklock.economy.items.ItemRequirement;
 import me.chunklock.util.item.MaterialUtil;
+import me.chunklock.util.message.MessageUtil;
+import org.bukkit.Material;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Utility class for formatting and text manipulation in holograms.
@@ -57,13 +62,28 @@ public final class HologramTextUtils {
                                                                  boolean hasItems, 
                                                                  int playerCount, 
                                                                  int requiredCount) {
+        String lockedTitle = MessageUtil.getMessage(LanguageKeys.HOLOGRAM_LOCKED_TITLE);
+        String materialLine = MessageUtil.getMessage(LanguageKeys.HOLOGRAM_MATERIAL_LINE);
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put("material", materialName);
+        materialLine = MessageUtil.getMessage(LanguageKeys.HOLOGRAM_MATERIAL_LINE, placeholders);
+        
+        String statusText = hasItems ? 
+            MessageUtil.getMessage(LanguageKeys.HOLOGRAM_STATUS_HAVE) :
+            MessageUtil.getMessage(LanguageKeys.HOLOGRAM_STATUS_MISSING);
+        placeholders.put("player_count", String.valueOf(playerCount));
+        placeholders.put("required_count", String.valueOf(requiredCount));
+        statusText = MessageUtil.getMessage(hasItems ? LanguageKeys.HOLOGRAM_STATUS_HAVE : LanguageKeys.HOLOGRAM_STATUS_MISSING, placeholders);
+        
+        String clickToUnlock = MessageUtil.getMessage(LanguageKeys.HOLOGRAM_CLICK_TO_UNLOCK);
+        
         return java.util.List.of(
-            "§c§l LOCKED CHUNK",
+            lockedTitle,
             "",
-            "§7" + materialName,
+            materialLine,
             "",
-            createStatusText(hasItems, playerCount, requiredCount),
-            "§a§l RIGHT-CLICK TO UNLOCK"
+            statusText,
+            clickToUnlock
         );
     }
     
@@ -74,20 +94,29 @@ public final class HologramTextUtils {
             java.util.List<ItemRequirement> requirements, boolean hasAllItems) {
         
         java.util.List<String> lines = new java.util.ArrayList<>();
-        lines.add("§c§l LOCKED CHUNK");
+        String lockedTitle = MessageUtil.getMessage(LanguageKeys.HOLOGRAM_LOCKED_TITLE);
+        lines.add(lockedTitle);
         lines.add("");
         
         // Add each requirement as a line
+        Map<String, String> placeholders = new HashMap<>();
         for (ItemRequirement req : requirements) {
             String itemName = req.getDisplayName();
             int amount = req.getAmount();
-            String line = "§7" + itemName + " §8x" + amount;
+            placeholders.put("material", itemName);
+            placeholders.put("amount", String.valueOf(amount));
+            String materialLine = MessageUtil.getMessage(LanguageKeys.HOLOGRAM_MATERIAL_LINE, placeholders);
+            String line = materialLine + " §8x" + amount;
             lines.add(line);
         }
         
         lines.add("");
-        lines.add(hasAllItems ? "§a✓ §a§lYou have all items" : "§c✗ §c§lMissing items");
-        lines.add("§a§l RIGHT-CLICK TO UNLOCK");
+        String statusMsg = hasAllItems ? 
+            MessageUtil.getMessage(LanguageKeys.HOLOGRAM_CAN_AFFORD) :
+            MessageUtil.getMessage(LanguageKeys.HOLOGRAM_CANNOT_AFFORD);
+        lines.add(statusMsg);
+        String clickToUnlock = MessageUtil.getMessage(LanguageKeys.HOLOGRAM_CLICK_TO_UNLOCK);
+        lines.add(clickToUnlock);
         
         return lines;
     }
@@ -97,13 +126,22 @@ public final class HologramTextUtils {
      */
     public static java.util.List<String> createChunkHologramLinesForMoney(String formattedCost, 
                                                                           boolean canAfford) {
+        String lockedTitle = MessageUtil.getMessage(LanguageKeys.HOLOGRAM_LOCKED_TITLE);
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put("cost", formattedCost);
+        String costLine = MessageUtil.getMessage(LanguageKeys.HOLOGRAM_COST_LINE, placeholders);
+        String statusMsg = canAfford ? 
+            MessageUtil.getMessage(LanguageKeys.HOLOGRAM_CAN_AFFORD) :
+            MessageUtil.getMessage(LanguageKeys.HOLOGRAM_CANNOT_AFFORD);
+        String clickToUnlock = MessageUtil.getMessage(LanguageKeys.HOLOGRAM_CLICK_TO_UNLOCK);
+        
         return java.util.List.of(
-            "§c§l LOCKED CHUNK",
+            lockedTitle,
             "",
-            "§6💰 Cost: " + formattedCost,
+            costLine,
             "",
-            canAfford ? "§a✓ You can afford this" : "§c✗ Insufficient funds",
-            "§a§l RIGHT-CLICK TO UNLOCK"
+            statusMsg,
+            clickToUnlock
         );
     }
 }

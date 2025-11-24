@@ -15,15 +15,19 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import me.chunklock.ChunklockPlugin;
+import me.chunklock.config.LanguageKeys;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.managers.TeamManager;
 import me.chunklock.ui.UnlockGuiStateManager.PendingUnlock;
-import me.chunklock.ChunklockPlugin;
+import me.chunklock.util.message.MessageUtil;
 import org.bukkit.Particle;
 import org.bukkit.Location;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -50,7 +54,6 @@ public class UnlockGui {
     private boolean debugLogging;
     
     // Constants - Updated for new GUI
-    public static final String GUI_TITLE_PREFIX = "🔓 Unlock Chunk";
     private static final int UNLOCK_BUTTON_SLOT = 31; // Updated slot for new layout
     
     public UnlockGui(ChunklockPlugin plugin,
@@ -135,10 +138,12 @@ public class UnlockGui {
             }
             
             // Enhanced contested notification
-            player.sendMessage(Component.text("⚔ ").color(NamedTextColor.RED)
-                .append(Component.text("Contested Chunk! ").color(NamedTextColor.GOLD))
-                .append(Component.text("Cost multiplied by ").color(NamedTextColor.YELLOW))
-                .append(Component.text("x" + multiplier).color(NamedTextColor.RED)));
+            Map<String, String> placeholders = new HashMap<>();
+            placeholders.put("multiplier", String.format("%.1f", multiplier));
+            String contestedTitle = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_CONTESTED_TITLE);
+            String contestedMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_CONTESTED_MULTIPLIER, placeholders);
+            player.sendMessage(Component.text(contestedTitle + " ").color(NamedTextColor.GOLD)
+                .append(Component.text(contestedMsg).color(NamedTextColor.YELLOW)));
             
             // Play warning sound
             player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
@@ -227,28 +232,35 @@ public class UnlockGui {
     private void sendHelpMessage(Player player) {
         player.sendMessage(Component.empty());
         player.sendMessage(Component.text("═══════════════════════════════════").color(NamedTextColor.DARK_GRAY));
-        player.sendMessage(Component.text("   📖 CHUNKLOCK HELP").color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
+        String helpTitle = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_HELP_TITLE);
+        player.sendMessage(Component.text("   " + helpTitle).color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
         player.sendMessage(Component.text("═══════════════════════════════════").color(NamedTextColor.DARK_GRAY));
         player.sendMessage(Component.empty());
         
-        player.sendMessage(Component.text("🔓 How to Unlock Chunks:").color(NamedTextColor.YELLOW));
-        player.sendMessage(Component.text("  1. ").color(NamedTextColor.GRAY)
-            .append(Component.text("Gather the required materials").color(NamedTextColor.WHITE)));
-        player.sendMessage(Component.text("  2. ").color(NamedTextColor.GRAY)
-            .append(Component.text("Right-click glass borders around locked chunks").color(NamedTextColor.WHITE)));
-        player.sendMessage(Component.text("  3. ").color(NamedTextColor.GRAY)
-            .append(Component.text("Click the green emerald button when ready").color(NamedTextColor.WHITE)));
+        String processTitle = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_HELP_PROCESS_TITLE);
+        player.sendMessage(Component.text(processTitle).color(NamedTextColor.YELLOW));
+        String step1 = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_HELP_STEP_1);
+        player.sendMessage(Component.text(step1).color(NamedTextColor.WHITE));
+        String step2 = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_HELP_STEP_2);
+        player.sendMessage(Component.text(step2).color(NamedTextColor.WHITE));
+        String step3 = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_HELP_STEP_3);
+        player.sendMessage(Component.text(step3).color(NamedTextColor.WHITE));
         
         player.sendMessage(Component.empty());
-        player.sendMessage(Component.text("💡 Tips:").color(NamedTextColor.AQUA));
+        String tipsTitle = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_HELP_TIPS_TITLE);
+        player.sendMessage(Component.text(tipsTitle).color(NamedTextColor.AQUA));
+        String tip1 = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_HELP_TIP_1);
         player.sendMessage(Component.text("  • ").color(NamedTextColor.GRAY)
-            .append(Component.text("Different biomes require different materials").color(NamedTextColor.WHITE)));
+            .append(Component.text(tip1.substring(3)).color(NamedTextColor.WHITE)));
+        String tip2 = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_HELP_TIP_2);
         player.sendMessage(Component.text("  • ").color(NamedTextColor.GRAY)
-            .append(Component.text("Harder chunks (higher score) cost more").color(NamedTextColor.WHITE)));
+            .append(Component.text(tip2.substring(3)).color(NamedTextColor.WHITE)));
+        String tip3 = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_HELP_TIP_3);
         player.sendMessage(Component.text("  • ").color(NamedTextColor.GRAY)
-            .append(Component.text("Team members share all unlocked chunks").color(NamedTextColor.WHITE)));
+            .append(Component.text(tip3.substring(3)).color(NamedTextColor.WHITE)));
+        String tip4 = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_HELP_TIP_4);
         player.sendMessage(Component.text("  • ").color(NamedTextColor.GRAY)
-            .append(Component.text("Contested chunks cost 2x resources!").color(NamedTextColor.RED)));
+            .append(Component.text(tip4.substring(3)).color(NamedTextColor.RED)));
         
         player.sendMessage(Component.empty());
         player.sendMessage(Component.text("═══════════════════════════════════").color(NamedTextColor.DARK_GRAY));
@@ -296,7 +308,8 @@ public class UnlockGui {
             try {
                 String inventoryTitle = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
                     .serialize(player.getOpenInventory().title());
-                if (inventoryTitle.startsWith(GUI_TITLE_PREFIX)) {
+                String guiTitle = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_TITLE);
+                if (inventoryTitle.contains(guiTitle) || inventoryTitle.startsWith("🔓")) {
                     return true;
                 }
             } catch (Exception e) {
@@ -316,8 +329,8 @@ public class UnlockGui {
         // Get pending unlock state
         PendingUnlock state = stateManager.getPendingUnlock(playerId);
         if (state == null) {
-            player.sendMessage(Component.text("❌ Unlock session expired. Please try again.")
-                .color(NamedTextColor.RED));
+            String message = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_SESSION_EXPIRED);
+            player.sendMessage(Component.text(message).color(NamedTextColor.RED));
             player.closeInventory();
             logger.warning("No pending unlock state for player " + player.getName());
             return;
@@ -327,8 +340,8 @@ public class UnlockGui {
 
         // Check if state is expired
         if (state.isExpired()) {
-            player.sendMessage(Component.text("❌ Unlock session expired. Please try again.")
-                .color(NamedTextColor.RED));
+            String message = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_SESSION_EXPIRED);
+            player.sendMessage(Component.text(message).color(NamedTextColor.RED));
             player.closeInventory();
             stateManager.cleanupPlayer(playerId);
             logger.warning("Expired unlock state for player " + player.getName());
@@ -342,8 +355,8 @@ public class UnlockGui {
 
         // Check if chunk is still locked
         if (!chunkLockManager.isLocked(state.chunk)) {
-            player.sendMessage(Component.text("✅ Chunk already unlocked!")
-                .color(NamedTextColor.GREEN));
+            String message = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_ALREADY_UNLOCKED);
+            player.sendMessage(Component.text(message).color(NamedTextColor.GREEN));
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_YES, 1.0f, 1.0f);
             player.closeInventory();
             stateManager.cleanupPlayer(playerId);
@@ -353,10 +366,10 @@ public class UnlockGui {
         try {
             // Validate contested chunk claims
             if (state.contested && !progressTracker.canClaimContested(teamId, chunkLockManager.getMaxContestedClaimsPerDay())) {
-                player.sendMessage(Component.text("❌ Contested claim limit reached for today.")
-                    .color(NamedTextColor.RED));
-                player.sendMessage(Component.text("💡 You can claim more contested chunks tomorrow!")
-                    .color(NamedTextColor.YELLOW));
+                String limitMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_CONTESTED_LIMIT);
+                player.sendMessage(Component.text(limitMsg).color(NamedTextColor.RED));
+                String tipMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_CONTESTED_LIMIT_TIP);
+                player.sendMessage(Component.text(tipMsg).color(NamedTextColor.YELLOW));
                 player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
                 return;
             }
@@ -420,8 +433,10 @@ public class UnlockGui {
                     } else {
                         // Check custom items
                         if (!req.hasInInventory(player)) {
-                            player.sendMessage(Component.text("❌ Missing required custom item: " + req.getDisplayName())
-                                .color(NamedTextColor.RED));
+                            Map<String, String> placeholders = new HashMap<>();
+                            placeholders.put("item", req.getDisplayName());
+                            String message = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_MISSING_ITEM, placeholders);
+                            player.sendMessage(Component.text(message).color(NamedTextColor.RED));
                             return;
                         }
                     }
@@ -437,8 +452,8 @@ public class UnlockGui {
             
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Error processing unlock for " + player.getName(), e);
-            player.sendMessage(Component.text("❌ An error occurred while unlocking the chunk.")
-                .color(NamedTextColor.RED));
+            String message = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_ERROR);
+            player.sendMessage(Component.text(message).color(NamedTextColor.RED));
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_HURT, 1.0f, 1.0f);
         }
     }
@@ -459,7 +474,8 @@ public class UnlockGui {
         // Send formatted message
         player.sendMessage(Component.empty());
         player.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━").color(NamedTextColor.DARK_RED));
-        player.sendMessage(Component.text("   💸 INSUFFICIENT FUNDS").color(NamedTextColor.RED).decorate(TextDecoration.BOLD));
+        String title = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_INSUFFICIENT_FUNDS_TITLE);
+        player.sendMessage(Component.text("   " + title).color(NamedTextColor.RED).decorate(TextDecoration.BOLD));
         player.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━").color(NamedTextColor.DARK_RED));
         player.sendMessage(Component.empty());
         
@@ -467,16 +483,24 @@ public class UnlockGui {
         String formattedCost = economyManager.getVaultService().format(requiredCost);
         String formattedNeeded = economyManager.getVaultService().format(needed);
         
-        player.sendMessage(Component.text("💰 Required: ").color(NamedTextColor.GRAY)
-            .append(Component.text(formattedCost).color(NamedTextColor.WHITE)));
-        player.sendMessage(Component.text("🏦 Your balance: ").color(NamedTextColor.GRAY)
-            .append(Component.text(formattedBalance).color(NamedTextColor.RED)));
-        player.sendMessage(Component.text("❗ Missing: ").color(NamedTextColor.GRAY)
-            .append(Component.text(formattedNeeded).color(NamedTextColor.YELLOW)));
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put("cost", formattedCost);
+        String requiredMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_INSUFFICIENT_FUNDS_REQUIRED, placeholders);
+        player.sendMessage(Component.text(requiredMsg).color(NamedTextColor.WHITE));
+        
+        placeholders.put("balance", formattedBalance);
+        String balanceMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_INSUFFICIENT_FUNDS_BALANCE, placeholders);
+        player.sendMessage(Component.text(balanceMsg).color(NamedTextColor.RED));
+        
+        placeholders.put("needed", formattedNeeded);
+        String missingMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_INSUFFICIENT_FUNDS_MISSING, placeholders);
+        player.sendMessage(Component.text(missingMsg).color(NamedTextColor.YELLOW));
         
         player.sendMessage(Component.empty());
-        player.sendMessage(Component.text("💡 Tip: ").color(NamedTextColor.AQUA)
-            .append(Component.text("Earn more money and try again!").color(NamedTextColor.WHITE)));
+        String tipMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_INSUFFICIENT_FUNDS_TIP);
+        String actionMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_INSUFFICIENT_FUNDS_ACTION);
+        player.sendMessage(Component.text(tipMsg).color(NamedTextColor.AQUA)
+            .append(Component.text(" " + actionMsg).color(NamedTextColor.WHITE)));
         player.sendMessage(Component.empty());
         
         logger.info("Player " + player.getName() + 
@@ -497,8 +521,8 @@ public class UnlockGui {
             
             // Process payment
             if (!economyManager.processPayment(player, requirement, state.biome, evaluation)) {
-                player.sendMessage(Component.text("❌ Payment failed. Please try again.")
-                    .color(NamedTextColor.RED));
+                String message = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_PAYMENT_FAILED);
+                player.sendMessage(Component.text(message).color(NamedTextColor.RED));
                 player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
                 return;
             }
@@ -511,8 +535,8 @@ public class UnlockGui {
             
         } catch (Exception e) {
             logger.warning("Money processing failed: " + e.getMessage());
-            player.sendMessage(Component.text("❌ Payment processing failed. Please try again.")
-                .color(NamedTextColor.RED));
+            String message = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_PAYMENT_PROCESSING_FAILED);
+            player.sendMessage(Component.text(message).color(NamedTextColor.RED));
             return;
         }
 
@@ -565,20 +589,28 @@ public class UnlockGui {
         // Send formatted message
         player.sendMessage(Component.empty());
         player.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━").color(NamedTextColor.DARK_RED));
-        player.sendMessage(Component.text("   ❌ INSUFFICIENT RESOURCES").color(NamedTextColor.RED).decorate(TextDecoration.BOLD));
+        String title = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_INSUFFICIENT_RESOURCES_TITLE);
+        player.sendMessage(Component.text("   " + title).color(NamedTextColor.RED).decorate(TextDecoration.BOLD));
         player.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━").color(NamedTextColor.DARK_RED));
         player.sendMessage(Component.empty());
         
-        player.sendMessage(Component.text("📦 Required: ").color(NamedTextColor.GRAY)
-            .append(Component.text(required + "x " + formatMaterialName(material)).color(NamedTextColor.WHITE)));
-        player.sendMessage(Component.text("🎒 You have: ").color(NamedTextColor.GRAY)
-            .append(Component.text(playerHas + "x").color(NamedTextColor.RED)));
-        player.sendMessage(Component.text("❗ Missing: ").color(NamedTextColor.GRAY)
-            .append(Component.text(needed + "x").color(NamedTextColor.YELLOW)));
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put("required", String.valueOf(required));
+        placeholders.put("material", formatMaterialName(material));
+        String requiredMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_INSUFFICIENT_RESOURCES_REQUIRED, placeholders);
+        player.sendMessage(Component.text(requiredMsg).color(NamedTextColor.WHITE));
+        
+        placeholders.put("have", String.valueOf(playerHas));
+        String haveMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_INSUFFICIENT_RESOURCES_HAVE, placeholders);
+        player.sendMessage(Component.text(haveMsg).color(NamedTextColor.RED));
+        
+        placeholders.put("missing", String.valueOf(needed));
+        String missingMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_INSUFFICIENT_RESOURCES_MISSING, placeholders);
+        player.sendMessage(Component.text(missingMsg).color(NamedTextColor.YELLOW));
         
         player.sendMessage(Component.empty());
-        player.sendMessage(Component.text("💡 Tip: ").color(NamedTextColor.AQUA)
-            .append(Component.text("Find more " + formatMaterialName(material) + " and try again!").color(NamedTextColor.WHITE)));
+        String tipMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_INSUFFICIENT_RESOURCES_TIP, placeholders);
+        player.sendMessage(Component.text(tipMsg).color(NamedTextColor.WHITE));
         player.sendMessage(Component.empty());
         
         logger.info("Player " + player.getName() + 
@@ -627,8 +659,8 @@ public class UnlockGui {
             
         } catch (Exception e) {
             logger.log(Level.WARNING, "Failed to finish unlock for " + player.getName(), e);
-            player.sendMessage(Component.text("❌ Failed to complete unlock. Please try again.")
-                .color(NamedTextColor.RED));
+            String message = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_FAILED_COMPLETE);
+            player.sendMessage(Component.text(message).color(NamedTextColor.RED));
         }
     }
     
@@ -683,24 +715,34 @@ public class UnlockGui {
     private void sendUnlockSuccessMessage(Player player, PendingUnlock state) {
         player.sendMessage(Component.empty());
         player.sendMessage(Component.text("═══════════════════════════════════").color(NamedTextColor.GREEN));
-        player.sendMessage(Component.text("   🎉 CHUNK UNLOCKED!").color(NamedTextColor.GREEN).decorate(TextDecoration.BOLD));
+        String title = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_SUCCESS_TITLE);
+        player.sendMessage(Component.text("   " + title).color(NamedTextColor.GREEN).decorate(TextDecoration.BOLD));
         player.sendMessage(Component.text("═══════════════════════════════════").color(NamedTextColor.GREEN));
         player.sendMessage(Component.empty());
         
-        player.sendMessage(Component.text("📍 Location: ").color(NamedTextColor.GRAY)
-            .append(Component.text(state.chunk.getX() + ", " + state.chunk.getZ()).color(NamedTextColor.WHITE)));
-        player.sendMessage(Component.text("🌿 Biome: ").color(NamedTextColor.GRAY)
-            .append(Component.text(BiomeUnlockRegistry.getBiomeDisplayName(state.biome)).color(NamedTextColor.YELLOW)));
-        player.sendMessage(Component.text("📦 Consumed: ").color(NamedTextColor.GRAY)
-            .append(Component.text(state.requirement.amount() + "x " + formatMaterialName(state.requirement.material())).color(NamedTextColor.AQUA)));
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put("location", state.chunk.getX() + ", " + state.chunk.getZ());
+        String locationMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_SUCCESS_LOCATION, placeholders);
+        player.sendMessage(Component.text(locationMsg).color(NamedTextColor.WHITE));
+        
+        placeholders.put("biome", BiomeUnlockRegistry.getBiomeDisplayName(state.biome));
+        String biomeMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_SUCCESS_BIOME, placeholders);
+        player.sendMessage(Component.text(biomeMsg).color(NamedTextColor.YELLOW));
+        
+        placeholders.put("amount", String.valueOf(state.requirement.amount()));
+        placeholders.put("material", formatMaterialName(state.requirement.material()));
+        String consumedMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_SUCCESS_CONSUMED, placeholders);
+        player.sendMessage(Component.text(consumedMsg).color(NamedTextColor.AQUA));
         
         if (state.contested) {
             player.sendMessage(Component.empty());
-            player.sendMessage(Component.text("⚔ Contested chunk claimed!").color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
+            String contestedMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_SUCCESS_CONTESTED);
+            player.sendMessage(Component.text(contestedMsg).color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
         }
         
         player.sendMessage(Component.empty());
-        player.sendMessage(Component.text("✨ You can now build and explore in this chunk!").color(NamedTextColor.GREEN));
+        String successMsg = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_SUCCESS_MESSAGE);
+        player.sendMessage(Component.text(successMsg).color(NamedTextColor.GREEN));
         player.sendMessage(Component.empty());
     }
     

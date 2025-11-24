@@ -1,7 +1,11 @@
 package me.chunklock.util.message;
 
+import me.chunklock.ChunklockPlugin;
+import me.chunklock.config.LanguageManager;
 import me.chunklock.util.ServerCompatibility;
 import org.bukkit.entity.Player;
+
+import java.util.Map;
 
 /**
  * Utility class to handle messaging with Adventure API compatibility.
@@ -231,5 +235,80 @@ public final class MessageUtil {
     public static String getCompatibilityInfo() {
         return "MessageUtil - Adventure: " + ServerCompatibility.isAdventureAvailable() + 
                ", Server: " + ServerCompatibility.getServerType().getDisplayName();
+    }
+    
+    // ===== Language System Integration =====
+    
+    /**
+     * Gets a language message by key.
+     * 
+     * @param key The language key (e.g., "commands.unlock.usage")
+     * @return The message, or the key if not found
+     */
+    public static String getMessage(String key) {
+        LanguageManager langManager = getLanguageManager();
+        if (langManager != null) {
+            return langManager.getMessage(key);
+        }
+        return key;
+    }
+    
+    /**
+     * Gets a language message by key with placeholder replacement.
+     * 
+     * @param key The language key
+     * @param placeholders Map of placeholder names to values
+     * @return The formatted message with placeholders replaced
+     */
+    public static String getMessage(String key, Map<String, String> placeholders) {
+        LanguageManager langManager = getLanguageManager();
+        if (langManager != null) {
+            return langManager.getMessage(key, placeholders);
+        }
+        // Fallback: simple placeholder replacement
+        if (placeholders != null) {
+            String message = key;
+            for (Map.Entry<String, String> entry : placeholders.entrySet()) {
+                message = message.replace("%" + entry.getKey() + "%", entry.getValue());
+            }
+            return message;
+        }
+        return key;
+    }
+    
+    /**
+     * Sends a language message to a player.
+     * 
+     * @param player The player to send the message to
+     * @param key The language key
+     */
+    public static void sendLangMessage(Player player, String key) {
+        String message = getMessage(key);
+        sendMessage(player, message);
+    }
+    
+    /**
+     * Sends a language message to a player with placeholder replacement.
+     * 
+     * @param player The player to send the message to
+     * @param key The language key
+     * @param placeholders Map of placeholder names to values
+     */
+    public static void sendLangMessage(Player player, String key, Map<String, String> placeholders) {
+        String message = getMessage(key, placeholders);
+        sendMessage(player, message);
+    }
+    
+    /**
+     * Gets the LanguageManager instance from the plugin.
+     * 
+     * @return LanguageManager instance, or null if not available
+     */
+    private static LanguageManager getLanguageManager() {
+        ChunklockPlugin plugin = ChunklockPlugin.getInstance();
+        if (plugin != null && plugin.getConfigManager() != null) {
+            return plugin.getConfigManager().getLanguageManager();
+        }
+        return null;
     }
 }
