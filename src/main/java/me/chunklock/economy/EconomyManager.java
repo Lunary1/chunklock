@@ -5,6 +5,8 @@ import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.ChunklockPlugin;
+import me.chunklock.util.world.BiomeUtil;
+import me.chunklock.util.item.MaterialUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -177,7 +179,7 @@ public class EconomyManager {
         
         plugin.getLogger().fine("Calculating requirement for " + player.getName() + 
             " - Type: " + effectiveType.getConfigName() + 
-            ", Biome: " + biome.name() + 
+            ", Biome: " + BiomeUtil.getBiomeName(biome) + 
             ", Difficulty: " + evaluation.difficulty.name() + 
             ", Score: " + evaluation.score);
         
@@ -238,7 +240,7 @@ public class EconomyManager {
                 
                 OpenAIChunkCostAgent.OpenAICostResult aiResult = openAIAgent.calculateOptimizedCost(player, chunk);
                 
-                plugin.getLogger().fine("OpenAI result: Material=" + aiResult.getMaterial().name() + 
+                plugin.getLogger().fine("OpenAI result: Material=" + MaterialUtil.getMaterialName(aiResult.getMaterial()) + 
                     ", Amount=" + aiResult.getAmount() + ", AI Processed=" + aiResult.isAiProcessed() + 
                     ", Explanation=" + aiResult.getExplanation());
                 
@@ -246,7 +248,7 @@ public class EconomyManager {
                 double baseVaultCost = convertMaterialToVaultCost(aiResult.getMaterial(), aiResult.getAmount());
                 
                 plugin.getLogger().fine("Converted material cost to vault: " + aiResult.getAmount() + " " + 
-                    aiResult.getMaterial().name() + " = $" + baseVaultCost);
+                    MaterialUtil.getMaterialName(aiResult.getMaterial()) + " = $" + baseVaultCost);
                 
                 // Apply vault-specific multipliers to the AI-suggested base cost
                 double cost = baseVaultCost;
@@ -266,9 +268,9 @@ public class EconomyManager {
                 
                 // Apply biome multiplier (reduced impact since AI accounts for this)
                 double biomeMultiplier = economyConfig != null ? 
-                    economyConfig.getBiomeMultiplier(biome.name()) : 1.0;
+                    economyConfig.getBiomeMultiplier(BiomeUtil.getBiomeName(biome)) : 1.0;
                 cost *= Math.pow(biomeMultiplier, 0.7); // Reduced power since AI considers biome
-                plugin.getLogger().fine("After biome multiplier (" + biome.name() + " = " + biomeMultiplier + "^0.7): $" + cost);
+                plugin.getLogger().fine("After biome multiplier (" + BiomeUtil.getBiomeName(biome) + " = " + biomeMultiplier + "^0.7): $" + cost);
                 
                 // Apply team multiplier if available
                 if (biomeRegistry.isTeamIntegrationActive()) {
@@ -304,9 +306,9 @@ public class EconomyManager {
                 
                 // Store the calculated result in database cache for future use
                 try {
-                    costDatabase.storeCost(player, chunk, calculatedResult, 
-                        biome.name(), evaluation.difficulty.name(), evaluation.score, 
-                        aiResult.isAiProcessed(), aiResult.getExplanation(), configHash);
+                costDatabase.storeCost(player, chunk, calculatedResult, 
+                    BiomeUtil.getBiomeName(biome), evaluation.difficulty.name(), evaluation.score, 
+                    aiResult.isAiProcessed(), aiResult.getExplanation(), configHash);
                     plugin.getLogger().fine("Stored AI-calculated cost in database cache for player " + player.getName());
                 } catch (Exception e) {
                     plugin.getLogger().warning("Failed to store cost in database cache: " + e.getMessage());
@@ -343,9 +345,9 @@ public class EconomyManager {
         
         // Apply biome multiplier
         double biomeMultiplier = economyConfig != null ? 
-            economyConfig.getBiomeMultiplier(biome.name()) : 1.0;
+            economyConfig.getBiomeMultiplier(BiomeUtil.getBiomeName(biome)) : 1.0;
         cost *= biomeMultiplier;
-        plugin.getLogger().info("After biome multiplier (" + biome.name() + " = " + biomeMultiplier + "): $" + cost);
+        plugin.getLogger().info("After biome multiplier (" + BiomeUtil.getBiomeName(biome) + " = " + biomeMultiplier + "): $" + cost);
         
         // Apply team multiplier if available
         if (biomeRegistry.isTeamIntegrationActive()) {
@@ -368,7 +370,7 @@ public class EconomyManager {
                 String configHash = costDatabase.generateConfigHash();
                 
                 costDatabase.storeCost(player, chunk, traditionalResult, 
-                    biome.name(), evaluation.difficulty.name(), evaluation.score, 
+                    BiomeUtil.getBiomeName(biome), evaluation.difficulty.name(), evaluation.score, 
                     false, "", configHash);
                 plugin.getLogger().fine("Stored traditional cost in database cache for player " + player.getName());
             } catch (Exception e) {
@@ -596,7 +598,7 @@ public class EconomyManager {
      * Format material name for display
      */
     private String formatMaterialName(Material material) {
-        return material.name().toLowerCase().replace('_', ' ');
+        return MaterialUtil.formatMaterialName(material);
     }
     
     // Getters

@@ -2,6 +2,7 @@ package me.chunklock.hologram.util;
 
 import org.bukkit.Material;
 import me.chunklock.economy.items.ItemRequirement;
+import me.chunklock.util.item.MaterialUtil;
 
 /**
  * Utility class for formatting and text manipulation in holograms.
@@ -21,7 +22,7 @@ public final class HologramTextUtils {
             return "Unknown Item";
         }
 
-        String name = material.name().toLowerCase().replace('_', ' ');
+        String name = MaterialUtil.formatMaterialName(material);
         StringBuilder formatted = new StringBuilder();
 
         boolean capitalizeNext = true;

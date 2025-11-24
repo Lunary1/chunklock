@@ -764,7 +764,7 @@ public class UnlockGui {
      * Format material name for display.
      */
     private String formatMaterialName(Material material) {
-        String name = material.name().toLowerCase().replace("_", " ");
+        String name = me.chunklock.util.item.MaterialUtil.formatMaterialName(material);
         String[] words = name.split(" ");
         StringBuilder formatted = new StringBuilder();
         

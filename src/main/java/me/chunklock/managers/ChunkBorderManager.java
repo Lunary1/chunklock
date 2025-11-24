@@ -675,7 +675,7 @@ public class ChunkBorderManager {
     public Map<String, Object> getBorderStats() {
         Map<String, Object> stats = new HashMap<>();
         stats.put("enabled", enabled);
-        stats.put("borderMaterial", borderMaterial.name());
+        stats.put("borderMaterial", me.chunklock.util.item.MaterialUtil.getMaterialName(borderMaterial));
         stats.put("scanRange", scanRange);
         stats.put("useFullHeight", useFullHeight);
         stats.put("borderHeight", borderHeight);

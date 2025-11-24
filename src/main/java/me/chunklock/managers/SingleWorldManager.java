@@ -195,7 +195,9 @@ public class SingleWorldManager {
             world.setDifficulty(Difficulty.NORMAL);
             world.setPVP(false);
             world.setSpawnFlags(true, false); // Spawn animals but not monsters at spawn
-            world.setKeepSpawnInMemory(true);
+            // Note: setKeepSpawnInMemory() is deprecated in newer Paper versions
+            // The world will keep spawn in memory by default, so this call is safe to remove
+            // Keeping commented for reference: world.setKeepSpawnInMemory(true);
             
             // Set world border
             WorldBorder border = world.getWorldBorder();

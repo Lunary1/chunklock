@@ -338,8 +338,8 @@ public class ChunkEvaluator {
                material == Material.SEAGRASS ||
                material == Material.TALL_SEAGRASS ||
                material == Material.SEA_PICKLE ||
-               material.name().contains("CORAL") ||
-               material.name().contains("SPONGE");
+               me.chunklock.util.item.MaterialUtil.getMaterialName(material).contains("CORAL") ||
+               me.chunklock.util.item.MaterialUtil.getMaterialName(material).contains("SPONGE");
     }
 
     /**
