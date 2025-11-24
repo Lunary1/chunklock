@@ -1,7 +1,7 @@
 # Chunklock
 
 **Version**: 1.2.7  
-**Minecraft**: Paper 1.20.4+ (tested up to 1.21.4)  
+**Minecraft**: Paper 1.20.4+ (tested up to 1.21.10)  
 **License**: Proprietary / Private
 
 ---
