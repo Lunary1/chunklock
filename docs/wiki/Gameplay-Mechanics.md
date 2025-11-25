@@ -54,28 +54,39 @@ Players expand their territory by unlocking adjacent chunks through resource inv
 
 ### Cost Calculation System
 
-Chunk unlock costs are dynamically calculated using multiple factors to create balanced progression:
+Chunk unlock costs are dynamically calculated using multiple factors to create balanced progression. Chunklock supports two cost calculation methods:
 
-#### Base Cost Formula
+1. **Traditional Calculation**: Formula-based cost calculation (default)
+2. **AI-Powered Calculation**: OpenAI/ChatGPT integration for dynamic pricing (optional)
+
+#### Traditional Cost Formula
 
 ```
 Total Cost = Base Cost × Difficulty × Distance × Biome × Progress × Team
 ```
 
+#### AI-Powered Cost Calculation
+
+When OpenAI integration is enabled (`openai.yml`), costs are calculated dynamically by AI:
+
+- AI considers player context (progress, resources, biome)
+- Costs adapt to player behavior and server economy
+- Responses are cached to reduce API calls
+- Falls back to traditional calculation if AI fails
+- Cost bounds prevent extreme pricing (configurable in `openai.yml`)
+
 #### Factor Breakdown
 
-**1. Base Cost**: Foundation cost from configuration
+**1. Base Cost**: Foundation cost from configuration (`economy.yml`)
 
 ```yaml
-economy:
-  vault:
-    base-cost: 100.0
-  materials:
-    base-requirements:
-      STONE: 32
-      COAL: 16
-      IRON_INGOT: 8
+# economy.yml
+vault:
+  base-cost: 100.0
+  cost-per-unlocked: 25.0
 ```
+
+For materials economy, base requirements come from `biome-unlocks.yml` (see Biome Requirements section below).
 
 **2. Difficulty Multiplier**: Progressive scaling
 
@@ -94,19 +105,23 @@ Distance 5: ×1.61 (161% of base cost)
 Distance 10: ×2.59 (259% of base cost)
 ```
 
-**4. Biome Multiplier**: Different biomes have different costs
+**4. Biome Multiplier**: Different biomes have different costs (`economy.yml`)
 
 ```yaml
-economy:
+# economy.yml
+vault:
   biome-multipliers:
-    OCEAN: 0.8 # Cheaper - limited resources
-    DESERT: 0.9 # Slightly cheaper
-    PLAINS: 1.0 # Standard cost
-    FOREST: 1.1 # Slightly expensive - good resources
-    JUNGLE: 1.3 # Expensive - rich resources
-    MOUNTAIN: 1.2 # Expensive - mining potential
-    NETHER: 2.0 # Very expensive - dangerous but valuable
+    PLAINS: 1.0
+    FOREST: 1.2
+    DESERT: 1.5
+    JUNGLE: 2.0
+    OCEAN: 1.8
+    SWAMP: 1.6
+    BADLANDS: 2.2
+    NETHER_WASTES: 3.0
 ```
+
+**Note**: Biome multipliers only apply to Vault economy. Materials economy uses biome-specific requirements from `biome-unlocks.yml`.
 
 **5. Progress Scaling**: More unlocked chunks = higher costs
 
@@ -117,12 +132,15 @@ Chunks 26-50: +50% additional scaling
 Chunks 51+: +75% additional scaling
 ```
 
-**6. Team Bonus**: Teams get cost reductions
+**6. Team Bonus**: Teams affect costs (`team-settings.yml`)
 
 ```yaml
-teams:
-  cost-reduction: 0.15 # 15% cost reduction for team members
+# team-settings.yml
+team-cost-multiplier: 0.15 # Additional cost per extra team member (15%)
+base-team-cost: 1.0 # Base multiplier for teams
 ```
+
+Team costs scale: `base × (1.0 + (team-size - 1) × team-cost-multiplier)`
 
 #### Example Cost Calculation
 
@@ -178,45 +196,55 @@ economy:
 **Best for**: Pure survival servers, resource-focused gameplay
 
 ```yaml
-economy:
-  type: "materials"
-  materials:
-    base-requirements:
-      STONE: 32
-      COAL: 16
-      IRON_INGOT: 8
-      GOLD_INGOT: 2
+# economy.yml
+type: "materials"
 ```
 
 **Features**:
 
-- Requires specific items from player inventory
-- Scales material costs with progression
+- Requires specific items from player inventory (defined in `biome-unlocks.yml`)
+- Biome-specific requirements (each biome has unique requirements)
+- Supports custom items from Oraxen and MMOItems
 - Encourages mining and resource gathering
 - No external dependencies needed
 
+**Biome Requirements** (`biome-unlocks.yml`):
+
+Each biome has specific unlock requirements. Requirements can include:
+- Vanilla Minecraft items (WHEAT, DIAMOND, etc.)
+- Custom items from Oraxen
+- Custom items from MMOItems
+
+**Example Biome Requirements**:
+
+```yaml
+# biome-unlocks.yml
+PLAINS:
+  WHEAT: 8
+  HAY_BLOCK: 2
+
+FOREST:
+  OAK_LOG: 16
+  APPLE: 4
+
+JUNGLE:
+  vanilla:
+    COCOA_BEANS: 16
+    MELON_SLICE: 8
+  custom:
+    - plugin: oraxen
+      item: mythic_sword
+      amount: 1
+```
+
 **Player Experience**:
 
-```
-/chunklock cost       # Shows required materials
-/chunklock unlock     # Consumes items from inventory
-```
+- Right-click a block or use `/chunklock gui` to see requirements
+- Check holograms for exact requirements
+- All listed items must be in inventory to unlock
+- Custom items are automatically detected if plugins are installed
 
-#### Material Scaling
-
-Material requirements scale with the same multipliers as Vault economy:
-
-```
-Base Requirements:
-- Stone: 32 blocks
-- Coal: 16 pieces
-- Iron Ingot: 8 pieces
-
-At Distance 5, 15th chunk, Forest biome, with team:
-- Stone: 32 × 2.61 = 84 blocks
-- Coal: 16 × 2.61 = 42 pieces
-- Iron Ingot: 8 × 2.61 = 21 pieces
-```
+**Note**: All items listed for a biome are **REQUIRED** (all-or-nothing system).
 
 ## Team System
 
@@ -359,17 +387,19 @@ Priority 3: Support team expansion
 
 ### Resource-Rich Biomes
 
-**Jungle** (×1.3 multiplier):
+**Jungle** (Vault: ×2.0 multiplier, Materials: COCOA_BEANS + MELON_SLICE):
 
-- **Pros**: Cocoa, unique wood, rich vegetation
+- **Pros**: Cocoa, unique wood, rich vegetation, may require custom items
 - **Strategy**: Unlock for renewable resource farms
 - **Timing**: Mid-game when you can afford the premium
+- **Requirements**: Check `biome-unlocks.yml` for exact requirements
 
-**Mountain** (×1.2 multiplier):
+**Mountain/Windswept Hills** (Vault: ×1.2 multiplier, Materials: STONE + EMERALD):
 
 - **Pros**: Exposed ores, stone variety, height advantage
 - **Strategy**: Early priority for mining operations
 - **Timing**: Early game for resource generation
+- **Requirements**: STONE: 40, EMERALD: 1 (from `biome-unlocks.yml`)
 
 ### Specialized Biomes
 
@@ -387,11 +417,12 @@ Priority 3: Support team expansion
 
 ### High-Value Biomes
 
-**Nether** (×2.0 multiplier):
+**Nether** (Vault: ×3.0 multiplier, Materials: NETHERRACK + NETHER_WART):
 
 - **Pros**: Unique resources, rapid travel, exclusive materials
 - **Strategy**: Late-game team investment
 - **Timing**: Only when team can pool resources
+- **Requirements**: NETHERRACK: 64, NETHER_WART: 16 (from `biome-unlocks.yml`)
 
 ## Visual Feedback Systems
 
@@ -436,19 +467,29 @@ holograms:
 
 ### User Interface
 
-GUI systems make progression accessible:
+Chunklock provides an interactive GUI system for easy chunk management:
 
-```
-/chunklock gui    # Open chunk management interface
-```
+**Opening the GUI**:
+
+- **Right-click** any block while standing in an unlocked chunk (recommended)
+- Or use `/chunklock gui` command
 
 **GUI Features**:
 
-- Visual chunk map
-- Cost calculations
-- Unlock previews
-- Team management
-- Progress tracking
+- **Visual Chunk Map**: See your unlocked chunks and adjacent unlockable chunks
+- **Click to Unlock**: Unlock chunks directly from the GUI
+- **Cost Display**: See exact costs (materials or money) before unlocking
+- **Biome Requirements**: View all required items including custom items
+- **Difficulty Ratings**: Color-coded difficulty (Easy, Normal, Hard, Impossible)
+- **Real-time Updates**: GUI updates as you unlock chunks
+- **Team Progress**: See team member contributions
+
+**GUI Tips**:
+
+- Hover over chunks to see detailed information
+- Custom items from Oraxen/MMOItems show their display names
+- Costs update in real-time (especially with OpenAI integration)
+- Use the GUI to plan your expansion strategy
 
 ## Performance Considerations
 

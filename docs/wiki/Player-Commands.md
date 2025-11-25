@@ -101,13 +101,17 @@ Next Unlock Cost: 32 Stone, 16 Iron Ore
 - Must be standing in a locked chunk
 - Chunk must be adjacent to an already unlocked chunk
 - Must have sufficient resources/money to pay the unlock cost
+- Must meet biome-specific requirements (may include custom items from Oraxen/MMOItems)
 
 **Process**:
 
 1. Checks if chunk can be unlocked
-2. Calculates unlock cost based on difficulty and biome
-3. Prompts for payment confirmation
-4. Unlocks chunk if payment is successful
+2. Calculates unlock cost based on difficulty, biome, and progress
+3. Checks for required materials (vanilla items and/or custom items)
+4. Prompts for payment confirmation
+5. Unlocks chunk if payment is successful
+
+**Note**: Biome requirements may include custom items from Oraxen or MMOItems. Check the unlock GUI or holograms to see exact requirements.
 
 ---
 
@@ -292,60 +296,41 @@ Team Progress: 67%
 
 ---
 
-## Advanced Commands
+## GUI System
 
-### `/chunklock gui`
+### Opening the Unlock GUI
 
 **Permission**: `chunklock.use`  
-**Description**: Opens the chunk unlock GUI interface.
+**Description**: Opens the interactive chunk unlock GUI interface.
 
+**Method 1 - Right-Click** (Recommended):
+- Right-click any block while standing in an unlocked chunk
+- GUI opens automatically showing adjacent unlockable chunks
+
+**Method 2 - Command**:
 ```
 /chunklock gui
 /cl gui
 ```
 
-**Features**:
+**GUI Features**:
 
-- Visual representation of unlockable chunks
-- Click to unlock chunks
-- Shows costs and requirements
-- Displays team member progress
+- Visual map of your unlocked chunks and adjacent unlockable chunks
+- Click chunks to unlock them directly from the GUI
+- Shows exact costs (materials or money)
+- Displays biome-specific requirements including custom items
+- Shows difficulty ratings (Easy, Normal, Hard, Impossible)
+- Real-time cost calculations
+- Team member progress indicators
+- Color-coded chunk states (unlocked, unlockable, locked)
+
+**Tips**:
+- The GUI updates in real-time as you unlock chunks
+- Hover over chunks to see detailed information
+- Custom items from Oraxen/MMOItems are shown with their display names
+- Costs may vary if OpenAI integration is enabled (dynamic pricing)
 
 ---
-
-### `/chunklock progress`
-
-**Permission**: `chunklock.use`  
-**Description**: Shows detailed progression statistics.
-
-```
-/chunklock progress
-/cl progress
-```
-
-**Example Output**:
-
-```
-=== Progression Details ===
-Biomes Unlocked: 5/12
-- Plains: 8 chunks
-- Forest: 12 chunks
-- Desert: 6 chunks
-- Ocean: 3 chunks
-- Mountains: 2 chunks
-
-Difficulty Distribution:
-- Easy: 15 chunks
-- Normal: 12 chunks
-- Hard: 4 chunks
-- Impossible: 0 chunks
-
-Resources Spent:
-- Stone: 2,456
-- Iron: 1,234
-- Coal: 3,789
-- Diamonds: 67
-```
 
 ---
 
@@ -384,15 +369,17 @@ Resources Spent:
 # Return to spawn
 /chunklock spawn
 
-# Open unlock GUI
+# Open unlock GUI (or right-click a block)
 /chunklock gui
 
-# Check progression
-/chunklock progress
+# Check your status
+/chunklock status
 ```
 
 ## Command Permissions
 
+| Command               | Permission Node    | Default |
+| --------------------- | ------------------ | ------- |
 | Command               | Permission Node    | Default |
 | --------------------- | ------------------ | ------- |
 | `/chunklock help`     | `chunklock.use`    | ✅ True |
@@ -401,8 +388,7 @@ Resources Spent:
 | `/chunklock spawn`    | `chunklock.spawn`  | ✅ True |
 | `/chunklock unlock`   | `chunklock.unlock` | ✅ True |
 | `/chunklock team *`   | `chunklock.team`   | ✅ True |
-| `/chunklock gui`      | `chunklock.use`    | ✅ True |
-| `/chunklock progress` | `chunklock.use`    | ✅ True |
+| GUI (right-click)      | `chunklock.use`    | ✅ True |
 
 ## Command Cooldowns
 
@@ -425,6 +411,8 @@ Some commands have cooldowns to prevent spam:
 **"Insufficient resources"**
 
 - Gather more materials or earn more money to unlock chunks
+- Check if biome requires custom items (Oraxen/MMOItems) - these must be in your inventory
+- Use `/chunklock status` or the GUI to see exact requirements
 
 **"Chunk is not adjacent"**
 
@@ -441,10 +429,13 @@ Some commands have cooldowns to prevent spam:
 ## Tips for Players
 
 1. **Start Early**: Use `/chunklock start` as soon as you join the server
-2. **Team Up**: Join or create teams for faster progression
-3. **Plan Ahead**: Use `/chunklock gui` to plan your expansion strategy
-4. **Resource Management**: Balance exploration with resource gathering
-5. **Communication**: Coordinate with team members for efficient unlocking
+2. **Use the GUI**: Right-click blocks to open the unlock GUI - it's the easiest way to see costs and unlock chunks
+3. **Team Up**: Join or create teams for faster progression and cost reductions
+4. **Check Requirements**: Some biomes require custom items - check the GUI or holograms before attempting to unlock
+5. **Plan Ahead**: Use the GUI to plan your expansion strategy and see which chunks are cheapest
+6. **Resource Management**: Balance exploration with resource gathering - costs increase with progress
+7. **Language Customization**: Server admins can customize all messages - ask them if you need clarification
+8. **AI Costs**: If OpenAI is enabled, costs may vary dynamically - check costs right before unlocking
 
 ---
 

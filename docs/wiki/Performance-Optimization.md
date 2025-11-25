@@ -44,109 +44,113 @@ Monitor these key metrics to assess plugin performance:
 
 ### Core Performance Settings
 
+**performance.yml**:
 ```yaml
-performance:
-  # Operation limits per tick
-  max-operations-per-tick: 5 # Reduce for smaller servers
-  chunk-loading-threads: 4 # Match CPU core count
-
-  # Async processing
-  async-chunk-loading: true # Always enable
-  async-border-updates: true # Enable for better performance
-  async-hologram-updates: true # Enable if using holograms
-
-  # Batch processing
-  batch-process-size: 20 # Reduce on smaller servers
-  database-batch-size: 50 # Increase for better DB performance
+# Border update performance
+border-update-delay: 2 # Ticks between border updates
+max-border-updates-per-tick: 10 # Maximum border updates processed per tick
 ```
 
-### Cache Configuration
-
-Proper caching dramatically improves performance:
-
+**holograms.yml** (Performance section):
 ```yaml
 performance:
-  caching:
-    # Player data caching
-    player-data-cache: 500 # Adjust based on player count
-    player-cache-expiry: 1800 # 30 minutes
-
-    # Chunk data caching
-    chunk-data-cache: 2000 # Adjust based on world size
-    chunk-cache-expiry: 3600 # 1 hour
-
-    # Team data caching
-    team-data-cache: 100 # Usually sufficient
-    team-cache-expiry: 1800 # 30 minutes
-
-    # Calculation caching
-    cost-calculation-cache: 1000 # Cache cost calculations
-    calculation-cache-expiry: 600 # 10 minutes
+  scan-range: 3 # Range to scan for chunks (3x3 around player)
+  max-holograms-per-player: 16 # Maximum holograms per player to prevent lag
+  cleanup-interval: 100 # Ticks between hologram cleanup cycles
+  debounce-delay-ticks: 3 # Delay between rapid hologram updates to prevent spam
+  max-active-per-player: 100 # Maximum active holograms per player for distance culling
+  max-view-distance: 128.0 # Maximum view distance for holograms in blocks
+  culling-sweep-period: 60 # Ticks between distance culling sweeps (3 seconds)
 ```
+
+**openai.yml** (Performance settings):
+```yaml
+cache-duration-minutes: 5 # How long to cache AI responses to reduce API calls
+request-timeout-seconds: 10 # Timeout for API requests
+```
+
+### Caching Systems
+
+Chunklock uses multiple caching systems for optimal performance:
+
+**OpenAI Response Caching** (`openai.yml`):
+- AI responses are cached for 5 minutes by default
+- Reduces API calls and costs
+- Configurable via `cache-duration-minutes`
+
+**MapDB Database**:
+- Uses MapDB for persistent data storage
+- Automatic caching of frequently accessed data
+- Memory-efficient storage system
+
+**Hologram Caching** (`holograms.yml`):
+- Hologram data is cached per player
+- Distance culling reduces active holograms
+- Automatic cleanup of unused holograms
 
 ### Server Size Configurations
 
 #### Small Server (1-20 players)
 
+**performance.yml**:
 ```yaml
+border-update-delay: 2
+max-border-updates-per-tick: 5
+```
+
+**holograms.yml**:
+```yaml
+update-interval: 20 # Less frequent updates
 performance:
-  max-operations-per-tick: 3
-  chunk-loading-threads: 2
-  batch-process-size: 10
+  max-holograms-per-player: 10
+  scan-range: 2
+```
 
-  caching:
-    player-data-cache: 100
-    chunk-data-cache: 500
-    team-data-cache: 25
-    cost-calculation-cache: 200
-
-  borders:
-    update-interval: 60 # Less frequent updates
-
-  holograms:
-    update-interval: 20 # Less frequent updates
+**openai.yml** (if using OpenAI):
+```yaml
+cache-duration-minutes: 10 # Longer cache for small servers
 ```
 
 #### Medium Server (20-100 players)
 
+**performance.yml**:
 ```yaml
+border-update-delay: 2
+max-border-updates-per-tick: 10
+```
+
+**holograms.yml**:
+```yaml
+update-interval: 20 # Standard updates
 performance:
-  max-operations-per-tick: 5
-  chunk-loading-threads: 4
-  batch-process-size: 20
+  max-holograms-per-player: 16
+  scan-range: 3
+```
 
-  caching:
-    player-data-cache: 500
-    chunk-data-cache: 2000
-    team-data-cache: 100
-    cost-calculation-cache: 1000
-
-  borders:
-    update-interval: 30 # Standard updates
-
-  holograms:
-    update-interval: 10 # Standard updates
+**openai.yml** (if using OpenAI):
+```yaml
+cache-duration-minutes: 5 # Standard cache duration
 ```
 
 #### Large Server (100+ players)
 
+**performance.yml**:
 ```yaml
+border-update-delay: 1
+max-border-updates-per-tick: 15
+```
+
+**holograms.yml**:
+```yaml
+update-interval: 20 # More frequent updates
 performance:
-  max-operations-per-tick: 8
-  chunk-loading-threads: 6
-  batch-process-size: 30
+  max-holograms-per-player: 20
+  scan-range: 3
+```
 
-  caching:
-    player-data-cache: 1000
-    chunk-data-cache: 5000
-    team-data-cache: 200
-    cost-calculation-cache: 2000
-
-  borders:
-    update-interval: 20 # More frequent updates
-
-  holograms:
-    update-interval: 5 # More frequent updates
+**openai.yml** (if using OpenAI):
+```yaml
+cache-duration-minutes: 3 # Shorter cache for more dynamic pricing
 ```
 
 ## Visual Effects Optimization

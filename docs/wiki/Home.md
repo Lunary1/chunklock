@@ -7,35 +7,23 @@ Welcome to the comprehensive documentation for **Chunklock**, an advanced Minecr
 ### 📚 **Getting Started**
 
 - [Installation Guide](Installation-Guide) - Complete setup instructions
-- [Quick Start Tutorial](Quick-Start-Tutorial) - Get up and running in 5 minutes
-- [Configuration Overview](Configuration-Overview) - Essential configuration settings
+- [Configuration Reference](Configuration-Reference) - Complete configuration documentation
 
 ### 🎮 **Player Guides**
 
 - [Player Commands](Player-Commands) - All available player commands
 - [Gameplay Mechanics](Gameplay-Mechanics) - How chunk progression works
-- [Team System](Team-System) - Collaborative gameplay features
-- [Economy Integration](Economy-Integration) - Cost and payment systems
 
 ### 🔧 **Administration**
 
 - [Admin Commands](Admin-Commands) - Administrative tools and commands
-- [Configuration Reference](Configuration-Reference) - Complete config.yml documentation
-- [Permissions Guide](Permissions-Guide) - Permission nodes and setup
+- [Configuration Reference](Configuration-Reference) - Complete modular configuration documentation
 - [Troubleshooting](Troubleshooting) - Common issues and solutions
 
 ### 🚀 **Advanced Features**
 
-- [Hologram System](Hologram-System) - Visual enhancement features
 - [API Documentation](API-Documentation) - Developer integration guide
-- [Service Architecture](Service-Architecture) - Plugin architecture overview
 - [Performance Optimization](Performance-Optimization) - Server optimization tips
-
-### 🛠️ **Development**
-
-- [Plugin Architecture](Plugin-Architecture) - Technical architecture details
-- [Contributing Guide](Contributing-Guide) - How to contribute to development
-- [Change Log](Change-Log) - Version history and updates
 
 ## Plugin Overview
 
@@ -45,16 +33,19 @@ Welcome to the comprehensive documentation for **Chunklock**, an advanced Minecr
 
 - ✅ **Strategic Chunk Progression** - Unlock chunks strategically based on difficulty and resources
 - ✅ **Team Collaboration** - Work together with friends to expand your territory
-- ✅ **Visual Enhancements** - Glass borders, holograms, and particle effects
+- ✅ **Visual Enhancements** - Glass borders, holograms, and interactive GUIs
 - ✅ **Economy Integration** - Flexible payment systems (materials or Vault economy)
-- ✅ **Performance Optimized** - Supports 200+ concurrent players
-- ✅ **Multi-World Support** - Individual player worlds and team systems
-- ✅ **Administrative Tools** - Comprehensive management and monitoring tools
+- ✅ **AI-Powered Cost Calculation** - Optional OpenAI/ChatGPT integration for dynamic pricing
+- ✅ **Custom Items Support** - Integration with Oraxen and MMOItems for biome unlock requirements
+- ✅ **Multi-Language System** - Complete language customization with support for multiple languages
+- ✅ **Modular Configuration** - Organized configuration system with separate files for each feature
+- ✅ **Performance Optimized** - Supports 200+ concurrent players with async processing and caching
+- ✅ **Administrative Tools** - Comprehensive management and debugging tools
 
 ### Supported Versions
 
-- **Minecraft**: 1.20.4+
-- **Server Software**: Paper, Spigot, Pufferfish
+- **Minecraft**: 1.21.10+
+- **Server Software**: Paper (recommended), Spigot, Pufferfish
 - **Java**: 17+
 
 ### Dependencies
@@ -63,14 +54,17 @@ Welcome to the comprehensive documentation for **Chunklock**, an advanced Minecr
 - **Optional**:
   - [Vault](https://www.spigotmc.org/resources/vault.34315/) - For economy integration
   - [FancyHolograms](https://www.spigotmc.org/resources/fancyholograms.96592/) - For enhanced hologram displays
+  - [Oraxen](https://www.spigotmc.org/resources/oraxen.72448/) - For custom items in biome requirements
+  - [MMOItems](https://www.spigotmc.org/resources/mmoitems.39267/) - Alternative custom items plugin support
 
 ## Installation Quick Start
 
 1. **Download** Chunklock plugin JAR file
 2. **Place** in your server's `plugins/` folder
-3. **Start** your server to generate default configuration
-4. **Configure** settings in `plugins/Chunklock/config.yml`
-5. **Restart** server and enjoy!
+3. **Start** your server to generate default configuration files
+4. **Configure** settings in `plugins/Chunklock/` (modular config system with multiple files)
+5. **Setup world** using `/chunklock setup <worldname> <diameter>`
+6. **Restart** server and enjoy!
 
 For detailed installation instructions, see our [Installation Guide](Installation-Guide).
 
@@ -83,9 +77,10 @@ For detailed installation instructions, see our [Installation Guide](Installatio
 
 ## Version Information
 
-**Current Version**: 1.2.7  
-**API Version**: 1.20  
-**Last Updated**: October 10, 2025
+**Current Version**: 2.1.0  
+**API Version**: 1.21  
+**Minecraft Version**: 1.21.10+  
+**Last Updated**: December 2024
 
 ---
 

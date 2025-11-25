@@ -10,6 +10,39 @@ Admin commands provide powerful tools for managing the Chunklock plugin, monitor
 
 ## Server Management Commands
 
+### `/chunklock setup <worldname> <diameter>`
+
+**Permission**: `chunklock.admin`  
+**Description**: Initializes a world for Chunklock use. This must be run before players can use the plugin.
+
+```
+/chunklock setup chunklock_world 30000
+/cl setup myworld 50000
+```
+
+**Parameters**:
+
+- `worldname` - Name of the world to initialize (must exist)
+- `diameter` - World diameter in blocks (e.g., 30000 = 30,000 block diameter)
+
+**What it does**:
+
+- Configures the world for Chunklock
+- Sets up world boundaries
+- Enables chunk locking in that world
+- Updates `worlds.yml` configuration
+
+**Example**:
+
+```
+/chunklock setup chunklock_world 30000
+> World 'chunklock_world' initialized with diameter 30000 blocks
+```
+
+**Note**: This command must be run before players can use `/chunklock start`.
+
+---
+
 ### `/chunklock reload`
 
 **Permission**: `chunklock.reload`  
@@ -22,15 +55,17 @@ Admin commands provide powerful tools for managing the Chunklock plugin, monitor
 
 **What it reloads**:
 
-- Configuration settings from `config.yml`
+- All modular configuration files (config.yml, economy.yml, openai.yml, etc.)
 - Economy settings and multipliers
-- Visual effect configurations
+- Visual effect configurations (borders, holograms)
+- Language files
 - Permission changes
 
 **Notes**:
 
 - Player data is preserved
 - Active chunk operations continue normally
+- OpenAI settings reload (API key changes take effect)
 - Some changes may require a full restart
 
 ---
@@ -112,21 +147,31 @@ Admin commands provide powerful tools for managing the Chunklock plugin, monitor
 
 ---
 
-### `/chunklock unlock <player>`
+### `/chunklock unlock <player> [x] [z] [world]`
 
 **Permission**: `chunklock.unlock`  
-**Description**: Force unlocks the chunk a player is standing in.
+**Description**: Force unlocks a chunk for a player. Can unlock the player's current chunk or a specific chunk.
 
 ```
-/chunklock unlock PlayerName
+/chunklock unlock PlayerName                    # Unlock player's current chunk
+/chunklock unlock PlayerName 10 -5 world        # Unlock specific chunk
+/chunklock unlock here                           # Unlock your current chunk (if you're a player)
 /cl unlock PlayerName
 ```
+
+**Parameters**:
+
+- `player` - Player name or "here" to unlock your current chunk
+- `x` (optional) - Chunk X coordinate
+- `z` (optional) - Chunk Z coordinate  
+- `world` (optional) - World name
 
 **Notes**:
 
 - No resource cost for admin unlocks
 - Bypasses adjacency requirements
 - Useful for fixing stuck players or resolving issues
+- If coordinates not specified, unlocks the player's current chunk
 
 ---
 
@@ -162,43 +207,63 @@ Current Location: Chunk (7, 2) - Unlocked
 
 ---
 
-### `/chunklock stats`
+## OpenAI Integration Commands
 
-**Permission**: `chunklock.admin`  
-**Description**: Shows global server statistics and performance metrics.
+### `/chunklock apikey <key>`
 
-```
-/chunklock stats
-/cl stats
-```
-
-**Global Statistics Output**:
+**Permission**: `chunklock.admin.apikey`  
+**Description**: Sets or updates the OpenAI API key for AI-powered cost calculation.
 
 ```
-=== Chunklock Server Statistics ===
-Total Players: 147
-Active Players (7 days): 89
-Total Chunks Unlocked: 2,456
-Average Chunks per Player: 16.7
-
-Teams:
-  - Total Teams: 23
-  - Average Team Size: 3.2 players
-  - Largest Team: 8 players
-
-Biome Distribution:
-  - Plains: 892 chunks (36.3%)
-  - Forest: 634 chunks (25.8%)
-  - Desert: 445 chunks (18.1%)
-  - Ocean: 298 chunks (12.1%)
-  - Other: 187 chunks (7.6%)
-
-Performance:
-  - Chunk Operations/sec: 45
-  - Database Queries/sec: 12
-  - Memory Usage: 156MB
-  - Service Health: All systems operational
+/chunklock apikey sk-your-api-key-here
+/cl apikey <your-api-key>
 ```
+
+**What it does**:
+
+- Sets the OpenAI API key in `openai.yml`
+- Enables OpenAI integration if `enabled: true` in `openai.yml`
+- Key is stored securely in the configuration file
+
+**Notes**:
+
+- You can also set the API key directly in `openai.yml`
+- Changes take effect after reload or restart
+- Use `/chunklock reload` after setting the key to activate it immediately
+- The key is required for OpenAI cost calculation features
+
+**Example**:
+
+```
+/chunklock apikey sk-1234567890abcdef
+> OpenAI API key updated successfully
+> Use /chunklock reload to activate
+```
+
+---
+
+### `/chunklock aidebug`
+
+**Permission**: `chunklock.admin.test`  
+**Description**: Tests the OpenAI integration and shows debug information.
+
+```
+/chunklock aidebug
+/cl aidebug
+```
+
+**What it shows**:
+
+- OpenAI API connection status
+- Current API key status (masked)
+- Test cost calculation results
+- Error messages if integration fails
+
+**Use cases**:
+
+- Verify OpenAI API key is working
+- Test cost calculation with AI
+- Debug OpenAI integration issues
 
 ---
 
@@ -284,21 +349,26 @@ Performance:
 
 ```
 === Chunklock Debug Information ===
-Plugin Version: 1.2.7
-Server: Paper 1.20.4-496
+Plugin Version: 2.1.0
+Server: Paper 1.21.10-123
 Java: OpenJDK 17.0.8
 
 Service Layer Status:
   ✅ ChunkService: Healthy
   ✅ TeamService: Healthy
-  ✅ EconomyService: Healthy
+  ✅ EconomyService: Healthy (Vault)
   ✅ HologramService: Healthy (FancyHolograms)
   ✅ Service Container: 8 services registered
 
 Database Status:
-  ✅ Connection: Active
+  ✅ Connection: Active (MapDB)
   ✅ Response Time: 12ms
   ✅ Queue Size: 0
+
+OpenAI Integration:
+  ✅ Status: Enabled
+  ✅ API Key: Configured
+  ✅ Cache: Active (5 min TTL)
 
 Performance Metrics:
   - Chunk Loading Time: 45ms avg
@@ -314,251 +384,6 @@ Active Operations:
 
 ---
 
-### `/chunklock maintenance <enable|disable>`
-
-**Permission**: `chunklock.admin`  
-**Description**: Enables or disables maintenance mode.
-
-```
-/chunklock maintenance enable
-/chunklock maintenance disable
-/cl maintenance enable
-```
-
-**Maintenance Mode Effects**:
-
-- Prevents new chunk unlocks
-- Blocks team operations
-- Shows maintenance message to players
-- Allows admins to perform updates safely
-
----
-
-## Economy Management Commands
-
-### `/chunklock economy status`
-
-**Permission**: `chunklock.admin`  
-**Description**: Shows economy system status and statistics.
-
-```
-/chunklock economy status
-/cl economy status
-```
-
-**Economy Status Output**:
-
-```
-=== Economy System Status ===
-Economy Type: Vault
-Economy Plugin: EssentialsX
-Currency: Coins
-
-Unlock Statistics:
-  - Total Unlocks Today: 156
-  - Total Revenue: $45,678
-  - Average Cost per Unlock: $293
-
-Cost Analysis:
-  - Cheapest Unlock: $150 (Plains, Easy)
-  - Most Expensive: $2,340 (Badlands, Impossible)
-  - Most Popular: Forest chunks (34% of unlocks)
-
-Player Balance Analysis:
-  - Players with 0 balance: 12
-  - Average player balance: $1,456
-  - Richest player: $45,890
-```
-
----
-
-### `/chunklock economy reset <player>`
-
-**Permission**: `chunklock.admin`  
-**Description**: Resets economy statistics for a specific player.
-
-```
-/chunklock economy reset PlayerName
-/cl economy reset PlayerName
-```
-
-**What it resets**:
-
-- Player's total spending statistics
-- Unlock cost calculations (resets to base values)
-- Economy-related achievements
-
----
-
-## Backup and Recovery Commands
-
-### `/chunklock backup create [name]`
-
-**Permission**: `chunklock.admin`  
-**Description**: Creates a backup of all Chunklock data.
-
-```
-/chunklock backup create
-/chunklock backup create "pre-update-backup"
-/cl backup create daily-backup
-```
-
-**Backup Contents**:
-
-- All player progression data
-- Team information
-- Configuration snapshots
-- Statistics and metrics
-
-**Backup Location**: `plugins/Chunklock/backups/`
-
----
-
-### `/chunklock backup restore <name>`
-
-**Permission**: `chunklock.admin`  
-**Description**: Restores data from a backup.
-
-```
-/chunklock backup restore backup-2025-10-10
-/cl backup restore "pre-update-backup"
-```
-
-**Confirmation Required**: Type `CONFIRM RESTORE` to proceed.
-
-**Warning**: This will overwrite all current data with backup data.
-
----
-
-### `/chunklock backup list`
-
-**Permission**: `chunklock.admin`  
-**Description**: Lists all available backups.
-
-```
-/chunklock backup list
-/cl backup list
-```
-
-**Backup List Output**:
-
-```
-=== Available Backups ===
-1. auto-backup-2025-10-10-14-30 (2.3MB) - 2 hours ago
-2. pre-update-backup (2.1MB) - 1 day ago
-3. weekly-backup-2025-10-03 (1.8MB) - 1 week ago
-4. backup-2025-09-28 (1.5MB) - 2 weeks ago
-```
-
----
-
-## Emergency Commands
-
-### `/chunklock emergency stop`
-
-**Permission**: `chunklock.admin`  
-**Description**: Emergency stops all Chunklock operations.
-
-```
-/chunklock emergency stop
-/cl emergency stop
-```
-
-**Emergency Stop Effects**:
-
-- Halts all chunk operations
-- Stops border updates
-- Disables hologram updates
-- Prevents new player actions
-- Maintains data integrity
-
----
-
-### `/chunklock emergency start`
-
-**Permission**: `chunklock.admin`  
-**Description**: Restarts operations after an emergency stop.
-
-```
-/chunklock emergency start
-/cl emergency start
-```
-
----
-
-## Batch Operations
-
-### `/chunklock batch unlock <player> <count>`
-
-**Permission**: `chunklock.admin`  
-**Description**: Unlocks multiple random adjacent chunks for a player.
-
-```
-/chunklock batch unlock PlayerName 5
-/cl batch unlock PlayerName 10
-```
-
-**Notes**:
-
-- Unlocks chunks in order of lowest difficulty first
-- Respects adjacency requirements
-- No resource cost for admin batch unlocks
-
----
-
-### `/chunklock batch reset team <teamname>`
-
-**Permission**: `chunklock.admin`  
-**Description**: Resets all progression for an entire team.
-
-```
-/chunklock batch reset team TeamName
-/cl batch reset team "Problem Team"
-```
-
-**Confirmation Required**: Type `CONFIRM TEAM RESET` to proceed.
-
-**Effects**:
-
-- Resets all team members' progression
-- Clears team statistics
-- Preserves team structure and membership
-
----
-
-## Monitoring Tools
-
-### `/chunklock monitor start`
-
-**Permission**: `chunklock.admin`  
-**Description**: Starts real-time monitoring mode.
-
-```
-/chunklock monitor start
-/cl monitor start
-```
-
-**Monitoring Features**:
-
-- Live chunk unlock notifications
-- Performance metric updates
-- Error and warning alerts
-- Player activity tracking
-
----
-
-### `/chunklock monitor stop`
-
-**Permission**: `chunklock.admin`  
-**Description**: Stops real-time monitoring mode.
-
-```
-/chunklock monitor stop
-/cl monitor stop
-```
-
----
-
 ## Command Examples
 
 ### Daily Admin Tasks
@@ -567,11 +392,11 @@ Player Balance Analysis:
 # Check server health
 /chunklock debug
 
-# Review player activity
-/chunklock stats
+# Review player status
+/chunklock status PlayerName
 
-# Monitor performance
-/chunklock monitor start
+# Test OpenAI integration
+/chunklock aidebug
 ```
 
 ### Player Support
@@ -591,17 +416,14 @@ Player Balance Analysis:
 ### Maintenance Operations
 
 ```bash
-# Enable maintenance mode
-/chunklock maintenance enable
-
-# Create backup before updates
-/chunklock backup create "pre-maintenance"
-
 # Reload configuration
 /chunklock reload
 
-# Disable maintenance mode
-/chunklock maintenance disable
+# Update OpenAI API key
+/chunklock apikey <new-key>
+
+# Test OpenAI integration
+/chunklock aidebug
 ```
 
 ## Best Practices
