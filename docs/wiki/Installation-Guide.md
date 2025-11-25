@@ -6,7 +6,7 @@ This guide will walk you through installing and configuring Chunklock on your Mi
 
 ### Server Requirements
 
-- **Minecraft Version**: 1.20.4 or higher
+- **Minecraft Version**: 1.21.10 or higher
 - **Server Software**: Paper (recommended), Spigot, or Pufferfish
 - **Java Version**: 17 or higher
 - **RAM**: Minimum 2GB, recommended 4GB+ for large servers
@@ -40,41 +40,79 @@ After the first startup, you'll find the following files in `plugins/Chunklock/`
 
 ```
 plugins/Chunklock/
-├── config.yml          # Main configuration file
-├── data.yml            # Player and chunk data storage
+├── config.yml          # Main configuration file (minimal)
+├── economy.yml         # Economy and payment settings
+├── openai.yml          # OpenAI/ChatGPT integration settings
+├── biome-unlocks.yml  # Biome-specific unlock requirements
+├── block-values.yml    # Block values and biome weights
+├── team-settings.yml   # Team system configuration
+├── borders.yml         # Glass border system settings
+├── worlds.yml          # World configuration
+├── holograms.yml       # Hologram display settings
+├── debug.yml           # Debug and logging options
+├── performance.yml     # Performance tuning settings
+├── lang/
+│   └── en.yml          # English language file
 └── logs/               # Plugin logs directory
 ```
 
+**Note**: Chunklock uses a modular configuration system with separate files for each feature area, making configuration easier to manage and understand.
+
 ### 4. Basic Configuration
 
-Edit `plugins/Chunklock/config.yml` to configure basic settings:
+Chunklock uses a modular configuration system. Edit the relevant files:
 
+**Main Config** (`config.yml`):
 ```yaml
-# Economy type: "materials" (default) or "vault"
-economy:
-  type: "materials" # Change to "vault" for money-based economy
-
-# World settings
-worlds:
-  world:
-    name: "chunklock_world" # Dedicated Chunklock world name
-    diameter: 30000 # World diameter in blocks
-  claims:
-    min-distance-between-claims: 2 # Distance between starting areas
-
-# Visual effects
-holograms:
-  enabled: true
-  provider: "FancyHolograms" # Requires FancyHolograms plugin
-
-# Borders
-borders:
-  enabled: true
-  material: "GLASS"
-  show-to-all: false
+config-version: 2
+language: "en"
 ```
 
-### 5. Optional Dependencies
+**Economy** (`economy.yml`):
+```yaml
+type: "vault" # or "materials"
+vault:
+  base-cost: 100.0
+  cost-per-unlocked: 25.0
+```
+
+**World Setup** (`worlds.yml`):
+```yaml
+world:
+  name: "chunklock_world"
+  diameter: 30000
+claims:
+  min-distance-between-claims: 2
+```
+
+**Visual Effects** (`holograms.yml`):
+```yaml
+enabled: true
+provider: "FancyHolograms"
+```
+
+**Borders** (`borders.yml`):
+```yaml
+enabled: true
+border-material: "LIGHT_GRAY_STAINED_GLASS"
+```
+
+### 5. World Setup
+
+After configuring, you need to set up your Chunklock world:
+
+```
+/chunklock setup <worldname> <diameter>
+```
+
+Example:
+```
+/chunklock setup chunklock_world 30000
+```
+
+This initializes the world for Chunklock use.
+
+### 6. Optional Dependencies
 
 #### Vault Economy Integration
 
@@ -82,13 +120,12 @@ If you want to use money instead of materials for chunk unlocking:
 
 1. **Install Vault**: Download from [SpigotMC](https://www.spigotmc.org/resources/vault.34315/)
 2. **Install Economy Plugin**: Such as EssentialsX or CMI
-3. **Configure Chunklock**:
+3. **Configure Chunklock** (`economy.yml`):
    ```yaml
-   economy:
-     type: "vault"
-     vault:
-       base-cost: 100.0
-       cost-per-unlocked: 25.0
+   type: "vault"
+   vault:
+     base-cost: 100.0
+     cost-per-unlocked: 25.0
    ```
 
 #### FancyHolograms Integration
@@ -96,14 +133,47 @@ If you want to use money instead of materials for chunk unlocking:
 For enhanced hologram displays:
 
 1. **Install FancyHolograms**: Download from [SpigotMC](https://www.spigotmc.org/resources/fancyholograms.96592/)
-2. **Configure Chunklock**:
+2. **Configure Chunklock** (`holograms.yml`):
    ```yaml
-   holograms:
-     enabled: true
-     provider: "FancyHolograms"
+   enabled: true
+   provider: "FancyHolograms"
    ```
 
-### 6. Verify Installation
+#### OpenAI/ChatGPT Integration (Optional)
+
+For AI-powered dynamic cost calculation:
+
+1. **Get OpenAI API Key**: Sign up at [OpenAI](https://platform.openai.com/)
+2. **Configure Chunklock** (`openai.yml`):
+   ```yaml
+   enabled: true
+   api-key: "your-api-key-here"
+   model: "gpt-4o-mini"
+   cache-duration-minutes: 5
+   ```
+3. **Or use command**: `/chunklock apikey <your-api-key>`
+
+**Note**: OpenAI integration is optional. The plugin works perfectly without it using traditional cost calculation.
+
+#### Custom Items Integration (Oraxen/MMOItems)
+
+To use custom items in biome unlock requirements:
+
+1. **Install Oraxen**: Download from [SpigotMC](https://www.spigotmc.org/resources/oraxen.72448/)
+   - Or install **MMOItems**: Download from [SpigotMC](https://www.spigotmc.org/resources/mmoitems.39267/)
+2. **Configure biome requirements** (`biome-unlocks.yml`):
+   ```yaml
+   PLAINS:
+     vanilla:
+       WHEAT: 8
+     custom:
+       - plugin: oraxen
+         item: mythic_sword
+         amount: 1
+   ```
+3. The plugin automatically detects installed custom item plugins at runtime.
+
+### 7. Verify Installation
 
 1. **Restart your server** after configuration changes
 2. **Check the console** for any error messages
@@ -117,51 +187,74 @@ For enhanced hologram displays:
 
 ### Small Server Setup (1-20 players)
 
+**economy.yml**:
 ```yaml
-economy:
-  type: "materials"
-worlds:
-  world:
-    name: "chunklock_world"
-    diameter: 20000
-  claims:
-    min-distance-between-claims: 3
-performance:
-  chunk-loading-threads: 2
-  border-update-interval: 60
+type: "materials"
+```
+
+**worlds.yml**:
+```yaml
+world:
+  name: "chunklock_world"
+  diameter: 20000
+claims:
+  min-distance-between-claims: 3
+```
+
+**performance.yml**:
+```yaml
+border-update-delay: 2
+max-border-updates-per-tick: 5
 ```
 
 ### Medium Server Setup (20-100 players)
 
+**economy.yml**:
 ```yaml
-economy:
-  type: "vault"
-  vault:
-    base-cost: 200.0
-    cost-per-unlocked: 50.0
+type: "vault"
+vault:
+  base-cost: 200.0
+  cost-per-unlocked: 50.0
+```
+
+**worlds.yml**:
+```yaml
 world:
-  spawn-chunk-size: 5x5
-  max-world-size: 75
-performance:
-  chunk-loading-threads: 4
-  border-update-interval: 30
+  name: "chunklock_world"
+  diameter: 30000
+claims:
+  min-distance-between-claims: 2
+```
+
+**performance.yml**:
+```yaml
+border-update-delay: 2
+max-border-updates-per-tick: 10
 ```
 
 ### Large Server Setup (100+ players)
 
+**economy.yml**:
 ```yaml
-economy:
-  type: "vault"
-  vault:
-    base-cost: 500.0
-    cost-per-unlocked: 100.0
+type: "vault"
+vault:
+  base-cost: 500.0
+  cost-per-unlocked: 100.0
+```
+
+**worlds.yml**:
+```yaml
 world:
-  spawn-chunk-size: 7x7
-  max-world-size: 100
-performance:
-  chunk-loading-threads: 8
-  border-update-interval: 15
-  enable-metrics: true
+  name: "chunklock_world"
+  diameter: 50000
+claims:
+  min-distance-between-claims: 2
+```
+
+**performance.yml**:
+```yaml
+border-update-delay: 1
+max-border-updates-per-tick: 15
 ```
 
 ## Post-Installation Setup
@@ -187,6 +280,7 @@ groups:
       - chunklock.reload
       - chunklock.reset
       - chunklock.bypass
+      - chunklock.admin.apikey
 ```
 
 ### 2. Set Up World
@@ -197,9 +291,13 @@ groups:
    /mv create chunklock_world normal
    ```
 
-2. **Configure world spawn** to ensure proper starting locations
+2. **Initialize Chunklock world**:
 
-3. **Test player progression** with a test account
+   ```
+   /chunklock setup chunklock_world 30000
+   ```
+
+3. **Test player progression** with a test account using `/chunklock start`
 
 ### 3. Performance Optimization
 
@@ -216,20 +314,37 @@ For optimal performance on larger servers:
 #### Plugin doesn't load
 
 - **Check Java version**: Ensure you're running Java 17+
-- **Verify server software**: Use Paper, Spigot, or Pufferfish
+- **Verify server software**: Use Paper 1.21.10+, Spigot, or Pufferfish
+- **Check Minecraft version**: Plugin requires Minecraft 1.21.10+
 - **Check console logs**: Look for specific error messages
 
 #### Configuration errors
 
-- **YAML syntax**: Ensure proper indentation and syntax
+- **YAML syntax**: Ensure proper indentation and syntax in all config files
 - **Invalid values**: Check that all configuration values are valid
 - **File permissions**: Ensure the server can read/write to plugin directories
+- **Modular config**: All config files are generated automatically on first run - don't delete them
+- **Missing files**: If a config file is missing, restart the server to regenerate it
 
 #### Economy integration issues
 
 - **Vault not found**: Install Vault plugin for economy features
-- **Economy plugin missing**: Install a compatible economy plugin
+- **Economy plugin missing**: Install a compatible economy plugin (EssentialsX, CMI, etc.)
 - **Insufficient funds**: Ensure players have enough money/materials
+- **Config location**: Economy settings are in `economy.yml`, not `config.yml`
+
+#### OpenAI integration issues
+
+- **API key not set**: Use `/chunklock apikey <key>` or edit `openai.yml`
+- **API errors**: Check your OpenAI API key is valid and has credits
+- **Fallback enabled**: Plugin falls back to traditional calculation if OpenAI fails
+- **Caching**: Responses are cached for 5 minutes by default (configurable)
+
+#### Custom items issues
+
+- **Plugin not detected**: Ensure Oraxen or MMOItems is installed and loaded
+- **Item not found**: Verify item names match exactly (case-sensitive)
+- **Format errors**: Check `biome-unlocks.yml` uses correct structured format
 
 ### Getting Help
 

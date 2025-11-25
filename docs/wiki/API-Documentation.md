@@ -25,7 +25,7 @@ ChunklockAPI api = ChunklockAPI.getInstance();
 <dependency>
     <groupId>me.chunklock</groupId>
     <artifactId>chunklock-api</artifactId>
-    <version>1.2.7</version>
+    <version>2.1.0</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -34,7 +34,7 @@ ChunklockAPI api = ChunklockAPI.getInstance();
 
 ```gradle
 dependencies {
-    compileOnly 'me.chunklock:chunklock-api:1.2.7'
+    compileOnly 'me.chunklock:chunklock-api:2.1.0'
 }
 ```
 
@@ -607,7 +607,8 @@ public void onChunkUnlockMonitor(ChunkUnlockEvent event) {
 
 | API Version | Plugin Version | Minecraft Version |
 | ----------- | -------------- | ----------------- |
-| 1.2.x       | 1.2.0 - 1.2.7  | 1.20.4+           |
+| 1.21.x      | 2.1.0+         | 1.21.10+          |
+| 1.20.x      | 1.2.0 - 1.2.7  | 1.20.4+           |
 | 1.1.x       | 1.1.0 - 1.1.9  | 1.20.1+           |
 | 1.0.x       | 1.0.0 - 1.0.5  | 1.19.4+           |
 

@@ -43,7 +43,7 @@ Run these commands to quickly assess the plugin state:
    /version
 
    # Chunklock requires:
-   # - Minecraft 1.20.4+
+   # - Minecraft 1.21.10+
    # - Paper/Spigot/Pufferfish
    # - Java 17+
    ```
@@ -448,6 +448,188 @@ Run these commands to quickly assess the plugin state:
    ```
 
 ## Integration Issues
+
+### OpenAI Integration Problems
+
+**Symptoms**: AI cost calculation not working, API errors in console
+
+**Diagnosis**:
+```
+/chunklock aidebug
+# Check OpenAI integration status
+
+/chunklock debug
+# Check OpenAI section in debug output
+```
+
+**Solutions**:
+
+1. **API Key Not Set**:
+   ```bash
+   # Set API key via command
+   /chunklock apikey <your-api-key>
+   
+   # Or edit openai.yml
+   api-key: "your-api-key-here"
+   ```
+
+2. **API Key Invalid**:
+   - Verify your OpenAI API key at [OpenAI Platform](https://platform.openai.com/)
+   - Ensure you have credits/balance
+   - Check key hasn't expired
+
+3. **API Errors**:
+   - Check `openai.yml` for correct model name
+   - Verify `fallback-on-error: true` is set
+   - Check server internet connection
+   - Review console logs for specific error messages
+
+4. **Costs Too High/Low**:
+   - Adjust `cost-bounds` in `openai.yml`
+   - Check `min-multiplier` and `max-multiplier` settings
+   - Consider disabling OpenAI if issues persist
+
+5. **Performance Issues**:
+   - Increase `cache-duration-minutes` in `openai.yml`
+   - Reduce `max-tokens` if responses are too long
+   - Consider disabling transparency mode
+
+---
+
+### Custom Items Integration Problems
+
+**Symptoms**: Custom items not detected, unlock requirements not met despite having items
+
+**Diagnosis**:
+```
+/plugins
+# Verify Oraxen or MMOItems is loaded
+
+/chunklock debug
+# Check for custom item plugin detection messages
+```
+
+**Solutions**:
+
+1. **Plugin Not Detected**:
+   - Ensure Oraxen or MMOItems is installed and loaded
+   - Check plugin loads before Chunklock (use `depend` in `plugin.yml`)
+   - Restart server to refresh plugin detection
+
+2. **Item Not Found**:
+   - Verify item names match exactly (case-sensitive)
+   - For Oraxen: Use exact item ID from Oraxen config
+   - For MMOItems: Use exact item ID and type from MMOItems database
+   - Check `biome-unlocks.yml` format is correct
+
+3. **Format Errors**:
+   ```yaml
+   # Correct Oraxen format:
+   custom:
+     - plugin: oraxen
+       item: mythic_sword
+       amount: 1
+   
+   # Correct MMOItems format:
+   custom:
+     - plugin: mmoitems
+       type: MATERIAL
+       item: diamond_ingot
+       amount: 3
+   ```
+
+4. **Items Not Consumed**:
+   - Ensure items are in main inventory (not in shulker boxes)
+   - Check item metadata matches exactly
+   - Verify custom item plugin is working correctly
+
+---
+
+### Modular Configuration Problems
+
+**Symptoms**: Config changes not taking effect, missing config files, errors on startup
+
+**Diagnosis**:
+```
+# Check all config files exist
+ls plugins/Chunklock/*.yml
+
+# Check config file syntax
+# Use online YAML validator
+```
+
+**Solutions**:
+
+1. **Missing Config Files**:
+   - Restart server to regenerate missing files
+   - Don't delete config files manually
+   - Files are auto-generated on first startup
+
+2. **Config Not Reloading**:
+   ```bash
+   # Use reload command
+   /chunklock reload
+   
+   # Some changes require full restart:
+   # - World setup changes
+   # - Language file changes
+   # - Major config structure changes
+   ```
+
+3. **Wrong Config File**:
+   - Economy settings → `economy.yml` (not `config.yml`)
+   - OpenAI settings → `openai.yml`
+   - Biome requirements → `biome-unlocks.yml`
+   - Team settings → `team-settings.yml`
+   - etc.
+
+4. **YAML Syntax Errors**:
+   - Use spaces, not tabs for indentation
+   - Ensure colons have spaces after them
+   - Check quotes are balanced
+   - Validate with online YAML validator
+
+---
+
+### Language System Problems
+
+**Symptoms**: Messages not displaying correctly, placeholders not replaced, wrong language
+
+**Diagnosis**:
+```
+# Check language setting
+cat plugins/Chunklock/config.yml | grep language
+
+# Check language file exists
+ls plugins/Chunklock/lang/
+```
+
+**Solutions**:
+
+1. **Wrong Language**:
+   ```yaml
+   # config.yml
+   language: "en" # Must match language file name
+   ```
+   - Ensure language file exists: `lang/en.yml`, `lang/de.yml`, etc.
+   - Language code must match file name exactly
+
+2. **Missing Language Keys**:
+   - Plugin falls back to English if keys are missing
+   - Check `lang/en.yml` for all available keys
+   - Copy missing keys to your language file
+
+3. **Placeholders Not Working**:
+   - Ensure placeholder syntax is correct: `%player%`, `%cost%`, etc.
+   - Don't modify placeholder names
+   - Check language file encoding is UTF-8
+
+4. **Custom Messages Not Showing**:
+   - Reload plugin after editing language file
+   - Check YAML syntax is correct
+   - Verify file is saved in correct location
+
+---
 
 ### Vault Integration Problems
 
