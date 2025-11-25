@@ -10,36 +10,51 @@ Admin commands provide powerful tools for managing the Chunklock plugin, monitor
 
 ## Server Management Commands
 
-### `/chunklock setup <worldname> <diameter>`
+### `/chunklock setup <diameter>`
 
 **Permission**: `chunklock.admin`  
-**Description**: Initializes a world for Chunklock use. This must be run before players can use the plugin.
+**Description**: Creates and initializes the Chunklock world. This must be run before players can use the plugin.
 
 ```
-/chunklock setup chunklock_world 30000
-/cl setup myworld 50000
+/chunklock setup 30000
+/cl setup 50000
 ```
 
 **Parameters**:
 
-- `worldname` - Name of the world to initialize (must exist)
 - `diameter` - World diameter in blocks (e.g., 30000 = 30,000 block diameter)
+  - Minimum: 1,000 blocks
+  - Maximum: 100,000 blocks
+  - Recommended: 20,000-30,000 blocks
 
 **What it does**:
 
-- Configures the world for Chunklock
-- Sets up world boundaries
+- **Creates** a new world named `chunklock_world` (if it doesn't exist)
+- Sets world border to the specified diameter
+- Configures world settings (difficulty, PVP, spawn flags)
+- Pre-generates chunks for better performance
+- Updates `worlds.yml` configuration automatically
 - Enables chunk locking in that world
-- Updates `worlds.yml` configuration
 
 **Example**:
 
 ```
-/chunklock setup chunklock_world 30000
-> World 'chunklock_world' initialized with diameter 30000 blocks
+/chunklock setup 30000
+> Starting Chunklock world setup...
+> Diameter: 30000 blocks
+> This may take several minutes depending on the size.
+> ✅ Chunklock world setup completed successfully!
+> World name: chunklock_world
+> Players can now use '/chunklock start' to begin!
 ```
 
-**Note**: This command must be run before players can use `/chunklock start`.
+**Important Notes**:
+
+- The world is **automatically created** - you don't need to create it manually
+- World name is automatically set to `chunklock_world` (configurable in `worlds.yml`)
+- Setup runs asynchronously and may take several minutes
+- If world already exists, you'll see a message with current settings
+- This command must be run before players can use `/chunklock start`
 
 ---
 

@@ -36,15 +36,15 @@ The plugin will automatically generate its configuration files on first startup.
 
 ### 3. Initial Configuration
 
-After the first startup, you'll find the following files in `plugins/Chunklock/`:
+After the first startup, the plugin automatically generates all configuration files. You'll find the following files in `plugins/Chunklock/`:
 
 ```
 plugins/Chunklock/
-├── config.yml          # Main configuration file (minimal)
+├── config.yml          # Main configuration file (minimal - version and language)
 ├── economy.yml         # Economy and payment settings
-├── openai.yml          # OpenAI/ChatGPT integration settings
+├── openai.yml          # OpenAI/ChatGPT integration settings (optional)
 ├── biome-unlocks.yml  # Biome-specific unlock requirements
-├── block-values.yml    # Block values and biome weights
+├── block-values.yml    # Block values and biome weights for difficulty scoring
 ├── team-settings.yml   # Team system configuration
 ├── borders.yml         # Glass border system settings
 ├── worlds.yml          # World configuration
@@ -53,10 +53,16 @@ plugins/Chunklock/
 ├── performance.yml     # Performance tuning settings
 ├── lang/
 │   └── en.yml          # English language file
-└── logs/               # Plugin logs directory
+└── data/               # Player and chunk data (MapDB databases)
+    ├── chunks.db
+    └── players.db
 ```
 
-**Note**: Chunklock uses a modular configuration system with separate files for each feature area, making configuration easier to manage and understand.
+**Note**: 
+- All configuration files are **automatically generated** on first startup
+- Chunklock uses a modular configuration system with separate files for each feature area
+- If a config file is missing, restart the server to regenerate it
+- Player and chunk data is stored in MapDB databases in the `data/` folder
 
 ### 4. Basic Configuration
 
@@ -99,18 +105,34 @@ border-material: "LIGHT_GRAY_STAINED_GLASS"
 
 ### 5. World Setup
 
-After configuring, you need to set up your Chunklock world:
+After configuring, you need to set up your Chunklock world. The setup command will **automatically create** the world if it doesn't exist:
 
 ```
-/chunklock setup <worldname> <diameter>
+/chunklock setup <diameter>
 ```
 
 Example:
 ```
-/chunklock setup chunklock_world 30000
+/chunklock setup 30000
 ```
 
-This initializes the world for Chunklock use.
+**What the setup command does**:
+- Creates a new world named `chunklock_world` (if it doesn't exist)
+- Sets the world border to the specified diameter
+- Configures world settings for Chunklock use
+- Pre-generates chunks for better performance
+- Updates `worlds.yml` configuration automatically
+
+**Important Notes**:
+- You **do not** need to create the world manually - the setup command creates it
+- The world name is automatically set to `chunklock_world` (configurable in `worlds.yml`)
+- Setup may take several minutes depending on the diameter size
+- Players can use `/chunklock start` after setup is complete
+
+**Minimum Requirements**:
+- Diameter must be at least 1,000 blocks
+- Maximum diameter is 100,000 blocks (for performance reasons)
+- Recommended diameter: 20,000-30,000 blocks for most servers
 
 ### 6. Optional Dependencies
 
@@ -285,19 +307,23 @@ groups:
 
 ### 2. Set Up World
 
-1. **Create a dedicated world** for Chunklock (recommended):
+1. **Run the setup command** (creates the world automatically):
 
    ```
-   /mv create chunklock_world normal
+   /chunklock setup 30000
    ```
 
-2. **Initialize Chunklock world**:
+   This command:
+   - Creates a new world named `chunklock_world` automatically
+   - Sets world border and configuration
+   - Pre-generates chunks for better performance
+   - Takes several minutes depending on diameter size
 
-   ```
-   /chunklock setup chunklock_world 30000
-   ```
+2. **Wait for setup to complete** - you'll see a success message when done
 
 3. **Test player progression** with a test account using `/chunklock start`
+
+**Note**: You do **not** need to manually create the world using Multiverse or other world management plugins. The `/chunklock setup` command handles world creation automatically.
 
 ### 3. Performance Optimization
 
