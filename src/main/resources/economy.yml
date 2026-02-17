@@ -1,73 +1,89 @@
-# ===== ECONOMY CONFIGURATION =====
-# Economy and payment system settings for Chunklock plugin
-
-# Economy type: "materials" or "vault"
-# "materials" = Players pay with items/resources (default behavior)
-# "vault" = Players pay with money through Vault economy plugin
+# =============================================
+#          CHUNKLOCK ECONOMY CONFIG
+# =============================================
+#
+# How do players pay to unlock chunks?
+#
+#   "materials"  →  Players pay with items from their inventory (default)
+#                   Configure what items in biome-unlocks.yml
+#
+#   "vault"      →  Players pay with money (requires Vault plugin)
+#
 type: "materials"
 
-# Vault economy settings (only used if type = "vault")
+# ─────────────────────────────────────────────
+#  MATERIAL ECONOMY  (type: "materials")
+# ─────────────────────────────────────────────
+materials:
+  enabled: true
+
+  # How costs are determined:
+  #
+  #   "biome"          →  Each biome has fixed material costs (see biome-unlocks.yml)
+  #                       Example: Plains always costs Wheat, Forest costs Oak Logs
+  #                       Simple and predictable, but players can get stuck if their
+  #                       starting chunk doesn't contain the required material.
+  #
+  #   "resource-scan"  →  Scans blocks in the player's owned chunks and picks a
+  #                       material they can actually gather. Costs scale with rarity.
+  #                       Example: a player on a plains chunk with no trees pays
+  #                       Cobblestone or Wheat instead of Oak Logs.
+  #                       Prevents early-game soft-locks.
+  #
+  cost-mode: "resource-scan"
+
+  # Resource-scan tuning (only when cost-mode: "resource-scan")
+  resource-scan:
+    base-cost: 16 # Starting item amount (adjusted by material rarity & progression)
+    min-cost: 1 # Floor — never ask for fewer than this
+    max-cost: 128 # Cap — never ask for more than this
+    min-abundance: 10 # Ignore materials with fewer than this many blocks in owned chunks
+    cache-duration: 60 # Seconds to cache scan results per player (avoids lag)
+
+  # If true, fall back to Vault money when the player can't pay with materials.
+  # Requires Vault to be installed.
+  vault-fallback: false
+
+# ─────────────────────────────────────────────
+#  VAULT / MONEY ECONOMY  (type: "vault")
+# ─────────────────────────────────────────────
 vault:
-  # Base cost multiplier for vault payments
-  base-cost: 100.0
-  # Additional cost per unlocked chunk (progressive pricing)
-  cost-per-unlocked: 25.0
-  # Difficulty multipliers
+  base-cost: 100.0 # Base price per chunk
+  cost-per-unlocked: 25.0 # Added per chunk the player already owns (progressive pricing)
+  #                          Example: 3rd chunk = 100 + (2 × 25) = $150
+
+  # Multiply the final price by chunk difficulty
   difficulty-multipliers:
     EASY: 0.5
     NORMAL: 1.0
     HARD: 2.0
     IMPOSSIBLE: 4.0
-  # Biome-specific cost multipliers
+
+  # Multiply the final price by biome (unlisted biomes default to 1.0)
   biome-multipliers:
     PLAINS: 1.0
     FOREST: 1.2
-    DESERT: 1.5
-    JUNGLE: 2.0
-    OCEAN: 1.8
-    SWAMP: 1.6
-    BADLANDS: 2.2
-    SAVANNA: 1.3
     TAIGA: 1.4
+    SAVANNA: 1.3
+    DESERT: 1.5
+    SWAMP: 1.6
     SNOWY_PLAINS: 1.7
+    OCEAN: 1.8
+    JUNGLE: 2.0
+    BADLANDS: 2.2
     DEEP_OCEAN: 2.5
-    # Add more biomes as needed
 
-# Material economy settings (only used if type = "materials")
-materials:
-  # Enable/disable material requirements
-  enabled: true
-  # Allow fallback to vault if materials not available
-  vault-fallback: false
-
-  # Cost calculation mode for materials:
-  #   "biome"         - (Default) Requires specific materials based on biome type (e.g., Plains -> WHEAT)
-  #   "resource-scan" - Scans player's owned chunks and requires materials that are actually available
-  #                     Solves the issue where players spawn in chunks without the biome's required materials
-  cost-mode: "biome"
-
-  # Resource-scan settings (only used if cost-mode = "resource-scan")
-  resource-scan:
-    # Base cost in items (before tier/progression multipliers)
-    base-cost: 16
-    # Maximum items required for a single unlock
-    max-cost: 128
-    # Minimum items required for a single unlock
-    min-cost: 1
-    # Minimum block count in owned chunks to consider a material available
-    min-abundance: 10
-    # How long to cache scan results per player (in seconds)
-    cache-duration: 60
-
-# Material-to-vault conversion values (used when AI converts material costs to vault)
-# Values represent vault cost per unit of material
+# ─────────────────────────────────────────────
+#  AI COST CONVERSION  (advanced, optional)
+# ─────────────────────────────────────────────
+# When the OpenAI agent converts material costs to Vault prices,
+# these values set the exchange rate per item.
+# Only used when both AI costing and Vault are active.
 material-values:
-  DIAMOND: 50.0
-  EMERALD: 45.0
-  GOLD_INGOT: 25.0
-  IRON_INGOT: 10.0
-  COPPER_INGOT: 5.0
-  COAL: 2.0
   COBBLESTONE: 0.5
-  # Add more materials as needed
-
+  COAL: 2.0
+  COPPER_INGOT: 5.0
+  IRON_INGOT: 10.0
+  GOLD_INGOT: 25.0
+  EMERALD: 45.0
+  DIAMOND: 50.0
