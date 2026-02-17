@@ -2,7 +2,12 @@
 # Hologram display settings for Chunklock plugin
 
 enabled: true
-provider: "FancyHolograms" # Force FancyHolograms only - ignore any other hologram plugins
+# Hologram provider to use. Options:
+#   - "auto"           : Auto-detect available hologram plugin (tries CMI first, then FancyHolograms)
+#   - "FancyHolograms" : Use FancyHolograms plugin
+#   - "CMI"            : Use CMI holograms
+#   - "none"           : Disable holograms
+provider: "auto"
 update-interval: 20 # ticks (1 second)
 view-distance: 64 # blocks (increased for better visibility)
 debug-logging: false # Enable debug logging for troubleshooting (set to true when needed)
