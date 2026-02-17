@@ -4,7 +4,7 @@
 # Economy type: "materials" or "vault"
 # "materials" = Players pay with items/resources (default behavior)
 # "vault" = Players pay with money through Vault economy plugin
-type: "vault"
+type: "materials"
 
 # Vault economy settings (only used if type = "vault")
 vault:
@@ -39,6 +39,25 @@ materials:
   enabled: true
   # Allow fallback to vault if materials not available
   vault-fallback: false
+
+  # Cost calculation mode for materials:
+  #   "biome"         - (Default) Requires specific materials based on biome type (e.g., Plains -> WHEAT)
+  #   "resource-scan" - Scans player's owned chunks and requires materials that are actually available
+  #                     Solves the issue where players spawn in chunks without the biome's required materials
+  cost-mode: "biome"
+
+  # Resource-scan settings (only used if cost-mode = "resource-scan")
+  resource-scan:
+    # Base cost in items (before tier/progression multipliers)
+    base-cost: 16
+    # Maximum items required for a single unlock
+    max-cost: 128
+    # Minimum items required for a single unlock
+    min-cost: 1
+    # Minimum block count in owned chunks to consider a material available
+    min-abundance: 10
+    # How long to cache scan results per player (in seconds)
+    cache-duration: 60
 
 # Material-to-vault conversion values (used when AI converts material costs to vault)
 # Values represent vault cost per unit of material

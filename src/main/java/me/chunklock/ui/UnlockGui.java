@@ -633,6 +633,11 @@ public class UnlockGui {
             // Note: Data persistence is handled automatically by ChunkDatabase and PlayerDatabase
             // Both databases commit on save operations (unlockChunk() and incrementUnlockedChunks() already save)
 
+            // Invalidate resource scan cache since owned territory changed
+            if (economyManager != null && economyManager.getOwnedChunkScanner() != null) {
+                economyManager.getOwnedChunkScanner().invalidateCache(player.getUniqueId());
+            }
+
             // Record team statistics if available
             try {
                 var enhancedTeamManager = plugin.getEnhancedTeamManager();

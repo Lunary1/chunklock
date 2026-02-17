@@ -71,6 +71,40 @@ public class EconomyConfig {
         return config.getBoolean("materials.vault-fallback", false);
     }
 
+    /**
+     * Get cost calculation mode: "biome" (default) or "resource-scan".
+     */
+    public String getMaterialCostMode() {
+        return config.getString("materials.cost-mode", "biome");
+    }
+
+    /**
+     * Whether resource-scan mode is enabled.
+     */
+    public boolean isResourceScanMode() {
+        return "resource-scan".equalsIgnoreCase(getMaterialCostMode());
+    }
+
+    public int getResourceScanBaseCost() {
+        return config.getInt("materials.resource-scan.base-cost", 16);
+    }
+
+    public int getResourceScanMaxCost() {
+        return config.getInt("materials.resource-scan.max-cost", 128);
+    }
+
+    public int getResourceScanMinCost() {
+        return config.getInt("materials.resource-scan.min-cost", 1);
+    }
+
+    public int getResourceScanMinAbundance() {
+        return config.getInt("materials.resource-scan.min-abundance", 10);
+    }
+
+    public int getResourceScanCacheDuration() {
+        return config.getInt("materials.resource-scan.cache-duration", 60);
+    }
+
     public FileConfiguration getRawConfig() {
         return config;
     }

@@ -10,6 +10,8 @@ import me.chunklock.economy.calculation.TraditionalVaultStrategy;
 import me.chunklock.economy.calculation.AIVaultStrategy;
 import me.chunklock.economy.calculation.TraditionalMaterialStrategy;
 import me.chunklock.economy.calculation.AIMaterialStrategy;
+import me.chunklock.economy.calculation.ResourceBasedMaterialStrategy;
+import me.chunklock.economy.calculation.OwnedChunkScanner;
 import me.chunklock.util.world.BiomeUtil;
 import me.chunklock.util.item.MaterialUtil;
 import me.chunklock.economy.items.ItemRequirement;
@@ -148,6 +150,9 @@ public class EconomyManager {
     // Material-to-vault converter
     private MaterialVaultConverter materialConverter;
     
+    // Resource scanner for resource-based cost mode
+    private OwnedChunkScanner ownedChunkScanner;
+    
     // Calculation strategy (selected based on economy type and AI enabled state)
     private CostCalculationStrategy calculationStrategy;
     
@@ -155,6 +160,7 @@ public class EconomyManager {
     private boolean materialsEnabled;
     private boolean vaultFallbackEnabled;
     private boolean aiCostingEnabled;
+    private boolean resourceScanMode;
     
     // Vault configuration
     private double baseCost;
@@ -176,6 +182,9 @@ public class EconomyManager {
         // Initialize material converter
         this.materialConverter = new MaterialVaultConverter(plugin, economyConfig);
         
+        // Initialize owned chunk scanner for resource-scan mode
+        this.ownedChunkScanner = new OwnedChunkScanner(plugin, plugin.getChunkDatabase(), plugin.getTeamManager());
+        
         loadConfiguration();
     }
     
@@ -195,6 +204,13 @@ public class EconomyManager {
         // Material settings
         materialsEnabled = economyConfig != null ? economyConfig.isMaterialsEnabled() : true;
         vaultFallbackEnabled = economyConfig != null ? economyConfig.isVaultFallbackEnabled() : false;
+        resourceScanMode = economyConfig != null ? economyConfig.isResourceScanMode() : false;
+        
+        // Configure owned chunk scanner from config
+        if (ownedChunkScanner != null && economyConfig != null) {
+            ownedChunkScanner.setMinAbundance(economyConfig.getResourceScanMinAbundance());
+            ownedChunkScanner.setCacheTtlMs(economyConfig.getResourceScanCacheDuration() * 1000L);
+        }
         
         // Vault settings
         baseCost = economyConfig != null ? economyConfig.getVaultBaseCost() : 100.0;
@@ -207,6 +223,7 @@ public class EconomyManager {
         plugin.getLogger().info("  Type: " + currentType.getConfigName());
         plugin.getLogger().info("  Vault available: " + vaultService.isVaultAvailable());
         plugin.getLogger().info("  AI costing enabled: " + aiCostingEnabled);
+        plugin.getLogger().info("  Resource-scan mode: " + resourceScanMode);
         plugin.getLogger().info("  OpenAI agent available: " + (openAIAgent != null));
         plugin.getLogger().info("  Base cost: $" + baseCost);
         plugin.getLogger().info("  Cost per unlocked: $" + costPerUnlocked);
@@ -247,7 +264,17 @@ public class EconomyManager {
                     biomeRegistry, progressTracker, baseCost, costPerUnlocked);
             }
         } else {
-            if (aiCostingEnabled && openAIAgent != null) {
+            if (resourceScanMode && ownedChunkScanner != null) {
+                // Resource-scan mode: cost based on blocks in player's owned chunks
+                ResourceBasedMaterialStrategy resourceStrategy = new ResourceBasedMaterialStrategy(
+                    plugin, ownedChunkScanner, biomeRegistry, progressTracker);
+                if (economyConfig != null) {
+                    resourceStrategy.setBaseCost(economyConfig.getResourceScanBaseCost());
+                    resourceStrategy.setMaxCost(economyConfig.getResourceScanMaxCost());
+                    resourceStrategy.setMinCost(economyConfig.getResourceScanMinCost());
+                }
+                calculationStrategy = resourceStrategy;
+            } else if (aiCostingEnabled && openAIAgent != null) {
                 calculationStrategy = new AIMaterialStrategy(plugin, biomeRegistry, 
                     progressTracker, openAIAgent, openAIConfig);
             } else {
@@ -457,6 +484,8 @@ public class EconomyManager {
     public boolean isMaterialsEnabled() { return materialsEnabled; }
     public boolean isVaultFallbackEnabled() { return vaultFallbackEnabled; }
     public boolean isAiCostingEnabled() { return aiCostingEnabled; }
+    public boolean isResourceScanMode() { return resourceScanMode; }
+    public OwnedChunkScanner getOwnedChunkScanner() { return ownedChunkScanner; }
     
     /**
      * Reload configuration
@@ -466,6 +495,9 @@ public class EconomyManager {
         vaultService.reload();
         if (materialConverter != null) {
             materialConverter.reload();
+        }
+        if (ownedChunkScanner != null) {
+            ownedChunkScanner.clearCache();
         }
     }
     
