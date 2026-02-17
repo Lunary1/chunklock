@@ -2,14 +2,14 @@ package me.chunklock.managers;
 
 import org.bukkit.plugin.java.JavaPlugin;
 import me.chunklock.managers.TeamManager;
-import me.chunklock.services.PlayerDatabase;
+import me.chunklock.services.PlayerStore;
 import me.chunklock.ChunklockPlugin;
 
 import java.util.UUID;
 
 public class PlayerProgressTracker {
     
-    private final PlayerDatabase playerDatabase;
+    private final PlayerStore playerDatabase;
     private final TeamManager teamManager;
 
     public PlayerProgressTracker(JavaPlugin plugin, TeamManager teamManager) {

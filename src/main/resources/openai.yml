@@ -2,7 +2,7 @@
 # AI-powered cost calculation settings
 
 # Master switch - set to true to enable AI-powered cost calculation
-enabled: true
+enabled: false
 
 # Your OpenAI API key (keep this secret!)
 api-key: "REPLACE_WITH_YOUR_OPENAI_API_KEY"

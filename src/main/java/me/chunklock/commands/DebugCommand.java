@@ -59,6 +59,10 @@ public class DebugCommand extends SubCommand {
             case "vault":
                 testVaultIntegration(player);
                 break;
+            case "db":
+            case "database":
+                debugDatabase(player);
+                break;
             default:
                 showUsage(player);
                 break;
@@ -179,8 +183,92 @@ public class DebugCommand extends SubCommand {
         }
     }
     
+    private void debugDatabase(Player player) {
+        player.sendMessage(Component.text("=== Database Debug ===")
+            .color(NamedTextColor.YELLOW));
+        
+        ChunklockPlugin plugin = ChunklockPlugin.getInstance();
+        String storageType = plugin.getConfigManager().getDatabaseConfig().getType();
+        boolean isMySql = "mysql".equalsIgnoreCase(storageType);
+        
+        player.sendMessage(Component.text("Storage Backend: " + storageType.toUpperCase())
+            .color(isMySql ? NamedTextColor.GREEN : NamedTextColor.YELLOW));
+        
+        if (isMySql) {
+            var provider = plugin.getMySqlConnectionProvider();
+            if (provider != null) {
+                try (var connection = provider.getConnection()) {
+                    long start = System.currentTimeMillis();
+                    connection.createStatement().execute("SELECT 1");
+                    long queryTime = System.currentTimeMillis() - start;
+                    
+                    player.sendMessage(Component.text("✓ MySQL Connection: Active")
+                        .color(NamedTextColor.GREEN));
+                    player.sendMessage(Component.text("  Query Response: " + queryTime + "ms")
+                        .color(queryTime < 50 ? NamedTextColor.GREEN : 
+                               queryTime < 200 ? NamedTextColor.YELLOW : NamedTextColor.RED));
+                    
+                    // Get pool stats
+                    try {
+                        java.lang.reflect.Field dsField = provider.getClass().getDeclaredField("dataSource");
+                        dsField.setAccessible(true);
+                        com.zaxxer.hikari.HikariDataSource dataSource = 
+                            (com.zaxxer.hikari.HikariDataSource) dsField.get(provider);
+                        
+                        if (dataSource != null) {
+                            var poolBean = dataSource.getHikariPoolMXBean();
+                            player.sendMessage(Component.text("  Active Connections: " + poolBean.getActiveConnections())
+                                .color(NamedTextColor.GRAY));
+                            player.sendMessage(Component.text("  Idle Connections: " + poolBean.getIdleConnections())
+                                .color(NamedTextColor.GRAY));
+                            player.sendMessage(Component.text("  Total Connections: " + poolBean.getTotalConnections())
+                                .color(NamedTextColor.GRAY));
+                            
+                            if (poolBean.getThreadsAwaitingConnection() > 0) {
+                                player.sendMessage(Component.text("  ⚠ Threads Waiting: " + 
+                                    poolBean.getThreadsAwaitingConnection())
+                                    .color(NamedTextColor.RED));
+                            }
+                        }
+                    } catch (Exception e) {
+                        player.sendMessage(Component.text("  (Pool stats unavailable)")
+                            .color(NamedTextColor.YELLOW));
+                    }
+                    
+                } catch (Exception e) {
+                    player.sendMessage(Component.text("✗ MySQL Connection Failed: " + e.getMessage())
+                        .color(NamedTextColor.RED));
+                }
+            } else {
+                player.sendMessage(Component.text("✗ MySQL provider not initialized")
+                    .color(NamedTextColor.RED));
+            }
+        } else {
+            // MapDB mode
+            java.io.File chunksDb = new java.io.File(plugin.getDataFolder(), "chunks.db");
+            java.io.File playersDb = new java.io.File(plugin.getDataFolder(), "players.db");
+            
+            player.sendMessage(Component.text("  Chunks DB: " + 
+                (chunksDb.exists() ? formatFileSize(chunksDb.length()) : "Not Found"))
+                .color(chunksDb.exists() ? NamedTextColor.GREEN : NamedTextColor.RED));
+            player.sendMessage(Component.text("  Players DB: " + 
+                (playersDb.exists() ? formatFileSize(playersDb.length()) : "Not Found"))
+                .color(playersDb.exists() ? NamedTextColor.GREEN : NamedTextColor.RED));
+        }
+        
+        player.sendMessage(Component.text("For full database info, use: /chunklock database")
+            .color(NamedTextColor.GRAY));
+    }
+    
+    private String formatFileSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        int exp = (int) (Math.log(bytes) / Math.log(1024));
+        String pre = "KMGTPE".charAt(exp-1) + "";
+        return String.format("%.1f %sB", bytes / Math.pow(1024, exp), pre);
+    }
+    
     private void showUsage(Player player) {
-        player.sendMessage(Component.text("Usage: /chunklock debug <world|holograms|full|fix-ownership|deps|vault>")
+        player.sendMessage(Component.text("Usage: /chunklock debug <world|holograms|full|fix-ownership|deps|vault|database>")
             .color(NamedTextColor.YELLOW));
         player.sendMessage(Component.text("  world - Test world detection")
             .color(NamedTextColor.GRAY));
@@ -194,12 +282,14 @@ public class DebugCommand extends SubCommand {
             .color(NamedTextColor.GRAY));
         player.sendMessage(Component.text("  vault - Test Vault economy integration")
             .color(NamedTextColor.GRAY));
+        player.sendMessage(Component.text("  database - Check database status and connection")
+            .color(NamedTextColor.GRAY));
     }
     
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("world", "holograms", "full", "fix-ownership", "deps", "dependencies", "vault");
+            return Arrays.asList("world", "holograms", "full", "fix-ownership", "deps", "dependencies", "vault", "database", "db");
         }
         return List.of();
     }

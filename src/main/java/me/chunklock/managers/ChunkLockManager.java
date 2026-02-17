@@ -5,7 +5,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import me.chunklock.models.ChunkData;
 import me.chunklock.models.Difficulty;
-import me.chunklock.services.ChunkDatabase;
+import me.chunklock.services.ChunkStore;
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.managers.TeamManager;
 
@@ -15,7 +15,7 @@ import java.util.UUID;
 
 public class ChunkLockManager {
 
-    private final ChunkDatabase chunkDatabase;
+    private final ChunkStore chunkDatabase;
     private final ChunkEvaluator chunkEvaluator;
     private final JavaPlugin plugin;
     private final TeamManager teamManager;

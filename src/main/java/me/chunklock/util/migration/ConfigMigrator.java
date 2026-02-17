@@ -329,6 +329,7 @@ public class ConfigMigrator {
                 "#   - holograms.yml        → Hologram display settings\n" +
                 "#   - debug.yml            → Debug and logging options\n" +
                 "#   - performance.yml      → Performance tuning settings\n" +
+                "#   - database.yml         → Storage backend settings (MapDB/MySQL)\n" +
                 "#\n" +
                 "# All these files are automatically loaded from the plugin's data folder.\n" +
                 "# If a file is missing, it will be created with default values.\n\n";

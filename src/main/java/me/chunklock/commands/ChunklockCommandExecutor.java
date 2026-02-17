@@ -166,6 +166,10 @@ public class ChunklockCommandExecutor extends ChunklockCommandManager {
             registerSubCommand(new DebugCommand());
             plugin.getLogger().info("✓ Registered DebugCommand (admin-only) - NO DEPENDENCIES REQUIRED");
 
+            // Database command (admin-only, no dependencies needed)
+            registerSubCommand(new DatabaseCommand());
+            plugin.getLogger().info("✓ Registered DatabaseCommand (admin-only) - NO DEPENDENCIES REQUIRED");
+
             // BorderCommand removed
 
             // DebugCommand removed

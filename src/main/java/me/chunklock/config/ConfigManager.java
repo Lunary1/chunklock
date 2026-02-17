@@ -40,6 +40,7 @@ public class ConfigManager {
     private HologramsConfig hologramsConfig;
     private DebugConfig debugConfig;
     private PerformanceConfig performanceConfig;
+    private DatabaseConfig databaseConfig;
     private LanguageManager languageManager;
     
     public ConfigManager(Plugin plugin) {
@@ -85,6 +86,7 @@ public class ConfigManager {
             hologramsConfig = new HologramsConfig(plugin);
             debugConfig = new DebugConfig(plugin);
             performanceConfig = new PerformanceConfig(plugin);
+            databaseConfig = new DatabaseConfig(plugin);
             languageManager = new LanguageManager(plugin);
             
             logger.info("Modular configuration loaded successfully");
@@ -172,6 +174,10 @@ public class ConfigManager {
     public PerformanceConfig getPerformanceConfig() {
         return performanceConfig;
     }
+
+    public DatabaseConfig getDatabaseConfig() {
+        return databaseConfig;
+    }
     
     public LanguageManager getLanguageManager() {
         return languageManager;
@@ -242,7 +248,8 @@ public class ConfigManager {
             blockValuesConfig == null || biomeUnlocksConfig == null ||
             teamSettingsConfig == null || bordersConfig == null ||
             worldsConfig == null || hologramsConfig == null ||
-            debugConfig == null || performanceConfig == null) {
+            debugConfig == null || performanceConfig == null ||
+            databaseConfig == null) {
             logger.warning("Some modular configuration files failed to load.");
             valid = false;
         }

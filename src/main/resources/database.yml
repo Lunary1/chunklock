@@ -1,0 +1,25 @@
+# ===== DATABASE CONFIGURATION =====
+# Storage backend for core chunk/player data.
+# Supported types: mapdb, mysql
+
+database:
+  type: "mapdb"
+  fail-fast: true
+
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "chunklock"
+    username: "chunklock_user"
+    password: "change_me"
+    use-ssl: false
+
+    pool:
+      max-size: 10
+      min-idle: 2
+      connection-timeout-ms: 30000
+      idle-timeout-ms: 600000
+      max-lifetime-ms: 1800000
+
+    cache:
+      ttl-ms: 300000

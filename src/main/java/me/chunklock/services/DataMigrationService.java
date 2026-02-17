@@ -17,11 +17,11 @@ import java.util.UUID;
 public class DataMigrationService {
     
     private final ChunklockPlugin plugin;
-    private final ChunkDatabase chunkDatabase;
-    private final PlayerDatabase playerDatabase;
+    private final ChunkStore chunkDatabase;
+    private final PlayerStore playerDatabase;
     private final File dataYmlFile;
 
-    public DataMigrationService(ChunklockPlugin plugin, ChunkDatabase chunkDatabase, PlayerDatabase playerDatabase) {
+    public DataMigrationService(ChunklockPlugin plugin, ChunkStore chunkDatabase, PlayerStore playerDatabase) {
         this.plugin = plugin;
         this.chunkDatabase = chunkDatabase;
         this.playerDatabase = playerDatabase;

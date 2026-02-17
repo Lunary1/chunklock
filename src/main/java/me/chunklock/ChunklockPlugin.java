@@ -79,9 +79,10 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private me.chunklock.services.ChunkCostDatabase costDatabase;
     
     // Database system
-    private me.chunklock.services.ChunkDatabase chunkDatabase;
-    private me.chunklock.services.PlayerDatabase playerDatabase;
+    private me.chunklock.services.ChunkStore chunkDatabase;
+    private me.chunklock.services.PlayerStore playerDatabase;
     private me.chunklock.services.DataMigrationService dataMigrationService;
+    private me.chunklock.services.MySqlConnectionProvider mySqlConnectionProvider;
     
     // Dependency checker
     private DependencyChecker dependencyChecker;
@@ -240,25 +241,80 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             
             // Initialize databases FIRST (before managers that depend on them)
             logSection("Database System", "💾");
-            this.chunkDatabase = new me.chunklock.services.ChunkDatabase(this);
-            this.playerDatabase = new me.chunklock.services.PlayerDatabase(this);
-            
+            me.chunklock.services.StorageFactory.StorageSelection storageSelection =
+                me.chunklock.services.StorageFactory.createStores(this);
+            if (storageSelection.isStartupFailure()) {
+                return false;
+            }
+
+            this.chunkDatabase = storageSelection.getChunkStore();
+            this.playerDatabase = storageSelection.getPlayerStore();
+            this.mySqlConnectionProvider = storageSelection.getMySqlConnectionProvider();
+
+            if (chunkDatabase == null || playerDatabase == null) {
+                getLogger().severe("❌ Storage backends were not created");
+                return false;
+            }
+
             if (!chunkDatabase.initialize()) {
-                getLogger().severe("❌ Failed to initialize ChunkDatabase - plugin cannot continue");
+                getLogger().severe("❌ Failed to initialize chunk storage - plugin cannot continue");
                 return false;
             }
-            
+
             if (!playerDatabase.initialize()) {
-                getLogger().severe("❌ Failed to initialize PlayerDatabase - plugin cannot continue");
+                getLogger().severe("❌ Failed to initialize player storage - plugin cannot continue");
                 return false;
             }
-            
-            // Run data migration if needed
-            this.dataMigrationService = new me.chunklock.services.DataMigrationService(this, chunkDatabase, playerDatabase);
-            if (dataMigrationService.needsMigration()) {
-                getLogger().info("📦 Migrating data from YAML to MapDB...");
-                if (!dataMigrationService.migrate()) {
-                    getLogger().warning("⚠️ Data migration had issues - check logs");
+
+            if (storageSelection.isMysqlMode()) {
+                me.chunklock.services.StorageFactory.StorageSelection mapDbBootstrap =
+                    me.chunklock.services.StorageFactory.createMapDbStores(this);
+                me.chunklock.services.ChunkStore mapDbChunkStore = mapDbBootstrap.getChunkStore();
+                me.chunklock.services.PlayerStore mapDbPlayerStore = mapDbBootstrap.getPlayerStore();
+                try {
+                    if (!mapDbChunkStore.initialize() || !mapDbPlayerStore.initialize()) {
+                        getLogger().warning("⚠️ Failed to initialize temporary MapDB stores for migration bootstrap");
+                        java.io.File chunksDb = new java.io.File(getDataFolder(), "chunks.db");
+                        java.io.File playersDb = new java.io.File(getDataFolder(), "players.db");
+                        if (chunksDb.exists() || playersDb.exists()) {
+                            getLogger().severe("❌ Existing MapDB files detected but migration bootstrap failed. Aborting startup to prevent data loss.");
+                            return false;
+                        }
+                    } else {
+                        me.chunklock.services.DataMigrationService mapDbDataMigration =
+                            new me.chunklock.services.DataMigrationService(this, mapDbChunkStore, mapDbPlayerStore);
+                        if (mapDbDataMigration.needsMigration()) {
+                            getLogger().info("📦 Migrating legacy YAML data into MapDB before MySQL import...");
+                            if (!mapDbDataMigration.migrate()) {
+                                getLogger().warning("⚠️ YAML to MapDB migration had issues - check logs");
+                            }
+                        }
+
+                        me.chunklock.services.MapDbToMySqlMigrationService mapDbToMySqlMigration =
+                            new me.chunklock.services.MapDbToMySqlMigrationService(
+                                this,
+                                mapDbChunkStore,
+                                mapDbPlayerStore,
+                                chunkDatabase,
+                                playerDatabase
+                            );
+                        if (mapDbToMySqlMigration.needsMigration() && !mapDbToMySqlMigration.migrate()) {
+                            getLogger().severe("❌ MapDB to MySQL migration failed");
+                            return false;
+                        }
+                    }
+                } finally {
+                    mapDbChunkStore.close();
+                    mapDbPlayerStore.close();
+                }
+            } else {
+                // Run YAML -> MapDB migration for non-MySQL storage mode
+                this.dataMigrationService = new me.chunklock.services.DataMigrationService(this, chunkDatabase, playerDatabase);
+                if (dataMigrationService.needsMigration()) {
+                    getLogger().info("📦 Migrating data from YAML to MapDB...");
+                    if (!dataMigrationService.migrate()) {
+                        getLogger().warning("⚠️ Data migration had issues - check logs");
+                    }
                 }
             }
             
@@ -571,8 +627,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private void saveAllData() {
         int saveErrors = 0;
         
-        // Databases auto-save on commit, but we ensure they're closed properly
-        // Note: ChunkDatabase and PlayerDatabase use MapDB which auto-commits
+        // Storage backends auto-save on write, but we ensure resources close cleanly
         
         try { if (teamManager != null) teamManager.saveAll(); } 
         catch (Exception e) { getLogger().log(Level.SEVERE, "Error saving team data", e); saveErrors++; }
@@ -581,11 +636,14 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         catch (Exception e) { getLogger().log(Level.SEVERE, "Error saving enhanced team data", e); saveErrors++; }
         
         // Close databases
-        try { if (chunkDatabase != null) chunkDatabase.close(); } 
-        catch (Exception e) { getLogger().log(Level.SEVERE, "Error closing ChunkDatabase", e); saveErrors++; }
+        try { if (chunkDatabase != null) chunkDatabase.close(); }
+        catch (Exception e) { getLogger().log(Level.SEVERE, "Error closing chunk store", e); saveErrors++; }
         
-        try { if (playerDatabase != null) playerDatabase.close(); } 
-        catch (Exception e) { getLogger().log(Level.SEVERE, "Error closing PlayerDatabase", e); saveErrors++; }
+        try { if (playerDatabase != null) playerDatabase.close(); }
+        catch (Exception e) { getLogger().log(Level.SEVERE, "Error closing player store", e); saveErrors++; }
+
+        try { if (mySqlConnectionProvider != null) mySqlConnectionProvider.close(); }
+        catch (Exception e) { getLogger().log(Level.SEVERE, "Error closing MySQL connection pool", e); saveErrors++; }
         
         if (saveErrors > 0) {
             getLogger().warning("Encountered " + saveErrors + " errors while saving data");
@@ -621,14 +679,19 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         return playerDataManager;
     }
 
-    public me.chunklock.services.ChunkDatabase getChunkDatabase() {
-        if (chunkDatabase == null) throw new IllegalStateException("ChunkDatabase not initialized");
+    public me.chunklock.services.ChunkStore getChunkDatabase() {
+        if (chunkDatabase == null) throw new IllegalStateException("ChunkStore not initialized");
         return chunkDatabase;
     }
 
-    public me.chunklock.services.PlayerDatabase getPlayerDatabase() {
-        if (playerDatabase == null) throw new IllegalStateException("PlayerDatabase not initialized");
+    public me.chunklock.services.PlayerStore getPlayerDatabase() {
+        if (playerDatabase == null) throw new IllegalStateException("PlayerStore not initialized");
         return playerDatabase;
+    }
+
+    public me.chunklock.services.MySqlConnectionProvider getMySqlConnectionProvider() {
+        // Nullable - only present when MySQL mode is active
+        return mySqlConnectionProvider;
     }
 
     public TeamManager getTeamManager() {

@@ -78,10 +78,24 @@ Chunklock uses multiple caching systems for optimal performance:
 - Reduces API calls and costs
 - Configurable via `cache-duration-minutes`
 
-**MapDB Database**:
-- Uses MapDB for persistent data storage
-- Automatic caching of frequently accessed data
-- Memory-efficient storage system
+**Core Data Storage** (`database.yml`):
+- Default backend is MapDB (`chunks.db`, `players.db`)
+- Optional MySQL backend supports pooled connections for larger networks
+- MySQL backend uses configurable in-memory cache (`database.mysql.cache.ttl-ms`)
+
+Example:
+```yaml
+database:
+  type: "mysql"
+  fail-fast: true
+  mysql:
+    pool:
+      max-size: 20
+      min-idle: 2
+      connection-timeout-ms: 30000
+    cache:
+      ttl-ms: 300000
+```
 
 **Hologram Caching** (`holograms.yml`):
 - Hologram data is cached per player

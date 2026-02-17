@@ -13,6 +13,7 @@
 #   - holograms.yml        → Hologram display settings
 #   - debug.yml            → Debug and logging options
 #   - performance.yml      → Performance tuning settings
+#   - database.yml         → Storage backend settings (MapDB/MySQL)
 #
 # All these files are automatically loaded from the plugin's data folder.
 # If a file is missing, it will be created with default values.

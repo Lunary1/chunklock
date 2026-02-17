@@ -11,7 +11,7 @@ import org.mapdb.DB;
 import org.mapdb.DBMaker;
 import org.mapdb.HTreeMap;
 
-public class PlayerDatabase {
+public class PlayerDatabase implements PlayerStore {
     
     private final ChunklockPlugin plugin;
     private final File databaseFile;

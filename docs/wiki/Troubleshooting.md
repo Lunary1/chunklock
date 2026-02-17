@@ -769,7 +769,11 @@ ls plugins/Chunklock/lang/
 ```
 # Check file permissions
 ls -la plugins/Chunklock/
-# Ensure server can read/write data.yml
+# Ensure server can read/write chunks.db / players.db (MapDB mode)
+
+# Verify selected backend
+grep -n "type:" plugins/Chunklock/database.yml
+# mapdb or mysql
 
 # Check disk space
 df -h
@@ -802,10 +806,30 @@ df -h
 3. **Database Recovery**:
    ```bash
    # Stop server
-   # Restore data.yml from backup
-   # Or delete data.yml to start fresh
+   # If using mapdb: restore chunks.db and players.db from backup
+   # If using mysql: verify credentials/network and table availability
+   # Check one-time migration marker:
+   ls -la plugins/Chunklock/.mysql_migration_completed
    # Start server
    ```
+
+### MySQL Connection Failures
+
+**Symptoms**: Plugin fails on startup when `database.type: mysql`
+
+**Checks**:
+
+```bash
+# Verify host/port reachability
+nc -zv <mysql-host> 3306
+
+# Validate credentials in database.yml
+grep -n "database.mysql" -n plugins/Chunklock/database.yml
+```
+
+**Behavior**:
+- If `database.fail-fast: true`, startup stops when MySQL cannot initialize
+- If `database.fail-fast: false`, plugin falls back to MapDB automatically
 
 ## Advanced Troubleshooting
 

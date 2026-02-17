@@ -2,14 +2,14 @@ package me.chunklock.managers;
 
 import org.bukkit.Location;
 import org.bukkit.plugin.java.JavaPlugin;
-import me.chunklock.services.PlayerDatabase;
+import me.chunklock.services.PlayerStore;
 import me.chunklock.ChunklockPlugin;
 
 import java.util.UUID;
 
 public class PlayerDataManager {
 
-    private final PlayerDatabase playerDatabase;
+    private final PlayerStore playerDatabase;
 
     public PlayerDataManager(JavaPlugin plugin) {
         

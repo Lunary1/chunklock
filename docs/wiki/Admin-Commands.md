@@ -178,7 +178,7 @@ Admin commands provide powerful tools for managing the Chunklock plugin, monitor
 
 - `player` - Player name or "here" to unlock your current chunk
 - `x` (optional) - Chunk X coordinate
-- `z` (optional) - Chunk Z coordinate  
+- `z` (optional) - Chunk Z coordinate
 - `world` (optional) - World name
 
 **Notes**:
@@ -399,6 +399,92 @@ Active Operations:
 
 ---
 
+### `/chunklock database`
+
+**Permission**: `chunklock.admin`  
+**Description**: Shows database status, storage backend information, and connection details.
+
+```
+/chunklock database
+/cl database
+```
+
+**Output (MapDB mode)**:
+
+```
+=== Chunklock Database Status ===
+
+Storage Backend: MAPDB
+
+MapDB Configuration:
+  Chunks Database: 12.5 MB
+  Players Database: 3.2 MB
+
+Performance:
+  In-Memory Cache: 5 minute TTL
+
+Note: To switch to MySQL, configure database.yml
+      and reload or restart the server.
+```
+
+**Output (MySQL mode)**:
+
+```
+=== Chunklock Database Status ===
+
+Storage Backend: MYSQL
+
+MySQL Configuration:
+  Host: localhost:3306
+  Database: chunklock
+  Username: chunklock_user
+  SSL: Disabled
+
+✓ Connection Status: Active
+
+Connection Pool:
+  Active Connections: 2
+  Idle Connections: 5
+  Total Connections: 7
+  Threads Awaiting Connection: 0
+
+Pool Configuration:
+  Max Pool Size: 10
+  Min Idle: 2
+  Connection Timeout: 30000ms
+  Idle Timeout: 600000ms
+  Max Lifetime: 1800000ms
+
+Performance:
+  Query Response Time: 15ms
+
+Cache:
+  Cache TTL: 300000ms
+
+Migration:
+  MapDB to MySQL: Completed
+```
+
+**Use cases**:
+
+- Verify which storage backend is active
+- Check MySQL connection health
+- Monitor connection pool usage
+- Diagnose performance issues
+- Confirm migration status
+
+**Troubleshooting with database command**:
+
+If you see:
+
+- `Connection Failed`: Check credentials in `database.yml`
+- `Threads Awaiting Connection > 0`: Increase `pool.max-size`
+- `Query Response Time > 100ms`: Check MySQL server performance or network latency
+
+For detailed MySQL setup instructions, see the [MySQL Setup Guide](../MySQL-Setup-Guide.md).
+
+---
+
 ## Command Examples
 
 ### Daily Admin Tasks
@@ -406,6 +492,9 @@ Active Operations:
 ```bash
 # Check server health
 /chunklock debug
+
+# Check database status
+/chunklock database
 
 # Review player status
 /chunklock status PlayerName

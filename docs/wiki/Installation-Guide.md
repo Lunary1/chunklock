@@ -51,18 +51,20 @@ plugins/Chunklock/
 ├── holograms.yml       # Hologram display settings
 ├── debug.yml           # Debug and logging options
 ├── performance.yml     # Performance tuning settings
+├── database.yml        # Storage backend settings (MapDB/MySQL)
 ├── lang/
 │   └── en.yml          # English language file
-└── data/               # Player and chunk data (MapDB databases)
-    ├── chunks.db
-    └── players.db
+├── chunks.db           # Core chunk data (MapDB backend)
+└── players.db          # Core player data (MapDB backend)
 ```
 
 **Note**: 
 - All configuration files are **automatically generated** on first startup
 - Chunklock uses a modular configuration system with separate files for each feature area
 - If a config file is missing, restart the server to regenerate it
-- Player and chunk data is stored in MapDB databases in the `data/` folder
+- Default storage backend is MapDB (`chunks.db` + `players.db`)
+- To use MySQL instead, configure `database.yml` (`database.type: "mysql"`)
+- On first MySQL startup, existing MapDB data is auto-imported and `.mysql_migration_completed` is created
 
 ### 4. Basic Configuration
 
@@ -101,6 +103,19 @@ provider: "FancyHolograms"
 ```yaml
 enabled: true
 border-material: "LIGHT_GRAY_STAINED_GLASS"
+```
+
+**Storage Backend** (`database.yml`):
+```yaml
+database:
+  type: "mapdb" # or "mysql"
+  fail-fast: true
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "chunklock"
+    username: "chunklock_user"
+    password: "change_me"
 ```
 
 ### 5. World Setup

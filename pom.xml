@@ -113,6 +113,22 @@
       <version>3.0.9</version>
       <scope>compile</scope>
     </dependency>
+
+    <!-- MySQL JDBC driver for optional external storage backend -->
+    <dependency>
+      <groupId>com.mysql</groupId>
+      <artifactId>mysql-connector-j</artifactId>
+      <version>9.1.0</version>
+      <scope>compile</scope>
+    </dependency>
+
+    <!-- HikariCP for MySQL connection pooling -->
+    <dependency>
+      <groupId>com.zaxxer</groupId>
+      <artifactId>HikariCP</artifactId>
+      <version>5.1.0</version>
+      <scope>compile</scope>
+    </dependency>
     
     <!-- JUnit 5 for testing -->
     <dependency>
@@ -174,6 +190,16 @@
             <relocation>
               <pattern>org.mapdb</pattern>
               <shadedPattern>me.chunklock.libs.mapdb</shadedPattern>
+            </relocation>
+            <!-- Relocate MySQL JDBC to avoid conflicts -->
+            <relocation>
+              <pattern>com.mysql</pattern>
+              <shadedPattern>me.chunklock.libs.mysql</shadedPattern>
+            </relocation>
+            <!-- Relocate HikariCP to avoid conflicts -->
+            <relocation>
+              <pattern>com.zaxxer.hikari</pattern>
+              <shadedPattern>me.chunklock.libs.hikari</shadedPattern>
             </relocation>
           </relocations>
           <filters>

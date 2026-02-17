@@ -34,6 +34,30 @@ The plugin uses a comprehensive `config.yml` with the following main sections:
 - **Performance** - Caching, threading, and optimization settings
 - **Worlds** - Dedicated world configuration and player claims
 
+### Storage backend (`database.yml`)
+
+Core gameplay data (`chunks` + `players`) now supports two backends:
+
+- `mapdb` (default): local embedded files (`chunks.db`, `players.db`)
+- `mysql` (optional): external MySQL server with connection pooling
+
+```yaml
+database:
+  type: "mapdb" # or "mysql"
+  fail-fast: true
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "chunklock"
+    username: "chunklock_user"
+    password: "change_me"
+    use-ssl: false
+```
+
+When switching from MapDB to MySQL, Chunklock performs a one-time automatic migration and writes `.mysql_migration_completed` in the plugin data folder after verification.
+
+**→ For detailed MySQL setup instructions, see [MySQL Setup Guide](docs/MySQL-Setup-Guide.md)**
+
 ### Upgrading from older versions
 
 When updating from v1.1 or earlier, the plugin automatically migrates legacy YAML files into the new unified configuration format. Original files are preserved with a `.old` extension for safety.
@@ -66,14 +90,15 @@ When updating from v1.1 or earlier, the plugin automatically migrates legacy YAM
 
 ### Admin Commands
 
-| Command                           | Description                                   |
-| --------------------------------- | --------------------------------------------- |
-| `/chunklock setup <size>`         | Initialize a new Chunklock world              |
-| `/chunklock reset <player>`       | Reset a player's progress                     |
-| `/chunklock resetall`             | Reset all player data (requires confirmation) |
-| `/chunklock bypass [player]`      | Toggle movement restriction bypass            |
-| `/chunklock reload`               | Reload plugin configuration                   |
-| `/chunklock debug`                | View system diagnostics and performance       |
+| Command                      | Description                                   |
+| ---------------------------- | --------------------------------------------- |
+| `/chunklock setup <size>`    | Initialize a new Chunklock world              |
+| `/chunklock reset <player>`  | Reset a player's progress                     |
+| `/chunklock resetall`        | Reset all player data (requires confirmation) |
+| `/chunklock bypass [player]` | Toggle movement restriction bypass            |
+| `/chunklock reload`          | Reload plugin configuration                   |
+| `/chunklock database`        | View storage backend status and MySQL details |
+| `/chunklock debug`           | View system diagnostics and performance       |
 
 ---
 
