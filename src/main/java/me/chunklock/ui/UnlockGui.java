@@ -404,42 +404,25 @@ public class UnlockGui {
                     materialPaymentRequirement = economyManager.calculateRequirement(player, state.chunk, state.biome, evaluation);
                 }
                 
-                // Validate using unified cost calculation (same as display)
-                Material requiredMaterial = materialPaymentRequirement.getMaterial();
-                int requiredAmount = materialPaymentRequirement.getMaterialAmount();
-                int playerHas = countPlayerItems(player, requiredMaterial);
-                
-                // Check if player has the required items using unified cost
-                if (playerHas < requiredAmount) {
-                    handleInsufficientItems(player, playerHas, requiredAmount, requiredMaterial);
-                    return;
-                }
-                
-                // Also check custom items if the biome has multiple requirements
-                // This ensures we validate all requirements, not just the primary one
-                // Note: For now, we validate the primary material from PaymentRequirement
-                // If there are multiple materials, EconomyManager should handle that in calculateRequirement()
-                // Custom items are checked separately if needed
-                var allRequirements = biomeUnlockRegistry.getRequirementsForBiome(state.biome);
-                for (var req : allRequirements) {
-                    if (req instanceof me.chunklock.economy.items.VanillaItemRequirement vanillaReq) {
-                        // Skip if this is the primary material (already checked above)
-                        if (vanillaReq.getMaterial() == requiredMaterial) {
-                            continue;
-                        }
-                        // For other vanilla requirements, we need to recalculate using EconomyManager
-                        // to ensure consistency. For now, we'll use a simplified check.
-                        // If this becomes an issue, we should extend PaymentRequirement to support multiple materials.
-                    } else {
-                        // Check custom items
-                        if (!req.hasInInventory(player)) {
-                            Map<String, String> placeholders = new HashMap<>();
-                            placeholders.put("item", req.getDisplayName());
-                            String message = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_MISSING_ITEM, placeholders);
-                            player.sendMessage(Component.text(message).color(NamedTextColor.RED));
-                            return;
+                // Validate using unified canAfford check (consistent with display)
+                if (!economyManager.canAfford(player, materialPaymentRequirement)) {
+                    // Find specific missing vanilla item for accurate error message
+                    Material requiredMaterial = materialPaymentRequirement.getMaterial();
+                    int requiredAmount = materialPaymentRequirement.getMaterialAmount();
+                    for (var req : materialPaymentRequirement.getItemRequirements()) {
+                        if (req instanceof me.chunklock.economy.items.VanillaItemRequirement vanillaReq
+                            && !req.hasInInventory(player)) {
+                            requiredMaterial = vanillaReq.getMaterial();
+                            requiredAmount = vanillaReq.getAmount();
+                            break;
                         }
                     }
+                    if (requiredMaterial == null) {
+                        requiredMaterial = Material.AIR;
+                    }
+                    int playerHas = countPlayerItems(player, requiredMaterial);
+                    handleInsufficientItems(player, playerHas, requiredAmount, requiredMaterial);
+                    return;
                 }
 
                 if (debugLogging) {
@@ -560,17 +543,25 @@ public class UnlockGui {
                 paymentRequirement = economyManager.calculateRequirement(player, state.chunk, state.biome, evaluation);
             }
             
+            // Process payment - consume items from inventory
+            var evaluation = chunkLockManager.evaluateChunk(player.getUniqueId(), state.chunk);
+            if (!economyManager.processPayment(player, paymentRequirement, state.biome, evaluation)) {
+                String message = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_PAYMENT_FAILED);
+                player.sendMessage(Component.text(message).color(NamedTextColor.RED));
+                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
+                return;
+            }
+            
             if (debugLogging) {
                 logger.info("Consumed items for " + player.getName() + 
-                    " using BiomeUnlockRegistry method");
+                    " using EconomyManager.processPayment");
             }
             
         } catch (Exception e) {
-            logger.warning("BiomeUnlockRegistry consumption failed, using fallback: " + e.getMessage());
-            
-            // Fallback: Manual item removal
-            ItemStack requiredStack = new ItemStack(state.requirement.material(), state.requirement.amount());
-            player.getInventory().removeItem(requiredStack);
+            logger.warning("Material payment processing failed: " + e.getMessage());
+            String message = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_PAYMENT_PROCESSING_FAILED);
+            player.sendMessage(Component.text(message).color(NamedTextColor.RED));
+            return;
         }
 
         // Complete the unlock process
@@ -584,7 +575,7 @@ public class UnlockGui {
         // Play error sound
         player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
         
-        int needed = required - playerHas;
+        int needed = Math.max(0, required - playerHas);
         
         // Send formatted message
         player.sendMessage(Component.empty());
@@ -632,6 +623,11 @@ public class UnlockGui {
 
             // Note: Data persistence is handled automatically by ChunkDatabase and PlayerDatabase
             // Both databases commit on save operations (unlockChunk() and incrementUnlockedChunks() already save)
+
+            // Invalidate resource scan cache since owned territory changed
+            if (economyManager != null && economyManager.getOwnedChunkScanner() != null) {
+                economyManager.getOwnedChunkScanner().invalidateCache(player.getUniqueId());
+            }
 
             // Record team statistics if available
             try {

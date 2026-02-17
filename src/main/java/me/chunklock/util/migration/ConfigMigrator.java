@@ -50,7 +50,6 @@ public class ConfigMigrator {
 
             // Migrate each section
             migrateEconomy(oldConfig);
-            migrateOpenAI(oldConfig);
             migrateBlockValues(oldConfig);
             migrateBiomeUnlocks(oldConfig);
             migrateTeamSettings(oldConfig);
@@ -97,38 +96,6 @@ public class ConfigMigrator {
         }
 
         saveConfig(file, newConfig, "economy.yml");
-    }
-
-    private void migrateOpenAI(FileConfiguration oldConfig) {
-        File file = new File(dataFolder, "openai.yml");
-        if (file.exists()) {
-            logger.info("openai.yml already exists, skipping migration");
-            return;
-        }
-
-        FileConfiguration newConfig = new YamlConfiguration();
-        if (oldConfig.isConfigurationSection("openai-agent")) {
-            ConfigurationSection openai = oldConfig.getConfigurationSection("openai-agent");
-            if (openai != null) {
-                newConfig.set("enabled", openai.getBoolean("enabled", false));
-                newConfig.set("api-key", openai.getString("api-key", ""));
-                newConfig.set("model", openai.getString("model", "gpt-4o-mini"));
-                newConfig.set("max-tokens", openai.getInt("max-tokens", 300));
-                newConfig.set("temperature", openai.getDouble("temperature", 0.3));
-                newConfig.set("transparency", openai.getBoolean("transparency", false));
-                newConfig.set("fallback-on-error", openai.getBoolean("fallback-on-error", true));
-                newConfig.set("cache-duration-minutes", openai.getInt("cache-duration-minutes", 5));
-                newConfig.set("request-timeout-seconds", openai.getInt("request-timeout-seconds", 10));
-                if (openai.isConfigurationSection("cost-bounds")) {
-                    newConfig.set("cost-bounds", openai.getConfigurationSection("cost-bounds"));
-                }
-            }
-        } else {
-            // Use defaults
-            newConfig.set("enabled", false);
-        }
-
-        saveConfig(file, newConfig, "openai.yml");
     }
 
     private void migrateBlockValues(FileConfiguration oldConfig) {
@@ -320,7 +287,6 @@ public class ConfigMigrator {
                 "# MODULAR CONFIG SYSTEM:\n" +
                 "# The plugin now uses multiple focused configuration files for better organization:\n" +
                 "#   - economy.yml          → Economy and payment settings\n" +
-                "#   - openai.yml           → OpenAI integration settings\n" +
                 "#   - block-values.yml     → Block values and biome weights for chunk scoring\n" +
                 "#   - biome-unlocks.yml    → Biome-specific unlock requirements\n" +
                 "#   - team-settings.yml    → Team system configuration\n" +

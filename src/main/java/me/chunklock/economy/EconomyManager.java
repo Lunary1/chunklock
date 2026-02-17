@@ -1,15 +1,14 @@
 package me.chunklock.economy;
 
-import me.chunklock.ai.OpenAIChunkCostAgent;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.economy.calculation.CostCalculationStrategy;
 import me.chunklock.economy.calculation.TraditionalVaultStrategy;
-import me.chunklock.economy.calculation.AIVaultStrategy;
 import me.chunklock.economy.calculation.TraditionalMaterialStrategy;
-import me.chunklock.economy.calculation.AIMaterialStrategy;
+import me.chunklock.economy.calculation.ResourceBasedMaterialStrategy;
+import me.chunklock.economy.calculation.OwnedChunkScanner;
 import me.chunklock.util.world.BiomeUtil;
 import me.chunklock.util.item.MaterialUtil;
 import me.chunklock.economy.items.ItemRequirement;
@@ -139,14 +138,15 @@ public class EconomyManager {
     private final VaultEconomyService vaultService;
     private final BiomeUnlockRegistry biomeRegistry;
     private final PlayerProgressTracker progressTracker;
-    private final OpenAIChunkCostAgent openAIAgent; // OpenAI ChatGPT integration
     
     // Config objects stored as fields for efficient access
     private me.chunklock.config.modular.EconomyConfig economyConfig;
-    private me.chunklock.config.modular.OpenAIConfig openAIConfig;
     
     // Material-to-vault converter
     private MaterialVaultConverter materialConverter;
+    
+    // Resource scanner for resource-based cost mode
+    private OwnedChunkScanner ownedChunkScanner;
     
     // Calculation strategy (selected based on economy type and AI enabled state)
     private CostCalculationStrategy calculationStrategy;
@@ -154,7 +154,7 @@ public class EconomyManager {
     private EconomyType currentType;
     private boolean materialsEnabled;
     private boolean vaultFallbackEnabled;
-    private boolean aiCostingEnabled;
+    private boolean resourceScanMode;
     
     // Vault configuration
     private double baseCost;
@@ -166,15 +166,16 @@ public class EconomyManager {
         this.biomeRegistry = biomeRegistry;
         this.progressTracker = progressTracker;
         this.vaultService = new VaultEconomyService(plugin);
-        this.openAIAgent = new OpenAIChunkCostAgent(plugin, chunkEvaluator, biomeRegistry);
         
         // Load configs once from ConfigManager
         me.chunklock.config.ConfigManager configManager = plugin.getConfigManager();
         this.economyConfig = configManager.getModularEconomyConfig();
-        this.openAIConfig = configManager.getOpenAIConfig();
         
         // Initialize material converter
         this.materialConverter = new MaterialVaultConverter(plugin, economyConfig);
+        
+        // Initialize owned chunk scanner for resource-scan mode
+        this.ownedChunkScanner = new OwnedChunkScanner(plugin, plugin.getChunkDatabase(), plugin.getTeamManager());
         
         loadConfiguration();
     }
@@ -186,7 +187,6 @@ public class EconomyManager {
         // Reload configs if they were updated
         me.chunklock.config.ConfigManager configManager = plugin.getConfigManager();
         this.economyConfig = configManager.getModularEconomyConfig();
-        this.openAIConfig = configManager.getOpenAIConfig();
         
         // Get economy type
         String typeString = economyConfig != null ? economyConfig.getEconomyType() : "materials";
@@ -195,43 +195,36 @@ public class EconomyManager {
         // Material settings
         materialsEnabled = economyConfig != null ? economyConfig.isMaterialsEnabled() : true;
         vaultFallbackEnabled = economyConfig != null ? economyConfig.isVaultFallbackEnabled() : false;
+        resourceScanMode = economyConfig != null ? economyConfig.isResourceScanMode() : false;
+
+        if (currentType == EconomyType.MATERIALS && !resourceScanMode) {
+            plugin.getLogger().warning("Materials mode is configured without resource-scan. Enabling deterministic resource-scan fallback to prevent progression deadlocks.");
+            resourceScanMode = true;
+        }
+        
+        // Configure owned chunk scanner from config
+        if (ownedChunkScanner != null && economyConfig != null) {
+            ownedChunkScanner.setMinAbundance(economyConfig.getResourceScanMinAbundance());
+            ownedChunkScanner.setCacheTtlMs(economyConfig.getResourceScanCacheDuration() * 1000L);
+        }
         
         // Vault settings
         baseCost = economyConfig != null ? economyConfig.getVaultBaseCost() : 100.0;
         costPerUnlocked = economyConfig != null ? economyConfig.getVaultCostPerUnlocked() : 25.0;
         
-        // AI settings
-        aiCostingEnabled = openAIConfig != null ? openAIConfig.isEnabled() : false;
-        
         plugin.getLogger().info("Economy Configuration:");
         plugin.getLogger().info("  Type: " + currentType.getConfigName());
         plugin.getLogger().info("  Vault available: " + vaultService.isVaultAvailable());
-        plugin.getLogger().info("  AI costing enabled: " + aiCostingEnabled);
-        plugin.getLogger().info("  OpenAI agent available: " + (openAIAgent != null));
+        plugin.getLogger().info("  Resource-scan mode: " + resourceScanMode);
         plugin.getLogger().info("  Base cost: $" + baseCost);
         plugin.getLogger().info("  Cost per unlocked: $" + costPerUnlocked);
-        
-        // Check OpenAI configuration
-        if (aiCostingEnabled && openAIAgent != null && this.openAIConfig != null) {
-            String apiKey = this.openAIConfig.getApiKey();
-            boolean transparencyEnabled = this.openAIConfig.isTransparencyEnabled();
-            plugin.getLogger().info("  OpenAI API key set: " + (!apiKey.isEmpty()));
-            plugin.getLogger().info("  AI transparency enabled: " + transparencyEnabled);
-            
-            if (apiKey.isEmpty()) {
-                plugin.getLogger().warning("  ⚠️ OpenAI agent enabled but no API key provided!");
-                plugin.getLogger().warning("     Add your OpenAI API key to openai.yml");
-                aiCostingEnabled = false; // Disable if no API key
-            }
-        }
         
         // Select appropriate calculation strategy
         selectCalculationStrategy();
         
         plugin.getLogger().info("Economy type set to: " + currentType.getConfigName() + 
             (currentType == EconomyType.VAULT && !vaultService.isVaultAvailable() ? 
-                " (Vault not available, falling back to materials)" : "") +
-            (aiCostingEnabled ? " with OpenAI ChatGPT optimization" : ""));
+                " (Vault not available, falling back to materials)" : ""));
     }
     
     /**
@@ -239,17 +232,19 @@ public class EconomyManager {
      */
     private void selectCalculationStrategy() {
         if (currentType == EconomyType.VAULT) {
-            if (aiCostingEnabled && openAIAgent != null) {
-                calculationStrategy = new AIVaultStrategy(plugin, economyConfig, biomeRegistry, 
-                    progressTracker, baseCost, costPerUnlocked, openAIAgent, openAIConfig, materialConverter);
-            } else {
-                calculationStrategy = new TraditionalVaultStrategy(plugin, economyConfig, 
-                    biomeRegistry, progressTracker, baseCost, costPerUnlocked);
-            }
+            calculationStrategy = new TraditionalVaultStrategy(plugin, economyConfig,
+                biomeRegistry, progressTracker, baseCost, costPerUnlocked);
         } else {
-            if (aiCostingEnabled && openAIAgent != null) {
-                calculationStrategy = new AIMaterialStrategy(plugin, biomeRegistry, 
-                    progressTracker, openAIAgent, openAIConfig);
+            if (resourceScanMode && ownedChunkScanner != null) {
+                // Resource-scan mode: cost based on blocks in player's owned chunks
+                ResourceBasedMaterialStrategy resourceStrategy = new ResourceBasedMaterialStrategy(
+                    plugin, ownedChunkScanner, biomeRegistry, progressTracker);
+                if (economyConfig != null) {
+                    resourceStrategy.setBaseCost(economyConfig.getResourceScanBaseCost());
+                    resourceStrategy.setMaxCost(economyConfig.getResourceScanMaxCost());
+                    resourceStrategy.setMinCost(economyConfig.getResourceScanMinCost());
+                }
+                calculationStrategy = resourceStrategy;
             } else {
                 calculationStrategy = new TraditionalMaterialStrategy(plugin, biomeRegistry, progressTracker);
             }
@@ -268,9 +263,15 @@ public class EconomyManager {
             effectiveType = EconomyType.MATERIALS;
             // Temporarily switch strategy for this calculation
             CostCalculationStrategy originalStrategy = calculationStrategy;
-            if (aiCostingEnabled && openAIAgent != null) {
-                calculationStrategy = new AIMaterialStrategy(plugin, biomeRegistry, 
-                    progressTracker, openAIAgent, openAIConfig);
+            if (resourceScanMode && ownedChunkScanner != null) {
+                ResourceBasedMaterialStrategy resourceStrategy = new ResourceBasedMaterialStrategy(
+                    plugin, ownedChunkScanner, biomeRegistry, progressTracker);
+                if (economyConfig != null) {
+                    resourceStrategy.setBaseCost(economyConfig.getResourceScanBaseCost());
+                    resourceStrategy.setMaxCost(economyConfig.getResourceScanMaxCost());
+                    resourceStrategy.setMinCost(economyConfig.getResourceScanMinCost());
+                }
+                calculationStrategy = resourceStrategy;
             } else {
                 calculationStrategy = new TraditionalMaterialStrategy(plugin, biomeRegistry, progressTracker);
             }
@@ -329,7 +330,7 @@ public class EconomyManager {
     }
     
     /**
-     * Process material payment and record OpenAI learning data.
+     * Process material payment.
      * Consumes ALL required items from PaymentRequirement.
      * This is an all-or-nothing operation: if any item is missing, it fails.
      */
@@ -337,6 +338,10 @@ public class EconomyManager {
                                          Biome biome, ChunkEvaluator.ChunkValueData evaluation) {
         // First verify all items are available
         if (!canAfford(player, requirement)) {
+            if (vaultFallbackEnabled && vaultService.isVaultAvailable()) {
+                double fallbackCost = estimateVaultFallbackCost(requirement);
+                return vaultService.withdrawMoney(player, fallbackCost);
+            }
             return false;
         }
         
@@ -346,41 +351,32 @@ public class EconomyManager {
                 req.consumeFromInventory(player);
             }
             
-            // Record OpenAI learning data for success
-            if (aiCostingEnabled && openAIAgent != null) {
-                recordPaymentForOpenAI(player, requirement, true, 0, false);
-            }
-            
             return true;
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "Failed to consume materials for " + player.getName(), e);
             
-            // Record OpenAI learning data for failure
-            if (aiCostingEnabled && openAIAgent != null) {
-                recordPaymentForOpenAI(player, requirement, false, 0, false);
-            }
-            
             return false;
         }
     }
-    
-    /**
-     * Record unlock attempt data for OpenAI learning
-     */
-    public void recordUnlockAttempt(Player player, org.bukkit.Chunk chunk, boolean successful, 
-                                   int actualCost, double timeTaken, boolean abandoned) {
-        if (aiCostingEnabled && openAIAgent != null) {
-            openAIAgent.recordUnlockAttempt(player, chunk, successful, actualCost, timeTaken, abandoned);
+
+    private double estimateVaultFallbackCost(PaymentRequirement requirement) {
+        double total = 0.0;
+        for (ItemRequirement req : requirement.getItemRequirements()) {
+            if (req instanceof VanillaItemRequirement vanillaRequirement) {
+                total += materialConverter.convertToVaultCost(vanillaRequirement.getMaterial(), req.getAmount());
+            } else {
+                total += req.getAmount() * 5.0;
+            }
         }
+        return Math.max(1.0, total);
     }
     
     /**
-     * Helper method to record payment data for OpenAI learning
+     * Compatibility no-op: unlock attempt telemetry is no longer used for AI pricing.
      */
-    private void recordPaymentForOpenAI(Player player, PaymentRequirement requirement, 
-                                       boolean successful, double timeTaken, boolean abandoned) {
-        // This would need chunk context, so we'll implement this when integrated with unlock system
-        // For now, just note that the payment was processed
+    public void recordUnlockAttempt(Player player, org.bukkit.Chunk chunk, boolean successful, 
+                                   int actualCost, double timeTaken, boolean abandoned) {
+        // Intentionally empty
     }
     
     /**
@@ -456,7 +452,9 @@ public class EconomyManager {
     public VaultEconomyService getVaultService() { return vaultService; }
     public boolean isMaterialsEnabled() { return materialsEnabled; }
     public boolean isVaultFallbackEnabled() { return vaultFallbackEnabled; }
-    public boolean isAiCostingEnabled() { return aiCostingEnabled; }
+    public boolean isAiCostingEnabled() { return false; }
+    public boolean isResourceScanMode() { return resourceScanMode; }
+    public OwnedChunkScanner getOwnedChunkScanner() { return ownedChunkScanner; }
     
     /**
      * Reload configuration
@@ -466,6 +464,9 @@ public class EconomyManager {
         vaultService.reload();
         if (materialConverter != null) {
             materialConverter.reload();
+        }
+        if (ownedChunkScanner != null) {
+            ownedChunkScanner.clearCache();
         }
     }
     

@@ -77,8 +77,8 @@ public class UnlockGuiBuilder {
                 );
             }
             addProgressBar(inv, player, requirement);
-            addRequirementDisplay(inv, player, requirement, eval.biome, biomeRegistry);
-            addUnlockButton(inv, player, requirement);
+            addRequirementDisplay(inv, player, requirement, paymentRequirement, eval.biome, biomeRegistry);
+            addUnlockButton(inv, player, requirement, paymentRequirement);
         }
         
         addHelpItem(inv);
@@ -228,10 +228,12 @@ public class UnlockGuiBuilder {
         inv.setItem(PROGRESS_SLOT, progressItem);
     }
     
-    private void addRequirementDisplay(Inventory inv, Player player, BiomeUnlockRegistry.UnlockRequirement requirement, 
+    private void addRequirementDisplay(Inventory inv, Player player, BiomeUnlockRegistry.UnlockRequirement requirement,
+                                       me.chunklock.economy.EconomyManager.PaymentRequirement paymentRequirement,
                                        Biome biome, BiomeUnlockRegistry biomeRegistry) {
-        // Get all requirements (vanilla + custom items) for this biome
-        List<ItemRequirement> allRequirements = biomeRegistry.getRequirementsForBiome(biome);
+        // Use payment requirement's items for display/validation consistency with cost calculation
+        List<ItemRequirement> allRequirements = (paymentRequirement != null && !paymentRequirement.getItemRequirements().isEmpty()) ?
+            paymentRequirement.getItemRequirements() : biomeRegistry.getRequirementsForBiome(biome);
         
         if (allRequirements.isEmpty()) {
             // Fallback to old display if no requirements found
@@ -239,13 +241,25 @@ public class UnlockGuiBuilder {
             return;
         }
         
-        // Display all requirements
+        // Check ALL requirements from payment requirement
         int requiredAmount = requirement.amount();
         int playerHas = countPlayerItems(player, requirement.material());
-        boolean hasEnough = playerHas >= requiredAmount;
+        boolean hasEnough = true;
+        for (ItemRequirement req : allRequirements) {
+            if (!req.hasInInventory(player)) {
+                hasEnough = false;
+                break;
+            }
+        }
         
         // Main requirement display in center (shows first vanilla item or first custom item)
         ItemRequirement firstReq = allRequirements.get(0);
+        requiredAmount = firstReq.getAmount();
+        if (firstReq instanceof me.chunklock.economy.items.VanillaItemRequirement vanillaReq) {
+            playerHas = countPlayerItems(player, vanillaReq.getMaterial());
+        } else {
+            playerHas = firstReq.hasInInventory(player) ? firstReq.getAmount() : 0;
+        }
         ItemStack mainDisplay = firstReq.getRepresentativeStack();
         if (mainDisplay == null) {
             mainDisplay = new ItemStack(Material.PAPER);
@@ -303,7 +317,7 @@ public class UnlockGuiBuilder {
             
         if (!hasEnough) {
             lore.add(Component.empty());
-            placeholders.put("missing", String.valueOf(requiredAmount - playerHas));
+            placeholders.put("missing", String.valueOf(Math.max(0, requiredAmount - playerHas)));
             String missingMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_MISSING, placeholders);
             lore.add(Component.text(missingMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.empty());
@@ -431,8 +445,21 @@ public class UnlockGuiBuilder {
         }
     }
 
-    private void addUnlockButton(Inventory inv, Player player, BiomeUnlockRegistry.UnlockRequirement requirement) {
-        boolean hasEnough = countPlayerItems(player, requirement.material()) >= requirement.amount();
+    private void addUnlockButton(Inventory inv, Player player, BiomeUnlockRegistry.UnlockRequirement requirement,
+                                  me.chunklock.economy.EconomyManager.PaymentRequirement paymentRequirement) {
+        // Check ALL requirements from payment requirement for consistency
+        boolean hasEnough;
+        if (paymentRequirement != null && !paymentRequirement.getItemRequirements().isEmpty()) {
+            hasEnough = true;
+            for (ItemRequirement req : paymentRequirement.getItemRequirements()) {
+                if (!req.hasInInventory(player)) {
+                    hasEnough = false;
+                    break;
+                }
+            }
+        } else {
+            hasEnough = countPlayerItems(player, requirement.material()) >= requirement.amount();
+        }
         
         ItemStack unlockButton;
         ItemMeta meta;
@@ -471,6 +498,7 @@ public class UnlockGuiBuilder {
         } else {
             unlockButton = new ItemStack(Material.REDSTONE_BLOCK);
             meta = unlockButton.getItemMeta();
+            meta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
             
             String notReadyTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_NOT_READY);
             meta.displayName(Component.text(notReadyTitle)
@@ -483,7 +511,7 @@ public class UnlockGuiBuilder {
             String missingMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_MISSING);
             lore.add(Component.text(missingMsg).color(NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
             
-            placeholders.put("amount", String.valueOf(requirement.amount() - countPlayerItems(player, requirement.material())));
+            placeholders.put("amount", String.valueOf(Math.max(0, requirement.amount() - countPlayerItems(player, requirement.material()))));
             placeholders.put("material", formatMaterialName(requirement.material()));
             String needMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_NEED_MORE, placeholders);
             lore.add(Component.text(needMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));

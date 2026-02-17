@@ -34,6 +34,8 @@ public class SingleWorldManager {
     // Player claims tracking
     private final Map<UUID, Chunk> playerClaims = new ConcurrentHashMap<>();
     private final Set<Chunk> claimedChunks = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> startAssignmentsInProgress = ConcurrentHashMap.newKeySet();
+    private final Object claimAssignmentLock = new Object();
     
     // Progress tracking for setup
     private final Map<UUID, Integer> setupProgress = new ConcurrentHashMap<>();
@@ -331,6 +333,7 @@ public class SingleWorldManager {
      */
     public CompletableFuture<Boolean> teleportPlayerToChunklockWorld(Player player) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
+        UUID playerId = player.getUniqueId();
         
         if (!worldSetup) {
             future.complete(false);
@@ -344,7 +347,7 @@ public class SingleWorldManager {
         }
         
         // Check if player already has a claim
-        Chunk existingClaim = playerClaims.get(player.getUniqueId());
+        Chunk existingClaim = getPlayerClaim(playerId);
         if (existingClaim != null) {
             // Teleport to existing claim
             Location teleportLoc = ChunkUtils.getChunkCenter(existingClaim);
@@ -375,19 +378,36 @@ public class SingleWorldManager {
             future.complete(true);
             return future;
         }
+
+        if (!startAssignmentsInProgress.add(playerId)) {
+            future.complete(true);
+            return future;
+        }
         
         // Find and assign a new starting chunk
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                Chunk startingChunk = findValidStartingChunk(world);
-                if (startingChunk != null) {
-                    // Assign the chunk to the player
-                    playerClaims.put(player.getUniqueId(), startingChunk);
-                    claimedChunks.add(startingChunk);
+                Chunk claimToTeleport;
+                synchronized (claimAssignmentLock) {
+                    Chunk latestClaim = playerClaims.get(playerId);
+                    if (latestClaim != null) {
+                        claimToTeleport = latestClaim;
+                    } else {
+                        Chunk startingChunk = findValidStartingChunk(world);
+                        if (startingChunk == null) {
+                            future.complete(false);
+                            return;
+                        }
+
+                        playerClaims.put(playerId, startingChunk);
+                        claimedChunks.add(startingChunk);
+                        claimToTeleport = startingChunk;
+                    }
+                }
                     
                     // Teleport on main thread
                     Bukkit.getScheduler().runTask(plugin, () -> {
-                        Location teleportLoc = ChunkUtils.getChunkCenter(startingChunk);
+                        Location teleportLoc = ChunkUtils.getChunkCenter(claimToTeleport);
                         player.teleport(teleportLoc);
                         player.setRespawnLocation(teleportLoc, true);
                         
@@ -398,14 +418,14 @@ public class SingleWorldManager {
                                 if (borderManager != null && borderManager.isEnabled()) {
                                     // Initialize the chunk and trigger border update
                                     ChunkLockManager chunkLockManager = ChunklockPlugin.getInstance().getChunkLockManager();
-                                    chunkLockManager.initializeChunk(startingChunk, player.getUniqueId());
-                                    chunkLockManager.unlockChunk(startingChunk, player.getUniqueId());
+                                    chunkLockManager.initializeChunk(claimToTeleport, playerId);
+                                    chunkLockManager.unlockChunk(claimToTeleport, playerId);
                                     
                                     // Schedule border update for the player
                                     borderManager.scheduleBorderUpdate(player);
                                     
                                     plugin.getLogger().fine("Triggered border update for player " + player.getName() + 
-                                        " after teleport to chunk " + startingChunk.getX() + "," + startingChunk.getZ());
+                                        " after teleport to chunk " + claimToTeleport.getX() + "," + claimToTeleport.getZ());
                                 }
                             } catch (Exception e) {
                                 plugin.getLogger().log(java.util.logging.Level.WARNING, 
@@ -415,12 +435,11 @@ public class SingleWorldManager {
                         
                         future.complete(true);
                     });
-                } else {
-                    future.complete(false);
-                }
             } catch (Exception e) {
                 plugin.getLogger().log(Level.WARNING, "Error assigning starting chunk to " + player.getName(), e);
                 future.complete(false);
+            } finally {
+                startAssignmentsInProgress.remove(playerId);
             }
         });
         
@@ -526,11 +545,37 @@ public class SingleWorldManager {
     }
     
     public Chunk getPlayerClaim(UUID playerId) {
-        return playerClaims.get(playerId);
+        Chunk inMemoryClaim = playerClaims.get(playerId);
+        if (inMemoryClaim != null) {
+            return inMemoryClaim;
+        }
+
+        if (!isChunklockWorldSetup()) {
+            return null;
+        }
+
+        PlayerDataManager playerDataManager = plugin.getPlayerDataManager();
+        if (playerDataManager == null) {
+            return null;
+        }
+
+        Location storedSpawn = playerDataManager.getChunkSpawn(playerId);
+        if (storedSpawn == null || storedSpawn.getWorld() == null) {
+            return null;
+        }
+
+        if (!storedSpawn.getWorld().getName().equals(chunklockWorldName)) {
+            return null;
+        }
+
+        Chunk restoredClaim = storedSpawn.getChunk();
+        playerClaims.put(playerId, restoredClaim);
+        claimedChunks.add(restoredClaim);
+        return restoredClaim;
     }
     
     public boolean hasPlayerClaim(UUID playerId) {
-        return playerClaims.containsKey(playerId);
+        return getPlayerClaim(playerId) != null;
     }
     
     public int getMinDistanceBetweenClaims() {
@@ -547,6 +592,10 @@ public class SingleWorldManager {
     
     public int getTotalClaims() {
         return claimedChunks.size();
+    }
+
+    public boolean isStartAssignmentInProgress(UUID playerId) {
+        return startAssignmentsInProgress.contains(playerId);
     }
     
     /**
