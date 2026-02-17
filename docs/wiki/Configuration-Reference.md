@@ -419,7 +419,7 @@ Configures hologram display settings.
 
 ```yaml
 enabled: true
-provider: "FancyHolograms" # Force FancyHolograms only
+provider: "auto" # Options: "auto", "FancyHolograms", "CMI", or "none"
 update-interval: 20 # ticks (1 second)
 view-distance: 64 # blocks (increased for better visibility)
 debug-logging: false # Enable debug logging for troubleshooting
@@ -450,8 +450,14 @@ display:
 
 ### Hologram Providers
 
-- **FancyHolograms** (recommended): Enhanced hologram displays with better performance
-- **Internal**: Built-in hologram system (fallback if FancyHolograms not installed)
+Chunklock supports multiple hologram plugins:
+
+- **auto** (recommended): Automatically detects and uses available hologram plugins (tries CMI first, then FancyHolograms)
+- **FancyHolograms**: Enhanced hologram displays with better performance - [Download](https://www.spigotmc.org/resources/fancyholograms.96592/)
+- **CMI**: Use CMI's hologram system (requires CMI premium plugin) - [Purchase](https://www.spigotmc.org/resources/cmi.3742/)
+- **none**: Disable holograms completely
+
+**Recommendation**: Use `provider: "auto"` to let Chunklock automatically detect your installed hologram plugin.
 
 ---
 
