@@ -48,6 +48,12 @@ public class StartCommand extends SubCommand {
             player.sendMessage(Component.text("Teleporting you to your starting chunk...")
                 .color(NamedTextColor.GREEN));
         } else {
+            if (singleWorldManager.isStartAssignmentInProgress(player.getUniqueId())) {
+                player.sendMessage(Component.text("A starting chunk is already being assigned for you. Please wait...")
+                    .color(NamedTextColor.YELLOW));
+                return true;
+            }
+
             player.sendMessage(Component.text("Finding you a starting chunk in the Chunklock world...")
                 .color(NamedTextColor.GREEN));
             player.sendMessage(Component.text("Please wait while we assign you a suitable location.")
@@ -72,8 +78,8 @@ public class StartCommand extends SubCommand {
                             .color(NamedTextColor.GRAY));
                     }
                 } else {
-                    player.sendMessage(Component.text("Welcome back to your starting chunk!")
-                        .color(NamedTextColor.GREEN));
+                    player.sendMessage(Component.text("Your starting chunk is still being prepared. Please run /chunklock start again in a moment.")
+                        .color(NamedTextColor.YELLOW));
                 }
             } else {
                 player.sendMessage(Component.text("❌ Failed to enter the Chunklock world.")

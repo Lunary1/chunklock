@@ -31,7 +31,6 @@ public class ConfigManager {
     
     // Modular configuration managers
     private me.chunklock.config.modular.EconomyConfig modularEconomyConfig;
-    private OpenAIConfig openAIConfig;
     private BlockValuesConfig blockValuesConfig;
     private BiomeUnlocksConfig biomeUnlocksConfig;
     private TeamSettingsConfig teamSettingsConfig;
@@ -77,7 +76,6 @@ public class ConfigManager {
         // Load modular configs
         try {
             modularEconomyConfig = new me.chunklock.config.modular.EconomyConfig(plugin);
-            openAIConfig = new OpenAIConfig(plugin);
             blockValuesConfig = new BlockValuesConfig(plugin);
             biomeUnlocksConfig = new BiomeUnlocksConfig(plugin);
             teamSettingsConfig = new TeamSettingsConfig(plugin);
@@ -137,10 +135,6 @@ public class ConfigManager {
     
     public me.chunklock.config.modular.EconomyConfig getModularEconomyConfig() {
         return modularEconomyConfig;
-    }
-    
-    public OpenAIConfig getOpenAIConfig() {
-        return openAIConfig;
     }
     
     public BlockValuesConfig getBlockValuesConfig() {
@@ -244,7 +238,7 @@ public class ConfigManager {
         if (uiConfig != null) valid &= uiConfig.validate();
         
         // Validate modular configs exist
-        if (modularEconomyConfig == null || openAIConfig == null || 
+        if (modularEconomyConfig == null ||
             blockValuesConfig == null || biomeUnlocksConfig == null ||
             teamSettingsConfig == null || bordersConfig == null ||
             worldsConfig == null || hologramsConfig == null ||

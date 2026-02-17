@@ -273,8 +273,6 @@ public class ChunkCostDatabase {
         StringBuilder configData = new StringBuilder();
         configData.append(plugin.getConfig().getString("economy.type", "materials"));
         configData.append(plugin.getConfig().getDouble("economy.vault.base-cost", 100.0));
-        configData.append(plugin.getConfig().getBoolean("openai-agent.enabled", false));
-        configData.append(plugin.getConfig().getString("openai-agent.model", "gpt-4o-mini"));
         
         return String.valueOf(configData.toString().hashCode());
     }

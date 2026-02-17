@@ -1,10 +1,9 @@
 # ===== CHUNKLOCK PLUGIN - CORE CONFIGURATION =====
 # This is the main configuration file for the Chunklock plugin.
-# 
+#
 # MODULAR CONFIG SYSTEM:
 # The plugin now uses multiple focused configuration files for better organization:
 #   - economy.yml          → Economy and payment settings
-#   - openai.yml           → OpenAI integration settings
 #   - block-values.yml     → Block values and biome weights for chunk scoring
 #   - biome-unlocks.yml    → Biome-specific unlock requirements
 #   - team-settings.yml    → Team system configuration

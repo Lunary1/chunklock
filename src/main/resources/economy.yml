@@ -74,11 +74,10 @@ vault:
     DEEP_OCEAN: 2.5
 
 # ─────────────────────────────────────────────
-#  AI COST CONVERSION  (advanced, optional)
+#  MATERIAL VALUE CONVERSION
 # ─────────────────────────────────────────────
-# When the OpenAI agent converts material costs to Vault prices,
-# these values set the exchange rate per item.
-# Only used when both AI costing and Vault are active.
+# These values define how material requirements can be converted to
+# Vault currency when `materials.vault-fallback` is enabled.
 material-values:
   COBBLESTONE: 0.5
   COAL: 2.0

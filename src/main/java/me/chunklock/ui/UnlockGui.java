@@ -406,9 +406,20 @@ public class UnlockGui {
                 
                 // Validate using unified canAfford check (consistent with display)
                 if (!economyManager.canAfford(player, materialPaymentRequirement)) {
-                    // Find specific missing item for error message
+                    // Find specific missing vanilla item for accurate error message
                     Material requiredMaterial = materialPaymentRequirement.getMaterial();
                     int requiredAmount = materialPaymentRequirement.getMaterialAmount();
+                    for (var req : materialPaymentRequirement.getItemRequirements()) {
+                        if (req instanceof me.chunklock.economy.items.VanillaItemRequirement vanillaReq
+                            && !req.hasInInventory(player)) {
+                            requiredMaterial = vanillaReq.getMaterial();
+                            requiredAmount = vanillaReq.getAmount();
+                            break;
+                        }
+                    }
+                    if (requiredMaterial == null) {
+                        requiredMaterial = Material.AIR;
+                    }
                     int playerHas = countPlayerItems(player, requiredMaterial);
                     handleInsufficientItems(player, playerHas, requiredAmount, requiredMaterial);
                     return;
@@ -564,7 +575,7 @@ public class UnlockGui {
         // Play error sound
         player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
         
-        int needed = required - playerHas;
+        int needed = Math.max(0, required - playerHas);
         
         // Send formatted message
         player.sendMessage(Component.empty());

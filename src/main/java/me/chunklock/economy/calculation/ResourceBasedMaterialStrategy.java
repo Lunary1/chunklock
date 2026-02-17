@@ -207,6 +207,16 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
                 adjusted.add(req);
             }
         }
-        return new EconomyManager.PaymentRequirement(adjusted);
+        ItemRequirement selectedRequirement = selectPrimaryRequirement(adjusted);
+        return new EconomyManager.PaymentRequirement(java.util.List.of(selectedRequirement));
+    }
+
+    private ItemRequirement selectPrimaryRequirement(List<ItemRequirement> requirements) {
+        for (ItemRequirement req : requirements) {
+            if (req instanceof VanillaItemRequirement) {
+                return req;
+            }
+        }
+        return requirements.get(0);
     }
 }

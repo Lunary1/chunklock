@@ -3,6 +3,7 @@ package me.chunklock.economy.items;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import me.chunklock.util.item.MaterialUtil;
 
 /**
@@ -30,12 +31,41 @@ public class VanillaItemRequirement implements ItemRequirement {
     
     @Override
     public boolean hasInInventory(Player player) {
-        return player.getInventory().containsAtLeast(new ItemStack(material), amount);
+        int total = 0;
+        PlayerInventory inventory = player.getInventory();
+        for (ItemStack item : inventory.getContents()) {
+            if (item != null && item.getType() == material) {
+                total += item.getAmount();
+                if (total >= amount) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
     
     @Override
     public void consumeFromInventory(Player player) {
-        player.getInventory().removeItem(new ItemStack(material, amount));
+        int remaining = amount;
+        PlayerInventory inventory = player.getInventory();
+        ItemStack[] contents = inventory.getContents();
+
+        for (int slot = 0; slot < contents.length && remaining > 0; slot++) {
+            ItemStack item = contents[slot];
+            if (item == null || item.getType() != material) {
+                continue;
+            }
+
+            int stackAmount = item.getAmount();
+            if (stackAmount <= remaining) {
+                remaining -= stackAmount;
+                inventory.setItem(slot, null);
+            } else {
+                item.setAmount(stackAmount - remaining);
+                inventory.setItem(slot, item);
+                remaining = 0;
+            }
+        }
     }
     
     @Override

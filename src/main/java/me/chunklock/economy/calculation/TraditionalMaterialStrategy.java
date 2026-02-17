@@ -41,7 +41,7 @@ public class TraditionalMaterialStrategy implements CostCalculationStrategy {
                 legacyRequirement.material(), legacyRequirement.amount());
         }
         
-        // Apply multiplier to all requirements
+        // Apply multiplier and keep a single requirement (legacy behavior)
         double multiplier = calculateMultiplier(player, evaluation.score);
         List<ItemRequirement> adjustedRequirements = new ArrayList<>();
         for (ItemRequirement req : requirements) {
@@ -53,8 +53,18 @@ public class TraditionalMaterialStrategy implements CostCalculationStrategy {
                 adjustedRequirements.add(req);
             }
         }
-        
-        return new EconomyManager.PaymentRequirement(adjustedRequirements);
+
+        ItemRequirement selectedRequirement = selectPrimaryRequirement(adjustedRequirements);
+        return new EconomyManager.PaymentRequirement(List.of(selectedRequirement));
+    }
+
+    private ItemRequirement selectPrimaryRequirement(List<ItemRequirement> requirements) {
+        for (ItemRequirement req : requirements) {
+            if (req instanceof VanillaItemRequirement) {
+                return req;
+            }
+        }
+        return requirements.get(0);
     }
     
     private double calculateMultiplier(Player player, int score) {

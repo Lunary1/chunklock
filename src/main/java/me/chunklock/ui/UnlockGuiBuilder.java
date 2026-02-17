@@ -254,6 +254,12 @@ public class UnlockGuiBuilder {
         
         // Main requirement display in center (shows first vanilla item or first custom item)
         ItemRequirement firstReq = allRequirements.get(0);
+        requiredAmount = firstReq.getAmount();
+        if (firstReq instanceof me.chunklock.economy.items.VanillaItemRequirement vanillaReq) {
+            playerHas = countPlayerItems(player, vanillaReq.getMaterial());
+        } else {
+            playerHas = firstReq.hasInInventory(player) ? firstReq.getAmount() : 0;
+        }
         ItemStack mainDisplay = firstReq.getRepresentativeStack();
         if (mainDisplay == null) {
             mainDisplay = new ItemStack(Material.PAPER);
@@ -311,7 +317,7 @@ public class UnlockGuiBuilder {
             
         if (!hasEnough) {
             lore.add(Component.empty());
-            placeholders.put("missing", String.valueOf(requiredAmount - playerHas));
+            placeholders.put("missing", String.valueOf(Math.max(0, requiredAmount - playerHas)));
             String missingMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REQUIRED_MISSING, placeholders);
             lore.add(Component.text(missingMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.empty());
@@ -505,7 +511,7 @@ public class UnlockGuiBuilder {
             String missingMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_MISSING);
             lore.add(Component.text(missingMsg).color(NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
             
-            placeholders.put("amount", String.valueOf(requirement.amount() - countPlayerItems(player, requirement.material())));
+            placeholders.put("amount", String.valueOf(Math.max(0, requirement.amount() - countPlayerItems(player, requirement.material()))));
             placeholders.put("material", formatMaterialName(requirement.material()));
             String needMsg = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_NEED_MORE, placeholders);
             lore.add(Component.text(needMsg).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
