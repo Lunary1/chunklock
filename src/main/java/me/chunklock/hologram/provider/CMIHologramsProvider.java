@@ -256,7 +256,8 @@ public final class CMIHologramsProvider implements HologramProvider {
     private void setupPlayerVisibility(Object cmiHologram, HologramData data) {
         try {
             // Extract player UUID from hologram ID
-            UUID playerUuid = HologramId.extractPlayerUUID(data.getId().getId());
+            String hologramId = data.getId().getId();
+            UUID playerUuid = HologramId.extractPlayerUUID(hologramId);
             if (playerUuid == null) {
                 return;
             }
@@ -291,6 +292,7 @@ public final class CMIHologramsProvider implements HologramProvider {
         public CMIHologram(String id, Object wrappedHologram, Location location) {
             this.id = id;
             this.wrappedHologram = wrappedHologram;
+            // Clone location immediately to prevent external modifications
             this.location = location.clone();
         }
 

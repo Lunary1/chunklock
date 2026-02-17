@@ -956,9 +956,10 @@ public final class HologramService {
                 return new CMIHologramsProvider();
             case "auto":
                 // Auto-detect: try CMI first, then FancyHolograms
-                // Use static availability check to avoid expensive initialization
+                // First check if plugin is loaded (lightweight) before attempting full initialization
                 if (CMIHologramsProvider.isPluginAvailable()) {
                     CMIHologramsProvider cmiProvider = new CMIHologramsProvider();
+                    // Constructor performs full reflection initialization
                     if (cmiProvider.isAvailable()) {
                         ChunklockPlugin.getInstance().getLogger().info("Auto-detected CMI hologram provider");
                         return cmiProvider;
@@ -966,6 +967,7 @@ public final class HologramService {
                 }
                 if (FancyHologramsProvider.isPluginAvailable()) {
                     FancyHologramsProvider fancyProvider = new FancyHologramsProvider();
+                    // Constructor performs full reflection initialization
                     if (fancyProvider.isAvailable()) {
                         ChunklockPlugin.getInstance().getLogger().info("Auto-detected FancyHolograms provider");
                         return fancyProvider;
