@@ -56,7 +56,7 @@ database:
 
 When switching from MapDB to MySQL, Chunklock performs a one-time automatic migration and writes `.mysql_migration_completed` in the plugin data folder after verification.
 
-**→ For detailed MySQL setup instructions, see [MySQL Setup Guide](docs/MySQL-Setup-Guide.md)**
+**→ For detailed MySQL setup instructions, see [MySQL Setup Guide](docs/user-guides/MySQL-Setup-Guide.md)**
 
 ### Upgrading from older versions
 
