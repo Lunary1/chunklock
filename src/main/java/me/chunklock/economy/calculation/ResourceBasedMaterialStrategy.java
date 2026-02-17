@@ -72,8 +72,23 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
                 return fallbackToBiomeBased(player, biome, evaluation);
             }
 
-            // Pick the best material: prefer highest tier that has enough abundance
-            OwnedChunkScanner.ResourceEntry selected = selectBestResource(resources);
+            // Determine max tier based on player progression
+            int unlocked = progressTracker.getUnlockedChunkCount(player.getUniqueId());
+            int maxTier = getMaxTierForProgression(unlocked);
+
+            // Filter to obtainable materials (within progression tier cap)
+            List<OwnedChunkScanner.ResourceEntry> obtainable = resources.stream()
+                .filter(r -> r.tier() <= maxTier)
+                .toList();
+
+            if (obtainable.isEmpty()) {
+                plugin.getLogger().fine("No obtainable resources (max tier " + maxTier + ") for " + player.getName() + ", falling back to biome-based");
+                return fallbackToBiomeBased(player, biome, evaluation);
+            }
+
+            // Pick the best obtainable material: prefer highest tier within the cap
+            // Resources already sorted highest-tier-first
+            OwnedChunkScanner.ResourceEntry selected = obtainable.get(0);
 
             // Convert ore blocks to their drop material for the payment requirement
             Material paymentMaterial = mapToDropMaterial(selected.material());
@@ -104,6 +119,24 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
                 ", falling back to biome-based", e);
             return fallbackToBiomeBased(player, biome, evaluation);
         }
+    }
+
+    /**
+     * Determine the maximum resource tier a player can reasonably obtain based on
+     * how many chunks they have unlocked (proxy for progression / tool availability).
+     *
+     * <ul>
+     *   <li>0-2 chunks  → Tier 1-3 (dirt, wood, crops — hand/wooden tools)</li>
+     *   <li>3-7 chunks  → Tier 1-4 (+ stone, coal, copper — stone tools)</li>
+     *   <li>8-14 chunks → Tier 1-5 (+ iron, gold, redstone — iron tools)</li>
+     *   <li>15+ chunks  → Tier 1-6 (+ diamond, emerald — full progression)</li>
+     * </ul>
+     */
+    private int getMaxTierForProgression(int unlockedChunks) {
+        if (unlockedChunks >= 15) return 6;
+        if (unlockedChunks >= 8)  return 5;
+        if (unlockedChunks >= 3)  return 4;
+        return 3; // New players: only common blocks, wood, and crops
     }
 
     /**
