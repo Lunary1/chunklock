@@ -166,6 +166,7 @@ public class SingleWorldManager {
     /**
      * Create the Chunklock world (main thread only)
      */
+    @SuppressWarnings("deprecation")
     private void createChunklockWorld(Player admin, CompletableFuture<Boolean> future) {
         try {
             plugin.getLogger().info("Creating Chunklock world: " + chunklockWorldName);

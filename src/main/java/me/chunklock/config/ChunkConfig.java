@@ -1,6 +1,5 @@
 package me.chunklock.config;
 
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import java.util.List;
 
@@ -14,11 +13,9 @@ import java.util.List;
 public class ChunkConfig {
     
     private final FileConfiguration config;
-    private final ConfigurationSection section;
     
     public ChunkConfig(FileConfiguration config) {
         this.config = config;
-        this.section = config.getConfigurationSection("chunk");
     }
     
     /**

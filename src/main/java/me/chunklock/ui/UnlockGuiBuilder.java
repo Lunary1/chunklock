@@ -498,7 +498,6 @@ public class UnlockGuiBuilder {
         } else {
             unlockButton = new ItemStack(Material.REDSTONE_BLOCK);
             meta = unlockButton.getItemMeta();
-            meta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
             
             String notReadyTitle = MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_UNLOCK_BUTTON_NOT_READY);
             meta.displayName(Component.text(notReadyTitle)

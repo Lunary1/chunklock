@@ -3,7 +3,6 @@ package me.chunklock.commands;
 
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.config.LanguageKeys;
-import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.managers.ChunkLockManager;
 import me.chunklock.managers.PlayerProgressTracker;
@@ -57,7 +56,6 @@ public class StatusCommand extends SubCommand {
             return true;
             
         } catch (Exception e) {
-            String errorMsg = MessageUtil.getMessage(LanguageKeys.ERROR_GENERIC);
             Map<String, String> placeholders = new HashMap<>();
             placeholders.put("error", e.getMessage());
             String message = MessageUtil.getMessage(LanguageKeys.ERROR_GENERIC, placeholders);

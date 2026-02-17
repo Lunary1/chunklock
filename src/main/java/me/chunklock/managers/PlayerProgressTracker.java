@@ -1,7 +1,6 @@
 package me.chunklock.managers;
 
 import org.bukkit.plugin.java.JavaPlugin;
-import me.chunklock.managers.TeamManager;
 import me.chunklock.services.PlayerStore;
 import me.chunklock.ChunklockPlugin;
 

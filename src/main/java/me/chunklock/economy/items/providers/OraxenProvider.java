@@ -11,7 +11,6 @@ import org.bukkit.plugin.Plugin;
 public class OraxenProvider implements CustomItemProvider {
     
     private final Plugin plugin;
-    private Object oraxenAPI;
     private boolean available = false;
     
     public OraxenProvider(Plugin plugin) {
@@ -30,7 +29,7 @@ public class OraxenProvider implements CustomItemProvider {
             
             // Try to get Oraxen API
             Class<?> oraxenClass = Class.forName("io.th0rgal.oraxen.api.OraxenItems");
-            java.lang.reflect.Method getAPI = oraxenClass.getMethod("getItemById", String.class);
+            oraxenClass.getMethod("getItemById", String.class);
             
             // Test if API is accessible by calling it with a dummy value
             // If no exception, API is available

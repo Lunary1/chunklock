@@ -13,7 +13,6 @@ import me.chunklock.ChunklockPlugin;
 import me.chunklock.managers.WorldManager;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Main command manager for the chunklock plugin.
@@ -158,7 +157,7 @@ public class ChunklockCommandManager implements CommandExecutor, TabCompleter {
      */
     private WorldValidationResult validatePlayerWorld(Player player, String commandName) {
         if (player == null || player.getWorld() == null) {
-            return new WorldValidationResult(ValidationResult.BLOCKED, "Invalid player or world", null, null);
+            return new WorldValidationResult(ValidationResult.BLOCKED, "Invalid player or world", null);
         }
         
         try {
@@ -168,7 +167,7 @@ public class ChunklockCommandManager implements CommandExecutor, TabCompleter {
             List<String> enabledWorlds = worldManager.getEnabledWorlds();
             
             if (worldEnabled) {
-                return new WorldValidationResult(ValidationResult.ALLOWED, null, worldName, enabledWorlds);
+                return new WorldValidationResult(ValidationResult.ALLOWED, null, enabledWorlds);
             }
             
             // World is disabled - check if player is admin
@@ -178,19 +177,19 @@ public class ChunklockCommandManager implements CommandExecutor, TabCompleter {
             if (isAdmin && isAdminCommand) {
                 // Admin using admin command in disabled world - allow with warning
                 return new WorldValidationResult(ValidationResult.ADMIN_WARNING, 
-                    "Admin override for command '" + commandName + "' in disabled world", worldName, enabledWorlds);
+                    "Admin override for command '" + commandName + "' in disabled world", enabledWorlds);
             }
             
             // Regular player or non-admin command in disabled world - block
             return new WorldValidationResult(ValidationResult.BLOCKED, 
-                "ChunkLock not active in world: " + worldName, worldName, enabledWorlds);
+                "ChunkLock not active in world: " + worldName, enabledWorlds);
                 
         } catch (Exception e) {
             ChunklockPlugin.getInstance().getLogger().warning(
                 "Error during world validation for " + player.getName() + ": " + e.getMessage());
             
             return new WorldValidationResult(ValidationResult.BLOCKED, 
-                "Could not verify world status", player.getWorld().getName(), null);
+                "Could not verify world status", null);
         }
     }
     
@@ -393,19 +392,16 @@ public class ChunklockCommandManager implements CommandExecutor, TabCompleter {
     private static class WorldValidationResult {
         private final ValidationResult result;
         private final String message;
-        private final String currentWorld;
         private final List<String> enabledWorlds;
         
-        public WorldValidationResult(ValidationResult result, String message, String currentWorld, List<String> enabledWorlds) {
+        public WorldValidationResult(ValidationResult result, String message, List<String> enabledWorlds) {
             this.result = result;
             this.message = message;
-            this.currentWorld = currentWorld;
             this.enabledWorlds = enabledWorlds;
         }
         
         public ValidationResult getResult() { return result; }
         public String getMessage() { return message; }
-        public String getCurrentWorld() { return currentWorld; }
         public List<String> getEnabledWorlds() { return enabledWorlds; }
     }
 }

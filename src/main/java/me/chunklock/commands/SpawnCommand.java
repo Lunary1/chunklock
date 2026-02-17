@@ -7,9 +7,7 @@ import me.chunklock.managers.PlayerDataManager;
 import me.chunklock.util.message.MessageUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Chunk;
 import org.bukkit.Location;
-import org.bukkit.World;
 import me.chunklock.util.chunk.ChunkUtils;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -63,7 +61,6 @@ public class SpawnCommand extends SubCommand {
                 // Teleport to exact center
                 Location centerLoc = ChunkUtils.getChunkCenter(savedLoc.getChunk());
                 player.teleport(centerLoc);
-                String message = MessageUtil.getMessage(LanguageKeys.SUCCESS_CHUNK_UNLOCKED);
                 player.sendMessage(Component.text("Teleported to center of your starting chunk.")
                     .color(NamedTextColor.GREEN));
             } else {

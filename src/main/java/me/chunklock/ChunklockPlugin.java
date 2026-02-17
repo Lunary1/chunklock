@@ -890,7 +890,7 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
         int pluginId = 26163; // Official Chunklock plugin ID
         
         // Simple bStats initialization - just basic metrics for now
-        Metrics metrics = new Metrics(this, pluginId);
+        new Metrics(this, pluginId);
         
         getLogger().info("bStats metrics initialized successfully");
     }

@@ -7,7 +7,6 @@ import me.chunklock.models.ChunkData;
 import me.chunklock.models.Difficulty;
 import me.chunklock.services.ChunkStore;
 import me.chunklock.ChunklockPlugin;
-import me.chunklock.managers.TeamManager;
 
 import java.util.HashSet;
 import java.util.Set;

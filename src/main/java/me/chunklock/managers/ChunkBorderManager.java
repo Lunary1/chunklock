@@ -17,12 +17,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.block.Action;
 
-import me.chunklock.managers.ChunkLockManager;
-import me.chunklock.managers.BiomeUnlockRegistry;
-import me.chunklock.managers.WorldManager;
 import me.chunklock.ui.UnlockGui;
-import me.chunklock.managers.TeamManager;
-import me.chunklock.managers.PlayerProgressTracker;
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.border.BorderConfig;
 import me.chunklock.border.BorderConfigLoader;
@@ -206,8 +201,6 @@ public class ChunkBorderManager {
             removeBordersForPlayer(player);
             return;
         }
-        
-        UUID playerId = player.getUniqueId();
         
         try {
             // Check if player is in bypass mode - no borders for bypass players unless configured

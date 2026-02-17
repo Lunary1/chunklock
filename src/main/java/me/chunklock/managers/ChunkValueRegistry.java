@@ -5,7 +5,6 @@ import me.chunklock.config.modular.BlockValuesConfig;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Biome;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.EnumMap;
@@ -48,47 +47,6 @@ public class ChunkValueRegistry {
         
         plugin.getLogger().info("[ChunkValueRegistry] Configuration loaded successfully: " +
             biomeWeights.size() + " biomes, " + blockWeights.size() + " blocks, " + thresholds.size() + " thresholds");
-    }
-
-    private boolean validateConfiguration(ConfigurationSection config) {
-        try {
-            // Validate thresholds section
-            if (!config.isConfigurationSection("thresholds")) {
-                plugin.getLogger().severe("Missing 'thresholds' section in config.yml (chunk-values)");
-                return false;
-            }
-            
-            // Validate threshold values are positive and in order
-            int easy = config.getInt("thresholds.easy", -1);
-            int normal = config.getInt("thresholds.normal", -1);
-            int hard = config.getInt("thresholds.hard", -1);
-            
-            if (easy <= 0 || normal <= 0 || hard <= 0) {
-                plugin.getLogger().severe("Threshold values must be positive integers");
-                return false;
-            }
-            
-            if (easy >= normal || normal >= hard) {
-                plugin.getLogger().severe("Thresholds must be in ascending order: easy < normal < hard");
-                return false;
-            }
-            
-            // Validate biomes section exists
-            if (!config.isConfigurationSection("biomes")) {
-                plugin.getLogger().warning("Missing 'biomes' section in config.yml (chunk-values)");
-            }
-            
-            // Validate blocks section exists
-            if (!config.isConfigurationSection("blocks")) {
-                plugin.getLogger().warning("Missing 'blocks' section in config.yml (chunk-values)");
-            }
-            
-            return true;
-            
-        } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "Error validating configuration", e);
-            return false;
-        }
     }
 
     private void loadThresholds() {
@@ -266,7 +224,7 @@ public class ChunkValueRegistry {
             NamespacedKey key = biome.getKey();
             return key.getKey().replace("_", " ");
         } catch (Exception e) {
-            return biome.name().replace("_", " ");
+            return biome.toString().replace("_", " ");
         }
     }
 

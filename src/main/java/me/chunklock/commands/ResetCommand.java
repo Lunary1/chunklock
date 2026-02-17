@@ -56,7 +56,6 @@ public class ResetCommand extends SubCommand {
         }
 
         if (args.length < 1) {
-            String usage = MessageUtil.getMessage(LanguageKeys.COMMAND_RESET_CONFIRM);
             sender.sendMessage(Component.text("Usage: /chunklock reset <player>")
                 .color(NamedTextColor.YELLOW));
             return true;

@@ -2,7 +2,6 @@ package me.chunklock.ui;
 
 import org.bukkit.Chunk;
 import org.bukkit.block.Biome;
-import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import me.chunklock.managers.BiomeUnlockRegistry;
 

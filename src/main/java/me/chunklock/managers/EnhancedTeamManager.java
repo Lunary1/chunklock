@@ -23,9 +23,7 @@ public class EnhancedTeamManager {
     // Configuration
     private int maxTeamSize = 6;
     private int maxTeamsPerServer = 100;
-    private boolean allowSoloTeams = true;
     private int joinRequestTtlHours = 72;
-    private double teamCostMultiplier = 0.15;
     
     // Files for persistence
     private final File teamsFile;
@@ -369,9 +367,7 @@ public class EnhancedTeamManager {
 
         maxTeamSize = section.getInt("max-team-size", 6);
         maxTeamsPerServer = section.getInt("max-teams-per-server", 100);
-        allowSoloTeams = section.getBoolean("allow-solo-teams", true);
         joinRequestTtlHours = section.getInt("join-request-ttl-hours", 72);
-        teamCostMultiplier = section.getDouble("team-cost-multiplier", 0.15);
     }
 
     private void saveDefaultConfiguration() {

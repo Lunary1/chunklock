@@ -13,12 +13,10 @@ import java.util.logging.Logger;
 public class ServiceRegistration {
     
     private final ServiceContainer container;
-    private final JavaPlugin plugin;
     private final Logger logger;
     
     public ServiceRegistration(ServiceContainer container, JavaPlugin plugin, Logger logger) {
         this.container = container;
-        this.plugin = plugin;
         this.logger = logger;
     }
     

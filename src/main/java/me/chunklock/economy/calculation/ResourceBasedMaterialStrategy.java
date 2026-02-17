@@ -140,16 +140,6 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
     }
 
     /**
-     * Select the best resource for payment. Prefers higher tier materials
-     * that have sufficient abundance.
-     */
-    private OwnedChunkScanner.ResourceEntry selectBestResource(List<OwnedChunkScanner.ResourceEntry> resources) {
-        // Resources are already sorted highest-tier-first, most-abundant-first within tier
-        // Just return the first one (highest tier with sufficient abundance)
-        return resources.get(0);
-    }
-
-    /**
      * Map ore/block materials to their player-obtainable drop material.
      * For example, IRON_ORE -> IRON_ORE (player mines it with silk touch or gets raw iron).
      * We keep it as the block material so players know what to mine.

@@ -2,7 +2,6 @@ package me.chunklock.economy.calculation;
 
 import org.bukkit.Material;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
 
 import java.util.List;
 

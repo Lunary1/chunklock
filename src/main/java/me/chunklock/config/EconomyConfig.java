@@ -79,7 +79,6 @@ public class EconomyConfig {
      * 
      * @return Map of biome names to multipliers
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> getBiomeMultipliers() {
         return (Map<String, Object>) config.getConfigurationSection("economy.vault.biome-multipliers")
                 .getValues(false);
@@ -90,7 +89,6 @@ public class EconomyConfig {
      * 
      * @return Map of difficulty names to multipliers
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> getDifficultyMultipliers() {
         return (Map<String, Object>) config.getConfigurationSection("economy.vault.difficulty-multipliers")
                 .getValues(false);

@@ -247,12 +247,10 @@ public class ChunkPreAllocationService {
     private static class PreAllocatedChunk {
         final Chunk chunk;
         final int score;
-        final long timestamp;
         
         PreAllocatedChunk(Chunk chunk, int score) {
             this.chunk = chunk;
             this.score = score;
-            this.timestamp = System.currentTimeMillis();
         }
     }
 }

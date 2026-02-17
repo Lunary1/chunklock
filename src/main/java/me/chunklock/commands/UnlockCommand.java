@@ -5,7 +5,6 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
-import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import me.chunklock.ChunklockPlugin;
@@ -29,7 +28,6 @@ import java.util.UUID;
 public class UnlockCommand extends SubCommand {
     
     private final ChunkLockManager chunkLockManager;
-    private final PlayerProgressTracker progressTracker;
     // Note: teamManager kept for potential future team-based unlocking features
     
     public UnlockCommand(ChunkLockManager chunkLockManager, 
@@ -37,7 +35,6 @@ public class UnlockCommand extends SubCommand {
                         TeamManager teamManager) {
         super("unlock", "chunklock.admin", false); // Admin-only, works from console too
         this.chunkLockManager = chunkLockManager;
-        this.progressTracker = progressTracker;
         // Note: teamManager parameter kept for API compatibility but not stored
     }
     
@@ -141,8 +138,6 @@ public class UnlockCommand extends SubCommand {
             chunkLockManager.unlockChunk(chunk, playerId);
             
             // Update progress tracking if the chunk was contested
-            Location chunkCenter = new Location(chunk.getWorld(), 
-                chunk.getX() * 16 + 8, 64, chunk.getZ() * 16 + 8);
             // Note: We don't increment contested claims here since this is an admin unlock
             
             // Update borders if border manager is available

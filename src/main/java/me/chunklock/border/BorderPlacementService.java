@@ -14,12 +14,10 @@ import java.util.*;
 
 public class BorderPlacementService {
     private final ChunkLockManager chunkLockManager;
-    private final TeamManager teamManager;
     private final BorderConfig config;
 
     public BorderPlacementService(ChunkLockManager chunkLockManager, TeamManager teamManager, BorderConfig config) {
         this.chunkLockManager = chunkLockManager;
-        this.teamManager = teamManager;
         this.config = config;
     }
 

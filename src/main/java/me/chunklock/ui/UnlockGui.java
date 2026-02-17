@@ -841,63 +841,6 @@ public class UnlockGui {
         }
     }
     
-    /**
-     * Count how many of a specific material the player has.
-     */
-    /**
-     * Find which item is actually missing from the requirements
-     */
-    private static class MissingItemInfo {
-        final Material material;
-        final int playerHas;
-        final int required;
-        
-        MissingItemInfo(Material material, int playerHas, int required) {
-            this.material = material;
-            this.playerHas = playerHas;
-            this.required = required;
-        }
-    }
-    
-    private MissingItemInfo findMissingItem(Player player, Biome biome, int score) {
-        var requirements = biomeUnlockRegistry.getRequirementsForBiome(biome);
-        if (requirements.isEmpty()) return null;
-        
-        // Use the same logic as hasRequiredItems() to find which item is missing
-        // We need to replicate the multiplier calculation since it's private in BiomeUnlockRegistry
-        int unlocked = progressTracker.getUnlockedChunkCount(player.getUniqueId());
-        double multiplier = 1.0 + unlocked / 10.0 + score / 50.0;
-        
-        // Apply team multiplier if available
-        if (teamManager != null) {
-            try {
-                var enhancedTeamManager = ChunklockPlugin.getInstance().getEnhancedTeamManager();
-                if (enhancedTeamManager != null) {
-                    multiplier *= enhancedTeamManager.getChunkCostMultiplier(player.getUniqueId());
-                }
-            } catch (Exception e) {
-                // Ignore team multiplier errors
-            }
-        }
-        
-        for (var req : requirements) {
-            if (req instanceof me.chunklock.economy.items.VanillaItemRequirement vanillaReq) {
-                int adjustedAmount = (int) Math.ceil(vanillaReq.getAmount() * multiplier);
-                int playerHas = countPlayerItems(player, vanillaReq.getMaterial());
-                if (playerHas < adjustedAmount) {
-                    return new MissingItemInfo(vanillaReq.getMaterial(), playerHas, adjustedAmount);
-                }
-            } else {
-                // For custom items, check if player has them
-                if (!req.hasInInventory(player)) {
-                    // For custom items, we can't easily show the count, so continue to find vanilla item
-                    continue;
-                }
-            }
-        }
-        return null;
-    }
-    
     private int countPlayerItems(Player player, Material material) {
         int count = 0;
         for (ItemStack item : player.getInventory().getContents()) {

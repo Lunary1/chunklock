@@ -1,7 +1,6 @@
 // src/main/java/me/chunklock/commands/TeamCommand.java
 package me.chunklock.commands;
 
-import me.chunklock.commands.BasicTeamCommandHandler;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
@@ -24,7 +23,7 @@ public class TeamCommand extends SubCommand {
     
     @Override
     public boolean execute(CommandSender sender, String[] args) {
-        if (!(sender instanceof Player player)) {
+        if (!(sender instanceof Player)) {
             sender.sendMessage(Component.text("Only players can use team commands.").color(NamedTextColor.RED));
             return true;
         }
