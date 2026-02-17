@@ -3,6 +3,7 @@ package me.chunklock.hologram.provider;
 import me.chunklock.hologram.api.Hologram;
 import me.chunklock.hologram.api.HologramProvider;
 import me.chunklock.hologram.core.HologramData;
+import me.chunklock.hologram.core.HologramId;
 import me.chunklock.ChunklockPlugin;
 
 import org.bukkit.Location;
@@ -26,6 +27,19 @@ public final class CMIHologramsProvider implements HologramProvider {
     private final boolean available;
     private final Map<String, CMIHologram> managedHolograms = new ConcurrentHashMap<>();
     private Object hologramManager;
+
+    /**
+     * Static method to check if CMI plugin is available without full initialization.
+     * Use this before creating an instance to avoid unnecessary reflection overhead.
+     */
+    public static boolean isPluginAvailable() {
+        try {
+            // Quick check if CMI plugin is loaded
+            return Bukkit.getPluginManager().getPlugin("CMI") != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     public CMIHologramsProvider() {
         this.available = initializeCMI();
@@ -242,7 +256,7 @@ public final class CMIHologramsProvider implements HologramProvider {
     private void setupPlayerVisibility(Object cmiHologram, HologramData data) {
         try {
             // Extract player UUID from hologram ID
-            UUID playerUuid = me.chunklock.hologram.core.HologramId.extractPlayerUUID(data.getId().getId());
+            UUID playerUuid = HologramId.extractPlayerUUID(data.getId().getId());
             if (playerUuid == null) {
                 return;
             }

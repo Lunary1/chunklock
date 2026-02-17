@@ -956,15 +956,20 @@ public final class HologramService {
                 return new CMIHologramsProvider();
             case "auto":
                 // Auto-detect: try CMI first, then FancyHolograms
-                CMIHologramsProvider cmiProvider = new CMIHologramsProvider();
-                if (cmiProvider.isAvailable()) {
-                    ChunklockPlugin.getInstance().getLogger().info("Auto-detected CMI hologram provider");
-                    return cmiProvider;
+                // Use static availability check to avoid expensive initialization
+                if (CMIHologramsProvider.isPluginAvailable()) {
+                    CMIHologramsProvider cmiProvider = new CMIHologramsProvider();
+                    if (cmiProvider.isAvailable()) {
+                        ChunklockPlugin.getInstance().getLogger().info("Auto-detected CMI hologram provider");
+                        return cmiProvider;
+                    }
                 }
-                FancyHologramsProvider fancyProvider = new FancyHologramsProvider();
-                if (fancyProvider.isAvailable()) {
-                    ChunklockPlugin.getInstance().getLogger().info("Auto-detected FancyHolograms provider");
-                    return fancyProvider;
+                if (FancyHologramsProvider.isPluginAvailable()) {
+                    FancyHologramsProvider fancyProvider = new FancyHologramsProvider();
+                    if (fancyProvider.isAvailable()) {
+                        ChunklockPlugin.getInstance().getLogger().info("Auto-detected FancyHolograms provider");
+                        return fancyProvider;
+                    }
                 }
                 ChunklockPlugin.getInstance().getLogger().warning(
                     "No hologram provider found - disabling holograms");
