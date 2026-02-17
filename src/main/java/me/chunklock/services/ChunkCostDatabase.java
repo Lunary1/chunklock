@@ -196,16 +196,32 @@ public class ChunkCostDatabase {
             }
             
             try {
-                // H2 uses MERGE instead of INSERT OR REPLACE
-                String sql = """
-                    MERGE INTO chunk_costs 
+                // H2 MERGE syntax: Use DELETE + INSERT pattern for better compatibility
+                // First delete existing record if it exists
+                String deleteSql = """
+                    DELETE FROM chunk_costs 
+                    WHERE world_name = ? AND chunk_x = ? AND chunk_z = ? AND player_id = ? AND config_hash = ?
+                """;
+                
+                try (PreparedStatement deleteStmt = connection.prepareStatement(deleteSql)) {
+                    deleteStmt.setString(1, chunk.getWorld().getName());
+                    deleteStmt.setInt(2, chunk.getX());
+                    deleteStmt.setInt(3, chunk.getZ());
+                    deleteStmt.setString(4, player.getUniqueId().toString());
+                    deleteStmt.setString(5, configHash);
+                    deleteStmt.executeUpdate();
+                }
+                
+                // Then insert the new record
+                String insertSql = """
+                    INSERT INTO chunk_costs 
                     (world_name, chunk_x, chunk_z, player_id, biome, difficulty, score, cost_type, 
                      vault_cost, material_type, material_amount, ai_processed, ai_explanation, 
                      calculated_at, config_hash)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
                 
-                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                try (PreparedStatement stmt = connection.prepareStatement(insertSql)) {
                     stmt.setString(1, chunk.getWorld().getName());
                     stmt.setInt(2, chunk.getX());
                     stmt.setInt(3, chunk.getZ());

@@ -7,9 +7,7 @@ import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.ChunklockPlugin;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
-import org.bukkit.block.Biome;
 import org.bukkit.entity.Player;
-import org.bukkit.configuration.file.FileConfiguration;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -61,10 +59,14 @@ public class OpenAIChunkCostAgent {
         
         loadConfiguration();
         
-        if (enabled && apiKey != null && !apiKey.isEmpty()) {
+        if (enabled && apiKey != null && !apiKey.isEmpty() && !isPlaceholderApiKey(apiKey)) {
             plugin.getLogger().info("[OpenAI Agent] ChatGPT integration enabled with model: " + model);
         } else {
-            plugin.getLogger().info("[OpenAI Agent] ChatGPT integration disabled - check configuration");
+            if (apiKey != null && isPlaceholderApiKey(apiKey)) {
+                plugin.getLogger().info("[OpenAI Agent] ChatGPT integration disabled - placeholder API key detected");
+            } else {
+                plugin.getLogger().info("[OpenAI Agent] ChatGPT integration disabled - check configuration");
+            }
         }
     }
     
@@ -79,7 +81,7 @@ public class OpenAIChunkCostAgent {
                 BiomeUnlockRegistry.UnlockRequirement baseRequirement = 
                     biomeRegistry.calculateRequirement(player, baseEvaluation.biome, baseEvaluation.score);
                 
-                if (!enabled || apiKey == null || apiKey.isEmpty()) {
+                if (!enabled || apiKey == null || apiKey.isEmpty() || isPlaceholderApiKey(apiKey)) {
                     return new OpenAICostResult(baseRequirement.material(), baseRequirement.amount(), 
                         baseEvaluation.score, "OpenAI disabled - using base calculation", 1.0, false);
                 }
@@ -108,7 +110,16 @@ public class OpenAIChunkCostAgent {
                 return result;
                 
             } catch (Exception e) {
-                plugin.getLogger().log(Level.WARNING, "OpenAI cost calculation failed", e);
+                // Only log warnings for non-placeholder API key errors
+                String errorMsg = e.getMessage();
+                boolean isAuthError = errorMsg != null && (errorMsg.contains("401") || errorMsg.contains("invalid_api_key"));
+                
+                if (isAuthError && (apiKey == null || isPlaceholderApiKey(apiKey))) {
+                    // Suppress repeated warnings for placeholder keys
+                    plugin.getLogger().fine("OpenAI API call skipped - invalid API key configuration");
+                } else {
+                    plugin.getLogger().log(Level.WARNING, "OpenAI cost calculation failed", e);
+                }
                 
                 // Fallback to base calculation
                 ChunkEvaluator.ChunkValueData baseEvaluation = chunkEvaluator.evaluateChunk(player.getUniqueId(), chunk);
@@ -248,7 +259,15 @@ public class OpenAIChunkCostAgent {
         if (responseCode != 200) {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()))) {
                 String errorResponse = reader.lines().reduce("", (a, b) -> a + b);
-                throw new IOException("OpenAI API error " + responseCode + ": " + errorResponse);
+                IOException ioException = new IOException("OpenAI API error " + responseCode + ": " + errorResponse);
+                
+                // If it's a 401 error and we have a placeholder key, disable OpenAI to prevent spam
+                if (responseCode == 401 && isPlaceholderApiKey(apiKey)) {
+                    plugin.getLogger().info("[OpenAI Agent] Invalid API key detected - disabling OpenAI integration");
+                    enabled = false;
+                }
+                
+                throw ioException;
             }
         }
         
@@ -335,10 +354,29 @@ public class OpenAIChunkCostAgent {
             temperature = 0.3;
         }
         
-        if (enabled && (apiKey == null || apiKey.isEmpty())) {
-            plugin.getLogger().warning("[OpenAI Agent] Enabled but no API key provided - disabling");
+        // Validate API key - check for placeholder or invalid keys
+        if (enabled && (apiKey == null || apiKey.isEmpty() || isPlaceholderApiKey(apiKey))) {
+            if (apiKey != null && isPlaceholderApiKey(apiKey)) {
+                plugin.getLogger().info("[OpenAI Agent] Placeholder API key detected - disabling OpenAI integration");
+            } else {
+                plugin.getLogger().warning("[OpenAI Agent] Enabled but no API key provided - disabling");
+            }
             enabled = false;
+            apiKey = null; // Clear invalid key
         }
+    }
+    
+    /**
+     * Check if API key is a placeholder value
+     */
+    private boolean isPlaceholderApiKey(String key) {
+        if (key == null) return true;
+        String lowerKey = key.toLowerCase().trim();
+        return lowerKey.contains("replace") || 
+               lowerKey.contains("your_api_key") || 
+               lowerKey.contains("example") ||
+               lowerKey.equals("sk-") ||
+               lowerKey.startsWith("sk-") && lowerKey.length() < 20; // OpenAI keys are much longer
     }
     
     private String generateCacheKey(Player player, Chunk chunk, ChunkEvaluator.ChunkValueData evaluation) {

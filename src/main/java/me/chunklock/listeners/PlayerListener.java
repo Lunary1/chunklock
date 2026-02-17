@@ -86,11 +86,30 @@ public class PlayerListener implements Listener {
             lastUnlockAttempt.remove(playerId);
             lastBorderUpdate.remove(playerId); // Clear border update tracking
             
+            // Check if player has chunk data stored (doesn't require world to be loaded)
             if (!playerDataManager.hasChunk(playerId)) {
-                // FIX: Mark as new player and assign starting chunk
+                // Player truly has no chunk assigned
+                ChunklockPlugin.getInstance().getLogger().fine("Player " + player.getName() + " has no chunk assigned - assigning new chunk");
                 newPlayers.add(playerId);
                 startingChunkService.assignStartingChunk(player);
             } else {
+                // Player has chunk data - check if world is loaded
+                String spawnWorldName = playerDataManager.getPlayerDatabase().getSpawnWorldName(playerId);
+                org.bukkit.World spawnWorld = spawnWorldName != null ? 
+                    ChunklockPlugin.getInstance().getServer().getWorld(spawnWorldName) : null;
+                
+                if (spawnWorld == null && spawnWorldName != null) {
+                    // World exists in database but isn't loaded yet - wait for it to load
+                    ChunklockPlugin.getInstance().getLogger().info("Player " + player.getName() + 
+                        " has spawn data in world " + spawnWorldName + " which isn't loaded yet - waiting for world to load");
+                    
+                    // Retry after a delay to allow world to load
+                    Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
+                        handlePlayerJoinDelayed(player, playerId, spawnWorldName);
+                    }, 20L); // Wait 1 second (20 ticks)
+                    return; // Exit early, will retry
+                }
+                
                 try {
                     Location savedSpawn = playerDataManager.getChunkSpawn(playerId);
                     if (savedSpawn != null && startingChunkService.isValidLocation(savedSpawn)) {
@@ -128,14 +147,25 @@ public class PlayerListener implements Listener {
                         // Remove from new players set after first join handling
                         newPlayers.remove(playerId);
                     } else {
+                        // Spawn location is null or invalid - check if it's because world isn't loaded
+                        if (savedSpawn == null && spawnWorldName != null) {
+                            ChunklockPlugin.getInstance().getLogger().warning("Player " + player.getName() + 
+                                " has spawn data for world " + spawnWorldName + " but world is not accessible - world may not be loaded");
+                            // Don't reassign immediately - world might still be loading
+                            // The delayed handler will retry
+                            return;
+                        }
                         ChunklockPlugin.getInstance().getLogger().warning("Invalid saved spawn for player " + player.getName() + ", reassigning");
                         newPlayers.add(playerId);
                         startingChunkService.assignStartingChunk(player);
                     }
                 } catch (Exception e) {
                     ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, "Error handling returning player " + player.getName(), e);
-                    newPlayers.add(playerId);
-                    startingChunkService.assignStartingChunk(player);
+                    // Only reassign if it's not a world loading issue
+                    if (!e.getMessage().contains("not loaded") && !e.getMessage().contains("null")) {
+                        newPlayers.add(playerId);
+                        startingChunkService.assignStartingChunk(player);
+                    }
                 }
             }
             
@@ -401,6 +431,76 @@ public class PlayerListener implements Listener {
         }
     }
 
+    /**
+     * Handle player join with delayed world loading check
+     * Called when player has spawn data but world wasn't loaded yet
+     */
+    private void handlePlayerJoinDelayed(Player player, UUID playerId, String spawnWorldName) {
+        if (!player.isOnline()) {
+            return; // Player disconnected
+        }
+        
+        try {
+            WorldManager worldManager = ChunklockPlugin.getInstance().getWorldManager();
+            if (!worldManager.isWorldEnabled(player.getWorld())) {
+                ChunklockPlugin.getInstance().getLogger().fine("Player " + player.getName() + 
+                    " is in disabled world - skipping delayed spawn handling");
+                return;
+            }
+            
+            // Check if world is now loaded
+            org.bukkit.World spawnWorld = ChunklockPlugin.getInstance().getServer().getWorld(spawnWorldName);
+            if (spawnWorld == null) {
+                // World still not loaded - try one more time after longer delay
+                ChunklockPlugin.getInstance().getLogger().warning("World " + spawnWorldName + 
+                    " still not loaded for player " + player.getName() + " - retrying in 3 seconds");
+                Bukkit.getScheduler().runTaskLater(ChunklockPlugin.getInstance(), () -> {
+                    handlePlayerJoinDelayed(player, playerId, spawnWorldName);
+                }, 60L); // Wait 3 more seconds
+                return;
+            }
+            
+            // World is now loaded - proceed with normal spawn handling
+            ChunklockPlugin.getInstance().getLogger().info("World " + spawnWorldName + 
+                " loaded for player " + player.getName() + " - processing spawn location");
+            
+            Location savedSpawn = playerDataManager.getChunkSpawn(playerId);
+            if (savedSpawn != null && startingChunkService.isValidLocation(savedSpawn)) {
+                // Check if saved spawn is in an enabled world
+                if (!worldManager.isWorldEnabled(savedSpawn.getWorld())) {
+                    ChunklockPlugin.getInstance().getLogger().info("Player " + player.getName() + 
+                        " has saved spawn in disabled world " + savedSpawn.getWorld().getName() + 
+                        " - reassigning to current world");
+                    newPlayers.add(playerId);
+                    startingChunkService.assignStartingChunk(player);
+                    return;
+                }
+                
+                // Teleport player to their saved spawn
+                Chunk savedChunk = savedSpawn.getChunk();
+                Location centerSpawn = ChunkUtils.getChunkCenter(savedChunk);
+                player.teleport(centerSpawn);
+                player.setRespawnLocation(centerSpawn, true);
+                player.sendMessage("§aWelcome back! You've been returned to your starting chunk.");
+                
+                // Remove from new players set
+                newPlayers.remove(playerId);
+            } else {
+                // Still can't get valid spawn - reassign
+                ChunklockPlugin.getInstance().getLogger().warning("Still cannot get valid spawn for player " + 
+                    player.getName() + " after world loaded - reassigning chunk");
+                newPlayers.add(playerId);
+                startingChunkService.assignStartingChunk(player);
+            }
+        } catch (Exception e) {
+            ChunklockPlugin.getInstance().getLogger().log(Level.WARNING, 
+                "Error in delayed player join handling for " + player.getName(), e);
+            // Last resort - assign new chunk
+            newPlayers.add(playerId);
+            startingChunkService.assignStartingChunk(player);
+        }
+    }
+    
     /**
      * Get current statistics for debugging
      */

@@ -240,6 +240,7 @@ errors:
   no-permission: "You don't have permission to do this"
   invalid-chunk: "Invalid chunk"
   not-adjacent: "This chunk is not adjacent to your unlocked chunks"
+  no-spawn-location: "You don't have a starting chunk spawn location. Use /chunklock start to get one."
   generic: "An error occurred: %error%"
 
 # ===== SUCCESS MESSAGES =====

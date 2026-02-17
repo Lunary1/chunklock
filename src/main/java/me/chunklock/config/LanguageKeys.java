@@ -193,6 +193,7 @@ public final class LanguageKeys {
     public static final String ERROR_NO_PERMISSION = "errors.no-permission";
     public static final String ERROR_INVALID_CHUNK = "errors.invalid-chunk";
     public static final String ERROR_NOT_ADJACENT = "errors.not-adjacent";
+    public static final String ERROR_NO_SPAWN_LOCATION = "errors.no-spawn-location";
     public static final String ERROR_GENERIC = "errors.generic";
     
     // ===== SUCCESS MESSAGES =====

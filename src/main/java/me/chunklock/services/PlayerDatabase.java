@@ -129,6 +129,24 @@ public class PlayerDatabase {
         return playerMap.size();
     }
 
+    /**
+     * Check if player has spawn data stored (without requiring world to be loaded)
+     * This is useful for checking if a player has a chunk assigned after server restart
+     * when worlds might not be loaded yet.
+     */
+    public boolean hasSpawnData(UUID playerId) {
+        PlayerData data = getPlayerData(playerId);
+        return data != null && data.getSpawnWorld() != null && !data.getSpawnWorld().isEmpty();
+    }
+    
+    /**
+     * Get spawn world name from stored data (without requiring world to be loaded)
+     */
+    public String getSpawnWorldName(UUID playerId) {
+        PlayerData data = getPlayerData(playerId);
+        return (data != null) ? data.getSpawnWorld() : null;
+    }
+    
     public Location getSpawnLocation(UUID playerId) {
         PlayerData data = getPlayerData(playerId);
         if (data == null || data.getSpawnWorld() == null) {
@@ -137,6 +155,8 @@ public class PlayerDatabase {
         
         org.bukkit.World world = plugin.getServer().getWorld(data.getSpawnWorld());
         if (world == null) {
+            // World not loaded yet - log for debugging but don't fail completely
+            plugin.getLogger().fine("World " + data.getSpawnWorld() + " not loaded yet for player " + playerId);
             return null;
         }
         
