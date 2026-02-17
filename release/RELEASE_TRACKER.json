@@ -1,0 +1,121 @@
+[
+  {
+    "id": "mysql-db-command",
+    "type": "feature",
+    "title": "Add /chunklock database command for MySQL status",
+    "description": "Admin command to check active storage backend, MySQL connection pool status, and trigger operations",
+    "status": "done",
+    "user_note": "Added '/chunklock database' command to view storage backend status (MapDB or MySQL) with connection pool metrics, performance stats, and migration status",
+    "risk": "low",
+    "files_touched": [
+      "src/main/java/me/chunklock/commands/DatabaseCommand.java",
+      "src/main/java/me/chunklock/commands/ChunklockCommandExecutor.java",
+      "src/main/java/me/chunklock/ChunklockPlugin.java"
+    ],
+    "tests": ["All 26 existing unit tests pass"],
+    "notes": "Provides visibility into MySQL vs MapDB usage, connection health, and pool statistics"
+  },
+  {
+    "id": "mysql-setup-guide",
+    "type": "feature",
+    "title": "Create comprehensive MySQL setup documentation",
+    "description": "Dedicated guide covering MySQL installation, configuration, migration, and troubleshooting",
+    "status": "done",
+    "user_note": "Created comprehensive MySQL Setup Guide with step-by-step instructions for server setup, configuration, migration, performance tuning, and troubleshooting",
+    "risk": "low",
+    "files_touched": ["docs/MySQL-Setup-Guide.md"],
+    "tests": ["Documentation review"],
+    "notes": "Should include complete step-by-step setup, performance tuning, and common issues"
+  },
+  {
+    "id": "mysql-admin-docs",
+    "type": "feature",
+    "title": "Update admin commands documentation with database command",
+    "description": "Add database status command documentation to Admin-Commands.md wiki page",
+    "status": "done",
+    "user_note": "Updated Admin Commands documentation with comprehensive /chunklock database command reference including example outputs for both MapDB and MySQL modes",
+    "risk": "low",
+    "files_touched": ["docs/wiki/Admin-Commands.md"],
+    "tests": ["Documentation review"],
+    "notes": "Integrate with existing admin commands documentation"
+  },
+  {
+    "id": "mysql-debug-enhance",
+    "type": "feature",
+    "title": "Enhance debug command to show MySQL connection details",
+    "description": "Update /chunklock debug output to include MySQL-specific metrics when MySQL is active",
+    "status": "done",
+    "user_note": "Added '/chunklock debug database' subcommand showing connection status, query performance, and pool statistics for MySQL or file sizes for MapDB",
+    "risk": "low",
+    "files_touched": ["src/main/java/me/chunklock/commands/DebugCommand.java"],
+    "tests": ["All 26 unit tests pass"],
+    "notes": "Show connection pool stats, active connections, query performance if MySQL mode"
+  },
+  {
+    "id": "fix-69-resource-based-unlock",
+    "type": "bugfix",
+    "title": "Fix resource-based unlock: players stuck without required materials",
+    "description": "Players spawning in chunks without biome-required materials (e.g., Plains with no trees) could not progress. Added resource-scan cost mode that bases unlock costs on materials actually available in the player's owned chunks. Fixed GUI display/validation mismatch where biome items were shown but PaymentRequirement items were validated. Fixed items never being consumed on material unlock.",
+    "status": "done",
+    "user_note": "Added new 'resource-scan' cost mode that scans your owned chunks and only requires materials you can actually gather. Fixed unlock GUI showing wrong material requirements and items not being consumed on unlock.",
+    "risk": "med",
+    "files_touched": [
+      "src/main/java/me/chunklock/economy/calculation/OwnedChunkScanner.java",
+      "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java",
+      "src/main/java/me/chunklock/economy/EconomyManager.java",
+      "src/main/java/me/chunklock/config/modular/EconomyConfig.java",
+      "src/main/resources/economy.yml",
+      "src/main/java/me/chunklock/ui/UnlockGui.java",
+      "src/main/java/me/chunklock/ui/UnlockGuiBuilder.java"
+    ],
+    "tests": [
+      "src/test/java/me/chunklock/economy/calculation/ResourceBasedCostTest.java"
+    ],
+    "notes": "Enable with materials.cost-mode: 'resource-scan' in economy.yml. Falls back to biome-based if scan returns no resources. Scans cached per-player with configurable TTL."
+  },
+  {
+    "id": "fix-71-material-unlock-regression",
+    "type": "bugfix",
+    "title": "Fix false insufficient-material unlock failures",
+    "description": "Fix regression where vanilla material unlock checks could fail despite sufficient inventory and show incorrect missing amounts.",
+    "status": "done",
+    "user_note": "Fixed a regression where chunk unlock could fail even when you had enough vanilla materials in inventory. Missing-item messages now show correct non-negative values.",
+    "risk": "low",
+    "files_touched": [
+      "src/main/java/me/chunklock/economy/items/VanillaItemRequirement.java",
+      "src/main/java/me/chunklock/ui/UnlockGui.java",
+      "src/main/java/me/chunklock/ui/UnlockGuiBuilder.java"
+    ],
+    "tests": ["mvn clean package (28 tests passed)"],
+    "notes": "GitHub issue: #71"
+  },
+  {
+    "id": "fix-72-single-material-enforcement",
+    "type": "bugfix",
+    "title": "Restore single-resource requirement in materials mode",
+    "description": "Material unlocks were enforcing multiple biome resources at once in some flows. Restored single-resource requirement behavior for affordability and payment consistency.",
+    "status": "done",
+    "user_note": "Materials unlock now requires one resource again (not multiple at once), matching legacy behavior and expected gameplay.",
+    "risk": "low",
+    "files_touched": [
+      "src/main/java/me/chunklock/economy/calculation/TraditionalMaterialStrategy.java",
+      "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java"
+    ],
+    "tests": ["mvn clean package (28 tests passed)"],
+    "notes": "Keeps first vanilla requirement when biome defines multiple entries."
+  },
+  {
+    "id": "fix-65-mysql-starting-chunk-persistence",
+    "type": "bugfix",
+    "title": "Fix MySQL starting chunk reassignment after restart",
+    "description": "After server restart, players could be assigned a new starting chunk because in-memory claims were empty and persisted spawn ownership was not restored in SingleWorldManager. Claim lookup now restores from persisted player spawn data before assigning a new chunk.",
+    "status": "done",
+    "user_note": "Fixed issue where /chunklock start could give a new chunk after restart on MySQL. Existing persisted claim is now restored and reused.",
+    "risk": "low",
+    "files_touched": [
+      "src/main/java/me/chunklock/managers/SingleWorldManager.java"
+    ],
+    "tests": ["runTests: 35 passed, 0 failed"],
+    "notes": "GitHub issue: #65"
+  }
+]

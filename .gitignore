@@ -8,5 +8,3 @@ COMPATIBILITY_GUIDE.md
 .env
 .github/agents/coder.agent.md
 docs/CODEX-CONTEXT.md
-release/RELEASE_NOTES_NEXT.md
-release/RELEASE_TRACKER.json
