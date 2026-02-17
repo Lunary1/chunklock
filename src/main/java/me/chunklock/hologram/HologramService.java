@@ -5,6 +5,7 @@ import me.chunklock.hologram.config.HologramConfiguration;
 import me.chunklock.hologram.core.*;
 import me.chunklock.hologram.core.HologramData;
 import me.chunklock.hologram.provider.FancyHologramsProvider;
+import me.chunklock.hologram.provider.CMIHologramsProvider;
 import me.chunklock.hologram.util.HologramLocationUtils;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkLockManager;
@@ -951,6 +952,30 @@ public final class HologramService {
         switch (config.getProvider().toLowerCase()) {
             case "fancyholograms":
                 return new FancyHologramsProvider();
+            case "cmi":
+                return new CMIHologramsProvider();
+            case "auto":
+                // Auto-detect: try CMI first, then FancyHolograms
+                // First check if plugin is loaded (lightweight) before attempting full initialization
+                if (CMIHologramsProvider.isPluginAvailable()) {
+                    CMIHologramsProvider cmiProvider = new CMIHologramsProvider();
+                    // Constructor performs full reflection initialization
+                    if (cmiProvider.isAvailable()) {
+                        ChunklockPlugin.getInstance().getLogger().info("Auto-detected CMI hologram provider");
+                        return cmiProvider;
+                    }
+                }
+                if (FancyHologramsProvider.isPluginAvailable()) {
+                    FancyHologramsProvider fancyProvider = new FancyHologramsProvider();
+                    // Constructor performs full reflection initialization
+                    if (fancyProvider.isAvailable()) {
+                        ChunklockPlugin.getInstance().getLogger().info("Auto-detected FancyHolograms provider");
+                        return fancyProvider;
+                    }
+                }
+                ChunklockPlugin.getInstance().getLogger().warning(
+                    "No hologram provider found - disabling holograms");
+                return createNullProvider();
             default:
                 ChunklockPlugin.getInstance().getLogger().warning(
                     "Unknown hologram provider '" + config.getProvider() + "' - disabling holograms");

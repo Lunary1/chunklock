@@ -112,7 +112,7 @@ When updating from v1.1 or earlier, the plugin automatically migrates legacy YAM
 ### Optional
 
 - **Vault** - For currency-based economy (with any economy plugin)
-- **FancyHolograms** - Enhanced hologram displays (falls back to internal system)
+- **FancyHolograms** or **CMI** - Enhanced hologram displays (optional, auto-detected)
 
 ---
 

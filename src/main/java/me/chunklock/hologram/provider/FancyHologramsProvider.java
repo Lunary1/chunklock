@@ -30,6 +30,19 @@ public final class FancyHologramsProvider implements HologramProvider {
     private final ReflectionHelper reflection;
     private final Map<String, FancyHologram> managedHolograms = new ConcurrentHashMap<>();
 
+    /**
+     * Static method to check if FancyHolograms plugin is available without full initialization.
+     * Use this before creating an instance to avoid unnecessary reflection overhead.
+     */
+    public static boolean isPluginAvailable() {
+        try {
+            // Quick check if FancyHolograms plugin is loaded
+            return Bukkit.getPluginManager().getPlugin("FancyHolograms") != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public FancyHologramsProvider() {
         this.reflection = new ReflectionHelper();
         this.available = reflection.isInitialized();

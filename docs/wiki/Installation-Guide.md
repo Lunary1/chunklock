@@ -96,7 +96,7 @@ claims:
 **Visual Effects** (`holograms.yml`):
 ```yaml
 enabled: true
-provider: "FancyHolograms"
+provider: "auto" # Options: "auto", "FancyHolograms", "CMI", or "none"
 ```
 
 **Borders** (`borders.yml`):
@@ -165,9 +165,11 @@ If you want to use money instead of materials for chunk unlocking:
      cost-per-unlocked: 25.0
    ```
 
-#### FancyHolograms Integration
+#### Hologram Integration
 
-For enhanced hologram displays:
+Chunklock supports multiple hologram plugins for enhanced visual displays. Choose one:
+
+##### Option 1: FancyHolograms
 
 1. **Install FancyHolograms**: Download from [SpigotMC](https://www.spigotmc.org/resources/fancyholograms.96592/)
 2. **Configure Chunklock** (`holograms.yml`):
@@ -175,6 +177,25 @@ For enhanced hologram displays:
    enabled: true
    provider: "FancyHolograms"
    ```
+
+##### Option 2: CMI Holograms
+
+1. **Install CMI**: Purchase and install from [SpigotMC](https://www.spigotmc.org/resources/cmi.3742/)
+2. **Configure Chunklock** (`holograms.yml`):
+   ```yaml
+   enabled: true
+   provider: "CMI"
+   ```
+
+##### Auto-Detection (Recommended)
+
+Let Chunklock automatically detect and use any available hologram plugin:
+```yaml
+enabled: true
+provider: "auto"  # Tries CMI first, then FancyHolograms
+```
+
+**Note**: If you don't have any hologram plugin, set `provider: "none"` or `enabled: false` to disable holograms.
 
 #### OpenAI/ChatGPT Integration (Optional)
 
