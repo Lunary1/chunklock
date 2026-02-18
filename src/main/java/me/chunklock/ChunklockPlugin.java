@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -499,6 +500,10 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             // Cleanup existing systems
             if (hologramService != null) hologramService.cleanup();
             if (chunkBorderManager != null) chunkBorderManager.cleanup();
+
+            // Ensure reload is idempotent (avoid duplicate listeners/tasks)
+            HandlerList.unregisterAll((org.bukkit.plugin.Plugin) this);
+            Bukkit.getScheduler().cancelTasks(this);
             
             // Save all data
             saveAllData();

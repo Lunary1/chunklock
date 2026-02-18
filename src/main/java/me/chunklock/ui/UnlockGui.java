@@ -25,6 +25,7 @@ import me.chunklock.ui.UnlockGuiStateManager.PendingUnlock;
 import me.chunklock.util.message.MessageUtil;
 import org.bukkit.Particle;
 import org.bukkit.Location;
+import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -677,12 +678,18 @@ public class UnlockGui {
         );
         
         // Multiple particle bursts
-        Bukkit.getScheduler().runTaskTimer(plugin, new Runnable() {
+        new BukkitRunnable() {
             int count = 0;
             
             @Override
             public void run() {
+                if (!player.isOnline()) {
+                    cancel();
+                    return;
+                }
+
                 if (count >= 3) {
+                    cancel();
                     return;
                 }
                 
@@ -702,7 +709,7 @@ public class UnlockGui {
                 
                 count++;
             }
-        }, 0L, 10L);
+        }.runTaskTimer(plugin, 0L, 10L);
     }
     
     /**

@@ -58,6 +58,9 @@ public class BiomeUnlockRegistry {
         
         ConfigurationSection config = biomeUnlocksConfig.getRootSection();
         if (config == null) return;
+
+        Set<Biome> loadedBiomes = new HashSet<>();
+        int endExclusiveMaterialRequirements = 0;
         
         for (String biomeKey : config.getKeys(false)) {
             try {
@@ -68,11 +71,83 @@ public class BiomeUnlockRegistry {
                 List<ItemRequirement> requirements = requirementFactory.parseRequirements(biomeKey, section);
                 if (!requirements.isEmpty()) {
                     itemRequirements.put(biome, requirements);
+                    loadedBiomes.add(biome);
+
+                    for (ItemRequirement requirement : requirements) {
+                        if (requirement instanceof me.chunklock.economy.items.VanillaItemRequirement vanilla
+                                && isEndExclusiveMaterial(vanilla.getMaterial())) {
+                            endExclusiveMaterialRequirements++;
+                        }
+                    }
                 }
             } catch (Exception ex) {
                 plugin.getLogger().warning("Error loading biome: " + ex.getMessage());
             }
         }
+
+        warnPotentiallyUnreachableRequirements(loadedBiomes, endExclusiveMaterialRequirements);
+    }
+
+    private void warnPotentiallyUnreachableRequirements(Set<Biome> loadedBiomes, int endExclusiveMaterialRequirements) {
+        if (!(plugin instanceof ChunklockPlugin chunklockPlugin)) {
+            return;
+        }
+
+        try {
+            WorldManager worldManager = chunklockPlugin.getWorldManager();
+            if (worldManager == null) {
+                return;
+            }
+
+            List<String> enabledWorlds = worldManager.getEnabledWorlds();
+            boolean singleWorldMode = enabledWorlds.size() <= 1;
+            if (!singleWorldMode) {
+                return;
+            }
+
+            boolean hasEndBiomeRequirements = loadedBiomes.stream().anyMatch(this::isEndBiome);
+            if (!hasEndBiomeRequirements && endExclusiveMaterialRequirements == 0) {
+                return;
+            }
+
+            plugin.getLogger().warning("⚠️ Potential progression softlock risk detected in biome-unlocks.yml:");
+            plugin.getLogger().warning("   - Single-world configuration is active (enabled worlds: " + enabledWorlds + ")");
+            if (hasEndBiomeRequirements) {
+                plugin.getLogger().warning("   - End biome requirements are configured while running in single-world mode");
+            }
+            if (endExclusiveMaterialRequirements > 0) {
+                plugin.getLogger().warning("   - Found " + endExclusiveMaterialRequirements + " End-exclusive material requirement(s)");
+            }
+            plugin.getLogger().warning("   Review biome-unlocks.yml and ensure all required items are reachable for this world setup.");
+        } catch (Exception ignored) {
+            // Guardrail warnings should never interrupt plugin startup
+        }
+    }
+
+    private boolean isEndBiome(Biome biome) {
+        if (biome == null) {
+            return false;
+        }
+        if (biome == Biome.THE_END) {
+            return true;
+        }
+        return biome.getKey().getKey().toUpperCase(Locale.ROOT).contains("END");
+    }
+
+    private boolean isEndExclusiveMaterial(Material material) {
+        if (material == null) {
+            return false;
+        }
+
+        String name = material.name();
+        return name.equals("DRAGON_EGG")
+            || name.equals("ELYTRA")
+            || name.equals("END_CRYSTAL")
+            || name.startsWith("CHORUS")
+            || name.startsWith("PURPUR")
+            || name.startsWith("END_STONE")
+            || name.startsWith("END_ROD")
+            || name.startsWith("SHULKER");
     }
 
     private Biome getBiomeFromString(String biomeKey) {

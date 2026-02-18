@@ -15,6 +15,8 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.player.PlayerKickEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -97,6 +99,16 @@ public class InventoryChangeListener implements Listener {
         // Consuming items (food, potions) changes inventory
         scheduleHologramUpdate(event.getPlayer(), "item consume");
     }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        lastUpdateTimes.remove(event.getPlayer().getUniqueId());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerKick(PlayerKickEvent event) {
+        lastUpdateTimes.remove(event.getPlayer().getUniqueId());
+    }
     
     /**
      * Schedule a debounced hologram update for the player
@@ -115,12 +127,16 @@ public class InventoryChangeListener implements Listener {
         
         // Schedule the update with debounce delay
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (player.isOnline() && hologramService != null) {
-                if (plugin.getLogger().isLoggable(Level.FINE)) {
-                    plugin.getLogger().fine(
-                        "Updating holograms for " + player.getName() + " due to " + reason);
+            try {
+                if (player.isOnline() && hologramService != null) {
+                    if (plugin.getLogger().isLoggable(Level.FINE)) {
+                        plugin.getLogger().fine(
+                            "Updating holograms for " + player.getName() + " due to " + reason);
+                    }
+                    hologramService.updateActiveHologramsForPlayer(player);
                 }
-                hologramService.updateActiveHologramsForPlayer(player);
+            } finally {
+                lastUpdateTimes.remove(playerId);
             }
         }, DEBOUNCE_DELAY_TICKS);
     }

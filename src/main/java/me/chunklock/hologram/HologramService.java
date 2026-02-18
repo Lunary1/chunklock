@@ -31,6 +31,9 @@ import java.util.stream.Collectors;
  */
 public final class HologramService {
 
+    private static final int WALL_LOCATION_CACHE_SOFT_LIMIT = 20_000;
+    private static final int WALL_LOCATION_CACHE_TRIM_BATCH = 2_000;
+
     private final HologramConfiguration config;
     private final HologramProvider provider;
     private final ChunkLockManager chunkLockManager;
@@ -867,6 +870,7 @@ public final class HologramService {
         Map<HologramLocationUtils.WallSide, Location> wallMap = cachedWallLocations.get(chunkKey);
         
         if (wallMap == null) {
+            enforceWallLocationCacheLimit();
             wallMap = new EnumMap<>(HologramLocationUtils.WallSide.class);
             cachedWallLocations.put(chunkKey, wallMap);
         }
@@ -880,6 +884,26 @@ public final class HologramService {
         }
         
         return location.clone();
+    }
+
+    private void enforceWallLocationCacheLimit() {
+        int cacheSize = cachedWallLocations.size();
+        if (cacheSize < WALL_LOCATION_CACHE_SOFT_LIMIT) {
+            return;
+        }
+
+        int removed = 0;
+        Iterator<String> iterator = cachedWallLocations.keySet().iterator();
+        while (iterator.hasNext() && removed < WALL_LOCATION_CACHE_TRIM_BATCH) {
+            iterator.next();
+            iterator.remove();
+            removed++;
+        }
+
+        if (removed > 0 && ChunklockPlugin.getInstance().getLogger().isLoggable(Level.FINE)) {
+            ChunklockPlugin.getInstance().getLogger().fine(
+                "Trimmed cached wall locations by " + removed + " entries (size now " + cachedWallLocations.size() + ")");
+        }
     }
     
     private void startBackgroundTasks() {
