@@ -8,7 +8,7 @@ Purpose: give GPT-5.3-Codex a fast, reliable map of where to look and what to ed
 - Artifact: `Chunklock-2.1.0`
 - Build: `mvn clean package`
 - Entry point: `src/main/java/me/chunklock/ChunklockPlugin.java`
-- Plugin descriptor: `src/main/resources/plugin.yml` (UTF-16LE + CRLF)
+- Plugin descriptor: `src/main/resources/plugin.yml` (UTF-8 with BOM + CRLF)
 
 ## 2) Core File Map (Highest Signal)
 
@@ -93,7 +93,11 @@ rg -n "MapDB|ChunkDatabase|PlayerDatabase|DataMigrationService" src/main/java/me
 
 ## 6) Known Gotchas
 
-- `plugin.yml` encoding is UTF-16LE with CRLF. Do not rewrite it as UTF-8 accidentally.
+- `plugin.yml` encoding is UTF-8 **with BOM** (`EF BB BF`) and CRLF line endings. Preserve both
+  when editing. (This note previously said UTF-16LE, which was incorrect - reading it as UTF-16
+  produces mojibake.)
+- `plugin.yml` carries a hardcoded `version:` field. Bump it alongside `pom.xml` and `README.md`
+  on every release - it is what `/version Chunklock` reports to server admins.
 - There are legacy + modular config classes with overlapping names:
   - `me.chunklock.config.EconomyConfig`
   - `me.chunklock.config.modular.EconomyConfig`
