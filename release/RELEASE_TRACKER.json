@@ -117,5 +117,63 @@
     ],
     "tests": ["runTests: 35 passed, 0 failed"],
     "notes": "GitHub issue: #65"
+  },
+  {
+    "id": "fix-76-resource-scan-acacia-repetition",
+    "type": "bugfix",
+    "title": "Reduce repeated acacia costs and improve material cost scaling",
+    "description": "Resource-scan was over-selecting wood/acacia and flattening costs around fixed values due to strict availability capping.",
+    "status": "done",
+    "user_note": "Improved resource-scan variety and progression scaling: repeated wood/acacia picks are reduced and costs no longer flatten around fixed values during progression.",
+    "risk": "med",
+    "files_touched": [
+      "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java",
+      "src/test/java/me/chunklock/economy/calculation/ResourceBasedCostTest.java"
+    ],
+    "tests": [
+      "runTests ResourceBasedCostTest: 9 passed, 0 failed",
+      "runTests all: 35 passed, 0 failed"
+    ],
+    "notes": "GitHub issue: #76"
+  },
+  {
+    "id": "fix-77-resource-scan-economy-hardening",
+    "type": "bugfix",
+    "title": "Harden resource-scan pricing against scarcity exploits and improve consistency",
+    "description": "Reworked resource-scan to use deterministic candidate sorting, weighted wood de-prioritization, diminishing-return progression scaling, and a bounded soft availability modifier instead of hard availability caps.",
+    "status": "done",
+    "user_note": "Resource-scan now selects materials more consistently and fairly, prevents low-cost scarcity exploits, and shows players that prices are based on claimed-chunk resources.",
+    "risk": "med",
+    "files_touched": [
+      "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java",
+      "src/main/java/me/chunklock/ui/UnlockGuiBuilder.java",
+      "src/test/java/me/chunklock/economy/calculation/ResourceBasedCostTest.java"
+    ],
+    "tests": [
+      "runTests ResourceBasedCostTest: 9 passed, 0 failed",
+      "runTests all: 35 passed, 0 failed"
+    ],
+    "notes": "GitHub issue: #77"
+  },
+  {
+    "id": "fix-78-async-cost-calculation-concurrency",
+    "type": "bugfix",
+    "title": "Fix NoSuchElementException in ResourceBasedMaterialStrategy during async cost calculation",
+    "description": "The recent-selection history added for #77 used a plain HashMap of ArrayDeque, but calculateRequirement runs on async threads via AsyncCostCalculationService (runTaskAsynchronously and two CompletableFuture.supplyAsync call sites). Concurrent trimming could call removeFirst() on an empty deque and throw NoSuchElementException, and the unsynchronized HashMap risked corruption under concurrent computeIfAbsent. Switched to ConcurrentHashMap + ConcurrentLinkedDeque and replaced removeFirst() with pollFirst(), which returns null instead of throwing. Also added per-player cleanup on quit so the map does not grow unbounded on long-running servers.",
+    "status": "done",
+    "user_note": "Fixed an error that could occur while calculating unlock costs in resource-scan mode, which could cause the unlock menu to fail to open or show incorrect requirements.",
+    "risk": "low",
+    "files_touched": [
+      "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java",
+      "src/main/java/me/chunklock/economy/EconomyManager.java",
+      "src/main/java/me/chunklock/listeners/PlayerListener.java",
+      "src/test/java/me/chunklock/economy/calculation/ResourceBasedCostTest.java"
+    ],
+    "tests": [
+      "runTests ResourceBasedCostTest: 9 passed, 0 failed",
+      "runTests all: 29 passed, 0 failed",
+      "Regression verified: reverting pollFirst() to removeFirst() makes the new concurrency test fail with NoSuchElementException"
+    ],
+    "notes": "GitHub issue: #78. Root cause was introduced by the #77 work in the same file, so both ship together."
   }
 ]

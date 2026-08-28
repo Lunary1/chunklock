@@ -13,7 +13,13 @@ import org.bukkit.block.Biome;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Deque;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.logging.Level;
 
 /**
@@ -28,8 +34,8 @@ import java.util.logging.Level;
  * <h3>Algorithm:</h3>
  * <ol>
  *   <li>Scan all player-owned chunks for harvestable resources</li>
- *   <li>Select the best available material (highest tier that meets abundance threshold)</li>
- *   <li>Calculate required amount based on tier cost multiplier and progression</li>
+ *   <li>Select a deterministic best candidate (tier, abundance, and anti-repeat weighting)</li>
+ *   <li>Calculate amount from tier, diminishing-return progression, and soft availability modifier</li>
  *   <li>Fall back to biome-based calculation if no resources found</li>
  * </ol>
  *
@@ -46,6 +52,11 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
     private int baseCost = 16;
     private int maxCost = 128;
     private int minCost = 1;
+    private static final int RECENT_SELECTION_MEMORY = 3;
+
+    // Cost calculation runs on async threads (see AsyncCostCalculationService), so this
+    // map and the deques inside it must both be safe for concurrent access.
+    private final Map<UUID, Deque<Material>> recentSelections = new ConcurrentHashMap<>();
 
     public ResourceBasedMaterialStrategy(ChunklockPlugin plugin,
                                          OwnedChunkScanner scanner,
@@ -86,9 +97,8 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
                 return fallbackToBiomeBased(player, biome, evaluation);
             }
 
-            // Pick the best obtainable material: prefer highest tier within the cap
-            // Resources already sorted highest-tier-first
-            OwnedChunkScanner.ResourceEntry selected = obtainable.get(0);
+            List<OwnedChunkScanner.ResourceEntry> sortedCandidates = sortCandidates(obtainable);
+            OwnedChunkScanner.ResourceEntry selected = selectMaterial(player, sortedCandidates, unlocked);
 
             // Convert ore blocks to their drop material for the payment requirement
             Material paymentMaterial = mapToDropMaterial(selected.material());
@@ -96,19 +106,15 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
             // Calculate cost amount
             double progressionMultiplier = calculateProgressionMultiplier(player, evaluation.score);
             double tierMultiplier = OwnedChunkScanner.getTierCostMultiplier(selected.tier());
-            int amount = (int) Math.ceil(baseCost * tierMultiplier * progressionMultiplier);
+            double availabilityModifier = calculateAvailabilityModifier(selected, sortedCandidates);
+            int amount = (int) Math.ceil(baseCost * tierMultiplier * progressionMultiplier * availabilityModifier);
 
             // Clamp
             amount = Math.max(minCost, Math.min(maxCost, amount));
 
-            // Ensure we don't ask for more than a reasonable fraction of what's available
-            // Don't ask for more than 25% of available resources
-            int maxFromAvailable = Math.max(minCost, selected.count() / 4);
-            amount = Math.min(amount, maxFromAvailable);
-
             plugin.getLogger().fine("Resource-based cost for " + player.getName() + 
                 ": " + amount + "x " + paymentMaterial + 
-                " (tier " + selected.tier() + ", available: " + selected.count() + ")");
+                " (tier " + selected.tier() + ", available: " + selected.count() + ", availability-mod: " + String.format("%.2f", availabilityModifier) + ")");
 
             List<ItemRequirement> requirements = new ArrayList<>();
             requirements.add(new VanillaItemRequirement(paymentMaterial, amount));
@@ -119,6 +125,107 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
                 ", falling back to biome-based", e);
             return fallbackToBiomeBased(player, biome, evaluation);
         }
+    }
+
+    private OwnedChunkScanner.ResourceEntry selectMaterial(Player player,
+                                                           List<OwnedChunkScanner.ResourceEntry> sortedCandidates,
+                                                           int unlockedChunks) {
+        int windowSize = Math.min(4, sortedCandidates.size());
+        List<OwnedChunkScanner.ResourceEntry> topCandidates = sortedCandidates.subList(0, windowSize);
+
+        UUID playerId = player.getUniqueId();
+        Deque<Material> recent = recentSelections.computeIfAbsent(playerId, id -> new ConcurrentLinkedDeque<>());
+
+        OwnedChunkScanner.ResourceEntry best = null;
+        double bestScore = Double.NEGATIVE_INFINITY;
+
+        for (OwnedChunkScanner.ResourceEntry candidate : topCandidates) {
+            double score = computeSelectionScore(candidate, unlockedChunks, recent);
+            if (score > bestScore) {
+                bestScore = score;
+                best = candidate;
+            }
+        }
+
+        if (best == null) {
+            best = topCandidates.get(unlockedChunks % windowSize);
+        }
+
+        rememberSelection(recent, best.material());
+        return best;
+    }
+
+    private List<OwnedChunkScanner.ResourceEntry> sortCandidates(List<OwnedChunkScanner.ResourceEntry> candidates) {
+        List<OwnedChunkScanner.ResourceEntry> sorted = new ArrayList<>(candidates);
+        sorted.sort(Comparator
+            .comparingInt(OwnedChunkScanner.ResourceEntry::tier).reversed()
+            .thenComparingInt(OwnedChunkScanner.ResourceEntry::count).reversed()
+            .thenComparing(entry -> entry.material().name()));
+        return sorted;
+    }
+
+    private double computeSelectionScore(OwnedChunkScanner.ResourceEntry entry, int unlockedChunks, Deque<Material> recent) {
+        double score = (entry.tier() * 1000.0) + Math.min(entry.count(), 250);
+
+        if (isWoodLike(entry.material()) && unlockedChunks >= 5) {
+            score -= unlockedChunks >= 12 ? 220.0 : 140.0;
+        }
+
+        if (recent.contains(entry.material())) {
+            score -= 350.0;
+        }
+
+        return score;
+    }
+
+    private double calculateAvailabilityModifier(OwnedChunkScanner.ResourceEntry selected,
+                                                 List<OwnedChunkScanner.ResourceEntry> sortedCandidates) {
+        int windowSize = Math.min(4, sortedCandidates.size());
+        double averageCount = sortedCandidates.stream()
+            .limit(windowSize)
+            .mapToInt(OwnedChunkScanner.ResourceEntry::count)
+            .average()
+            .orElse(selected.count());
+
+        return computeAvailabilityModifier(selected.count(), averageCount);
+    }
+
+    static double computeAvailabilityModifier(int selectedCount, double averageCount) {
+        if (averageCount <= 0) {
+            return 1.0;
+        }
+        double ratio = selectedCount / averageCount;
+        double modifier = 1.0 + ((ratio - 1.0) * 0.15);
+        return Math.max(0.9, Math.min(1.1, modifier));
+    }
+
+    static void rememberSelection(Deque<Material> recent, Material material) {
+        recent.addLast(material);
+        // pollFirst() returns null on an empty deque instead of throwing, so a concurrent
+        // trim from another async calculation cannot fail here.
+        while (recent.size() > RECENT_SELECTION_MEMORY && recent.pollFirst() != null) {
+            // trimmed
+        }
+    }
+
+    /**
+     * Forget a player's recent-selection history. Called when a player quits so the
+     * per-player map does not grow without bound on long-running servers.
+     */
+    public void invalidatePlayer(UUID playerId) {
+        recentSelections.remove(playerId);
+    }
+
+    /**
+     * Clear all remembered selections (used on reload).
+     */
+    public void clearRecentSelections() {
+        recentSelections.clear();
+    }
+
+    private boolean isWoodLike(Material material) {
+        String name = material.name();
+        return name.endsWith("_LOG") || name.endsWith("_STEM") || name.endsWith("_WOOD");
     }
 
     /**
@@ -156,13 +263,15 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
             case LAPIS_ORE, DEEPSLATE_LAPIS_ORE -> Material.LAPIS_LAZULI;
             case REDSTONE_ORE, DEEPSLATE_REDSTONE_ORE -> Material.REDSTONE;
             case RAW_COPPER_BLOCK -> Material.RAW_COPPER;
+            case RAW_IRON_BLOCK -> Material.RAW_IRON;
+            case RAW_GOLD_BLOCK -> Material.RAW_GOLD;
             default -> blockMaterial;
         };
     }
 
     private double calculateProgressionMultiplier(Player player, int score) {
         int unlocked = progressTracker.getUnlockedChunkCount(player.getUniqueId());
-        double multiplier = 1.0 + unlocked / 10.0 + score / 50.0;
+        double multiplier = computeBaseProgressionMultiplier(unlocked, score);
 
         if (biomeRegistry.isTeamIntegrationActive()) {
             try {
@@ -173,6 +282,13 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
         }
 
         return multiplier;
+    }
+
+    static double computeBaseProgressionMultiplier(int unlockedChunks, int score) {
+        double progression = 1.0 + (Math.sqrt(Math.max(0, unlockedChunks)) / 5.0);
+        double normalizedScore = Math.max(0.0, Math.min(1.0, score / 100.0));
+        double scoreFactor = 1.0 + (normalizedScore * 0.6);
+        return progression * scoreFactor;
     }
 
     /**
