@@ -34,6 +34,15 @@ public final class HologramService {
     private static final int WALL_LOCATION_CACHE_SOFT_LIMIT = 20_000;
     private static final int WALL_LOCATION_CACHE_TRIM_BATCH = 2_000;
 
+    // hologramStates is a cache: despawned entries are deliberately retained so a hologram
+    // can be respawned without recomputing its content. Keys are per player AND per chunk
+    // side, so without eviction the map grows as players * chunks explored * 4 and is only
+    // cleared on shutdown. These bounds keep that growth in check. See issue #74.
+    private static final int HOLOGRAM_STATE_SOFT_LIMIT = 20_000;
+    private static final int HOLOGRAM_STATE_TRIM_BATCH = 2_000;
+    /** Despawned states untouched for this many ticks are evicted (20 ticks = 1 second). */
+    private static final long HOLOGRAM_STATE_STALE_TICKS = 20L * 60L * 10L; // 10 minutes
+
     private final HologramConfiguration config;
     private final HologramProvider provider;
     private final ChunkLockManager chunkLockManager;
@@ -57,6 +66,9 @@ public final class HologramService {
     // Background tasks
     private BukkitTask distanceCullingTask;
     private BukkitTask cleanupTask;
+
+    /** Running total of evicted hologram states, surfaced via /chunklock debug (#74). */
+    private volatile long totalEvictedStates;
 
     private HologramService(Builder builder) {
         this.config = new HologramConfiguration(ChunklockPlugin.getInstance());
@@ -165,12 +177,15 @@ public final class HologramService {
         
         for (HologramId hologramId : playerHolograms) {
             despawnHologram(hologramId);
+            // The player is leaving, so there is nothing to respawn for them. Drop the
+            // cached state outright rather than keeping a despawned entry forever (#74).
+            hologramStates.remove(hologramId);
         }
-        
+
         // Clean up player-specific data
         activeHologramSets.remove(playerId);
         lastPlayerLocations.remove(playerId);
-        
+
         ChunklockPlugin.getInstance().getLogger().fine("Despawned " + playerHolograms.size() + " holograms for player " + player.getName());
     }
 
@@ -929,8 +944,107 @@ public final class HologramService {
     }
     
     private void cleanupInvalidHolograms() {
-        // For now, no cleanup is needed as we don't have a way to validate hologram state
-        // This could be extended to check hologram validity with the provider API
+        evictStaleHologramStates();
+    }
+
+    /**
+     * Evicts cached hologram state that can no longer be useful.
+     *
+     * <p>{@code hologramStates} intentionally keeps entries after a hologram is despawned so
+     * it can be respawned cheaply. Without eviction that cache only ever grows: keys combine
+     * player UUID, chunk coordinates and wall side, so an explore-heavy server accumulates
+     * roughly {@code players * chunks * 4} entries, each retaining a {@link Location} (and
+     * therefore a world reference) plus its rendered lines. Before this, the map was only
+     * cleared on shutdown, which is the memory growth reported in issue #74.
+     *
+     * <p>Two rules, both conservative - a wrongly evicted entry only costs one recomputation:
+     * <ol>
+     *   <li>drop despawned entries not touched for {@link #HOLOGRAM_STATE_STALE_TICKS}</li>
+     *   <li>if still above {@link #HOLOGRAM_STATE_SOFT_LIMIT}, drop the oldest despawned
+     *       entries until back under the limit</li>
+     * </ol>
+     *
+     * <p>Entries that are still spawned are never evicted, since they track live holograms.
+     */
+    private void evictStaleHologramStates() {
+        if (hologramStates.isEmpty()) {
+            return;
+        }
+
+        int sizeBefore = hologramStates.size();
+        EvictionResult result = evictStaleStates(
+            hologramStates, getCurrentTick(),
+            HOLOGRAM_STATE_STALE_TICKS, HOLOGRAM_STATE_SOFT_LIMIT, HOLOGRAM_STATE_TRIM_BATCH,
+            HologramState::isSpawned, HologramState::getLastUpdateTick);
+
+        if (result.total() > 0) {
+            totalEvictedStates += result.total();
+            ChunklockPlugin.getInstance().getLogger().fine(
+                "Evicted " + result.total() + " cached hologram states (" + result.stale() + " stale, "
+                    + result.overflow() + " over limit); size " + sizeBefore + " -> " + hologramStates.size());
+        }
+    }
+
+    /** Counts from one eviction pass. */
+    record EvictionResult(int stale, int overflow) {
+        int total() {
+            return stale + overflow;
+        }
+    }
+
+    /**
+     * Eviction policy for {@code hologramStates}, kept static and side-effect free so it can
+     * be unit tested without a running server.
+     *
+     * <p>Two rules, both conservative - a wrongly evicted entry only costs one recomputation:
+     * <ol>
+     *   <li>drop despawned entries not touched for {@code staleTicks}</li>
+     *   <li>if still at or above {@code softLimit}, drop the oldest despawned entries,
+     *       at most {@code trimBatch} of them</li>
+     * </ol>
+     *
+     * <p>Entries that are still spawned are never evicted - they track live holograms.
+     */
+    static <K, V> EvictionResult evictStaleStates(Map<K, V> states,
+                                                  long now,
+                                                  long staleTicks,
+                                                  int softLimit,
+                                                  int trimBatch,
+                                                  java.util.function.Predicate<V> isSpawned,
+                                                  java.util.function.ToLongFunction<V> lastUpdateTick) {
+        // Rule 1: drop despawned entries that have gone stale.
+        int evictedStale = 0;
+        Iterator<Map.Entry<K, V>> iterator = states.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<K, V> entry = iterator.next();
+            V state = entry.getValue();
+            if (isSpawned.test(state)) {
+                continue;
+            }
+            if (now - lastUpdateTick.applyAsLong(state) >= staleTicks) {
+                iterator.remove();
+                evictedStale++;
+            }
+        }
+
+        // Rule 2: hard cap. Evict the oldest despawned entries first.
+        int evictedOverflow = 0;
+        if (states.size() >= softLimit) {
+            List<Map.Entry<K, V>> evictable = states.entrySet().stream()
+                .filter(entry -> !isSpawned.test(entry.getValue()))
+                .sorted(Comparator.comparingLong(entry -> lastUpdateTick.applyAsLong(entry.getValue())))
+                .limit(trimBatch)
+                .collect(Collectors.toList());
+
+            for (Map.Entry<K, V> entry : evictable) {
+                // remove(key, value) so a concurrent update is not clobbered
+                if (states.remove(entry.getKey(), entry.getValue())) {
+                    evictedOverflow++;
+                }
+            }
+        }
+
+        return new EvictionResult(evictedStale, evictedOverflow);
     }
     
     private void cleanupOrphanedHolograms() {
@@ -1017,6 +1131,13 @@ public final class HologramService {
         stats.put("spawnedHolograms", spawnedHolograms.size());
         stats.put("activePlayers", activeHologramSets.size());
         stats.put("cachedWallLocations", cachedWallLocations.size());
+
+        // Cached-but-not-spawned states. This is the number that grew without bound before
+        // the eviction policy was added (#74) - it should plateau, not climb indefinitely.
+        int cachedNotSpawned = hologramStates.size() - spawnedHolograms.size();
+        stats.put("cachedDespawnedStates", Math.max(0, cachedNotSpawned));
+        stats.put("hologramStateSoftLimit", HOLOGRAM_STATE_SOFT_LIMIT);
+        stats.put("totalEvictedStates", totalEvictedStates);
         
         // Per-player stats
         Map<String, Integer> activeCountsPerPlayer = new HashMap<>();
