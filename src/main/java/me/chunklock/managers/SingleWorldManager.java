@@ -12,6 +12,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
@@ -353,7 +354,20 @@ public class SingleWorldManager {
             // Teleport to existing claim
             Location teleportLoc = ChunkUtils.getChunkCenter(existingClaim);
             player.teleport(teleportLoc);
-            
+            player.setRespawnLocation(teleportLoc, true);
+
+            // Persist the spawn here too. A player returning to an existing claim previously
+            // got no respawn point at all on this path, so dying sent them to world spawn.
+            try {
+                PlayerDataManager playerDataManager = plugin.getPlayerDataManager();
+                if (playerDataManager != null) {
+                    playerDataManager.setChunk(playerId, teleportLoc);
+                }
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.WARNING,
+                    "Failed to persist existing claim spawn for " + player.getName(), e);
+            }
+
             // Update chunk borders after teleportation (with delay to ensure teleport is complete)
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 try {
@@ -411,7 +425,22 @@ public class SingleWorldManager {
                         Location teleportLoc = ChunkUtils.getChunkCenter(claimToTeleport);
                         player.teleport(teleportLoc);
                         player.setRespawnLocation(teleportLoc, true);
-                        
+
+                        // Persist the spawn so respawn handling can find it. Without this the
+                        // claim only exists in memory: PlayerListener's respawn handler looks
+                        // up getChunkSpawn(), finds nothing, logs "No valid chunk spawn found"
+                        // and falls back to default respawn - which drops the player into the
+                        // void on a Chunklock world.
+                        try {
+                            PlayerDataManager playerDataManager = plugin.getPlayerDataManager();
+                            if (playerDataManager != null) {
+                                playerDataManager.setChunk(playerId, teleportLoc);
+                            }
+                        } catch (Exception e) {
+                            plugin.getLogger().log(Level.WARNING,
+                                "Failed to persist starting chunk spawn for " + player.getName(), e);
+                        }
+
                         // Update chunk borders after teleportation (with delay to ensure teleport is complete)
                         Bukkit.getScheduler().runTaskLater(plugin, () -> {
                             try {
@@ -455,19 +484,51 @@ public class SingleWorldManager {
         int chunkRadius = (radius / 16) - 5; // Leave some buffer from world border
         int maxAttempts = 1000;
         
+        // This runs on an async thread. world.getChunkAt(x, z) off the main thread does NOT
+        // generate terrain - it hands back an ungenerated chunk. Every height lookup on such
+        // a chunk then returns the world minimum, so getChunkCenter() produced a spawn at
+        // Y = minHeight + 1 (-63 on modern worlds) and players fell straight into the void.
+        // getChunkAtAsync() actually loads and generates, so heights are real.
+        int attemptsPerBatch = 20;
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
             // Generate random chunk coordinates within bounds
             int chunkX = random.nextInt(chunkRadius * 2) - chunkRadius;
             int chunkZ = random.nextInt(chunkRadius * 2) - chunkRadius;
-            
-            Chunk candidate = world.getChunkAt(chunkX, chunkZ);
-            
-            // Check if this chunk meets distance requirements
+
+            Chunk candidate;
+            try {
+                candidate = world.getChunkAtAsync(chunkX, chunkZ, true).get(15, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                plugin.getLogger().warning("Interrupted while loading candidate starting chunk");
+                return null;
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.FINE,
+                    "Failed to load candidate chunk " + chunkX + "," + chunkZ, e);
+                continue;
+            }
+
+            if (candidate == null) {
+                continue;
+            }
+
+            // Check if this chunk meets distance and suitability requirements
             if (isValidStartingChunk(candidate)) {
                 return candidate;
             }
+
+            // Loading and generating chunks is expensive. Give the server room to breathe
+            // rather than hammering the chunk generator for up to 1000 attempts.
+            if (attempt > 0 && attempt % attemptsPerBatch == 0) {
+                try {
+                    Thread.sleep(50L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return null;
+                }
+            }
         }
-        
+
         plugin.getLogger().warning("Could not find valid starting chunk after " + maxAttempts + " attempts");
         return null;
     }

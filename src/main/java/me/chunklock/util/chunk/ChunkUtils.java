@@ -41,6 +41,16 @@ public final class ChunkUtils {
             centerY = world.getSpawnLocation().getBlockY();
         }
 
+        // An ungenerated chunk reports no blocks, so the height lookup above collapses to the
+        // world minimum and this location becomes a void spawn. Never hand that out: fall back
+        // to the world spawn height, which is always somewhere survivable.
+        if (centerY <= world.getMinHeight() + 1) {
+            int fallbackY = world.getSpawnLocation().getBlockY();
+            if (fallbackY > world.getMinHeight() + 1) {
+                centerY = fallbackY;
+            }
+        }
+
         return new Location(world, centerX + 0.5, centerY, centerZ + 0.5);
     }
     
