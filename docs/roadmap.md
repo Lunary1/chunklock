@@ -1,6 +1,6 @@
 # Chunklock Plugin - Development Roadmap
 
-## Current Status: v1.2.7 (Production Stable)
+## Current Status: v2.1.0 (Released 2025-11-25)
 
 The Chunklock plugin has achieved production maturity with all core systems fully implemented, thoroughly tested, and actively deployed across multiple server environments. The current focus is on performance optimization, ecosystem expansion, and advanced feature development based on community feedback and emerging use cases.
 
