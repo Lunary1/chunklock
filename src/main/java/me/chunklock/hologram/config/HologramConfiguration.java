@@ -75,7 +75,7 @@ public final class HologramConfiguration {
      * Checks if the specified provider is explicitly disabled.
      */
     public boolean isProviderDisabled() {
-        return "none".equals(getProvider());
+        return "none".equalsIgnoreCase(getProvider());
     }
 
     /**

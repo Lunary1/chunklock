@@ -1109,15 +1109,53 @@ public final class HologramService {
     }
     
     private void logInitializationStatus() {
+        var logger = ChunklockPlugin.getInstance().getLogger();
+
         if (available) {
-            ChunklockPlugin.getInstance().getLogger().info(
-                "HologramService initialized with provider: " + provider.getProviderName());
-            ChunklockPlugin.getInstance().getLogger().info(
-                "HologramService enabled worlds: " + worldManager.getEnabledWorlds());
-        } else {
-            ChunklockPlugin.getInstance().getLogger().info(
-                "HologramService disabled - provider unavailable or disabled in config");
+            logger.info("HologramService initialized with provider: " + provider.getProviderName());
+            logger.info("HologramService enabled worlds: " + worldManager.getEnabledWorlds());
+            return;
         }
+
+        // Holograms are off. Distinguish "the admin turned them off" from "we could not load
+        // the provider" - the second is almost always unintended and previously logged the
+        // same quiet info line as the first, so servers ran without holograms unaware.
+        if (!config.isEnabled() || config.isProviderDisabled()) {
+            logger.info("Holograms are disabled in holograms.yml - chunk borders will have no labels");
+            return;
+        }
+
+        String configured = config.getProvider();
+        logger.warning("=================================================================");
+        logger.warning("Holograms are ENABLED in holograms.yml but no provider could load.");
+        logger.warning("Chunk unlock costs will NOT be displayed above chunk borders.");
+        logger.warning("");
+        logger.warning("Configured provider: " + configured);
+
+        if ("fancyholograms".equalsIgnoreCase(configured)) {
+            boolean pluginPresent = Bukkit.getPluginManager().getPlugin("FancyHolograms") != null;
+            if (!pluginPresent) {
+                logger.warning("FancyHolograms is not installed, or failed to load itself.");
+                logger.warning("");
+                logger.warning("Install it from: https://modrinth.com/plugin/fancyholograms");
+                logger.warning("");
+                logger.warning("If you DID install it and it is still not detected, check that the");
+                logger.warning("build matches your Java version - a jar built for a newer Java than");
+                logger.warning("the server runs is skipped silently by the server at startup.");
+                logger.warning("FancyHolograms publishes parallel '-java21' builds for this reason.");
+            } else {
+                logger.warning("FancyHolograms is installed but the provider failed to initialize.");
+                logger.warning("This usually means an incompatible FancyHolograms version.");
+                logger.warning("Set debug-logging: true in holograms.yml for details.");
+            }
+        } else {
+            logger.warning("'" + configured + "' is not a supported provider.");
+            logger.warning("Supported values: FancyHolograms, none");
+        }
+
+        logger.warning("");
+        logger.warning("To silence this warning, set enabled: false in holograms.yml.");
+        logger.warning("=================================================================");
     }
     
     public boolean isAvailable() {
