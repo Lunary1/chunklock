@@ -680,39 +680,70 @@ ls plugins/Chunklock/lang/
 
 **Symptoms**: Holograms not appearing, console errors about hologram providers
 
+**FancyHolograms is required for holograms.** There is no built-in hologram system. Without
+it, chunk borders still work and are still clickable, but unlock costs are not displayed
+above them.
+
 **Diagnosis**:
 
 ```
-/chunklock debug
-# Check hologram service status
-
 /plugins
-# Verify hologram plugin is loaded (FancyHolograms, HolographicDisplays)
+# FancyHolograms must be listed and green
+
+/chunklock debug memory
+# "Total states" stays at 0 if no provider loaded
 ```
+
+Check the startup log. Chunklock prints a clear warning block when holograms are enabled in
+`holograms.yml` but no provider could load.
 
 **Solutions**:
 
-1. **Install Hologram Plugin**:
+1. **Install FancyHolograms** — https://modrinth.com/plugin/fancyholograms
+
+   It is the only supported provider. `HolographicDisplays`, `DecentHolograms` and CMI are
+   **not** currently implemented (tracked as issue #56).
+
+2. **Check the Java version of the jar** — the most common cause of a "missing" plugin.
+
+   A plugin jar built for a newer Java than your server runs is **skipped silently** at
+   startup: no error, it simply never appears in `/plugins`. FancyHolograms moved its
+   mainline builds to a newer Java and publishes parallel `-java21` builds for this reason.
+
+   To check what your server runs:
 
    ```
-   # Supported plugins:
-   # - FancyHolograms (recommended)
-   # - HolographicDisplays
-   # - DecentHolograms
+   java -version
    ```
 
-2. **Configure Provider**:
+   Then install the FancyHolograms build matching it. If your server is on Java 21 or 22,
+   use the `-java21` flavour rather than the default download.
+
+3. **Verify the config**:
 
    ```yaml
-   holograms:
-     enabled: true
-     provider: "FancyHolograms" # Match your installed plugin
+   # holograms.yml
+   enabled: true
+   provider: "FancyHolograms"   # only supported value (or "none" to disable)
    ```
 
-3. **Fallback to Internal**:
+   Note this is `holograms.yml`, not a `holograms:` section inside `config.yml`.
+
+4. **Holograms load but are invisible** — check the height cutoff:
+
    ```yaml
-   holograms:
-     provider: "internal" # Use built-in hologram system
+   # holograms.yml
+   positioning:
+     min-height: 64   # holograms below this Y are not shown
+   ```
+
+   If your chunks are in a valley, beach, or below sea level, lower this value.
+
+5. **Still nothing** — enable debug logging and check console:
+
+   ```yaml
+   # holograms.yml
+   debug-logging: true
    ```
 
 ## Data Issues

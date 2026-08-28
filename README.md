@@ -112,7 +112,14 @@ When updating from v1.1 or earlier, the plugin automatically migrates legacy YAM
 ### Optional
 
 - **Vault** - For currency-based economy (with any economy plugin)
-- **FancyHolograms** - Enhanced hologram displays (falls back to internal system)
+- **[FancyHolograms](https://modrinth.com/plugin/fancyholograms)** - **Required for holograms.**
+  Without it, chunk borders still work but unlock costs are not displayed above them. There is
+  no built-in hologram fallback. Chunklock logs a warning at startup if holograms are enabled
+  in `holograms.yml` but the provider cannot load.
+
+  > **Java version note**: install a FancyHolograms build matching your server's Java version.
+  > A jar built for a newer Java than the server runs is skipped silently at startup, so the
+  > plugin appears simply absent. FancyHolograms publishes parallel `-java21` builds for this.
 
 ---
 

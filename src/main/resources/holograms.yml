@@ -1,8 +1,16 @@
 # ===== HOLOGRAM CONFIGURATION =====
 # Hologram display settings for Chunklock plugin
+#
+# Holograms require the FancyHolograms plugin - there is no built-in hologram system.
+# Without it, chunk borders still work but unlock costs are not shown above them.
+# Download: https://modrinth.com/plugin/fancyholograms
+#
+# NOTE: install a build matching your server's Java version. A jar built for a newer
+# Java than the server runs is skipped silently at startup and appears simply absent.
+# FancyHolograms publishes parallel "-java21" builds for this reason.
 
 enabled: true
-provider: "FancyHolograms" # Force FancyHolograms only - ignore any other hologram plugins
+provider: "FancyHolograms" # Supported values: FancyHolograms, none
 update-interval: 20 # ticks (1 second)
 view-distance: 64 # blocks (increased for better visibility)
 debug-logging: false # Enable debug logging for troubleshooting (set to true when needed)
