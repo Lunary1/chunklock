@@ -194,7 +194,18 @@ public class PlayerListener implements Listener {
             } catch (Exception e) {
                 ChunklockPlugin.getInstance().getLogger().warning("Error cleaning up borders for leaving player " + player.getName() + ": " + e.getMessage());
             }
-            
+
+            // Release cached cost-calculation state for this player.
+            // getEconomyManager() throws if the plugin is not fully initialized, which can
+            // happen if a player disconnects during startup or shutdown.
+            try {
+                ChunklockPlugin.getInstance().getEconomyManager().invalidatePlayer(playerId);
+            } catch (IllegalStateException ignored) {
+                // Economy not initialized yet - nothing cached for this player
+            } catch (Exception e) {
+                ChunklockPlugin.getInstance().getLogger().warning("Error cleaning up economy state for leaving player " + player.getName() + ": " + e.getMessage());
+            }
+
             ChunklockPlugin.getInstance().getLogger().fine("Cleaned up data for leaving player: " + player.getName());
             
         } catch (Exception e) {

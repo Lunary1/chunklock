@@ -455,7 +455,21 @@ public class EconomyManager {
     public boolean isAiCostingEnabled() { return false; }
     public boolean isResourceScanMode() { return resourceScanMode; }
     public OwnedChunkScanner getOwnedChunkScanner() { return ownedChunkScanner; }
-    
+
+    /**
+     * Release per-player calculation state when a player quits, so long-running
+     * servers do not accumulate entries for players who have left.
+     */
+    public void invalidatePlayer(java.util.UUID playerId) {
+        if (playerId == null) return;
+        if (ownedChunkScanner != null) {
+            ownedChunkScanner.invalidateCache(playerId);
+        }
+        if (calculationStrategy instanceof ResourceBasedMaterialStrategy resourceStrategy) {
+            resourceStrategy.invalidatePlayer(playerId);
+        }
+    }
+
     /**
      * Reload configuration
      */

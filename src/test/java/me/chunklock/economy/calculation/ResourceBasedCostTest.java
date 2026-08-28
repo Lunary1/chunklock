@@ -3,7 +3,15 @@ package me.chunklock.economy.calculation;
 import org.bukkit.Material;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -117,22 +125,14 @@ public class ResourceBasedCostTest {
      */
     @Test
     public void testProgressionMultiplierScaling() {
-        int baseCost = 16;
-        double tierMultiplier = OwnedChunkScanner.getTierCostMultiplier(2); // Wood: 0.5
+        double early = ResourceBasedMaterialStrategy.computeBaseProgressionMultiplier(0, 0);
+        double mid = ResourceBasedMaterialStrategy.computeBaseProgressionMultiplier(10, 25);
+        double late = ResourceBasedMaterialStrategy.computeBaseProgressionMultiplier(30, 100);
 
-        // First chunk (unlocked=0, score=0): multiplier = 1.0
-        double prog0 = 1.0 + 0 / 10.0 + 0 / 50.0;
-        assertEquals(1.0, prog0, 0.001);
-        int cost0 = (int) Math.ceil(baseCost * tierMultiplier * prog0); // 16 * 0.5 * 1.0 = 8
-        assertEquals(8, cost0);
-
-        // 10th chunk (unlocked=10, score=25): multiplier = 2.5
-        double prog10 = 1.0 + 10 / 10.0 + 25 / 50.0;
-        assertEquals(2.5, prog10, 0.001);
-        int cost10 = (int) Math.ceil(baseCost * tierMultiplier * prog10); // 16 * 0.5 * 2.5 = 20
-        assertEquals(20, cost10);
-
-        assertTrue(cost10 > cost0, "Cost should increase with progression");
+        assertEquals(1.0, early, 0.001);
+        assertTrue(mid > early, "Mid progression should cost more than early progression");
+        assertTrue(late > mid, "Late progression should cost more than mid progression");
+        assertTrue(late < 4.0, "Diminishing-returns multiplier should avoid runaway growth");
     }
 
     /**
@@ -163,18 +163,60 @@ public class ResourceBasedCostTest {
     }
 
     /**
-     * Test that cost is capped by available resources (max 25%).
+     * Test soft availability modifier is bounded and centered near neutral.
      */
     @Test
     public void testCostCappedByAvailability() {
-        int available = 40; // Only 40 blocks available
-        int calculatedCost = 50; // Strategy calculated 50 needed
-        int minCost = 1;
+        double neutral = ResourceBasedMaterialStrategy.computeAvailabilityModifier(50, 50.0);
+        double scarce = ResourceBasedMaterialStrategy.computeAvailabilityModifier(10, 50.0);
+        double abundant = ResourceBasedMaterialStrategy.computeAvailabilityModifier(100, 50.0);
 
-        int maxFromAvailable = Math.max(minCost, available / 4); // 40/4 = 10
-        int finalCost = Math.min(calculatedCost, maxFromAvailable);
+        assertEquals(1.0, neutral, 0.001);
+        assertTrue(scarce >= 0.9 && scarce < 1.0, "Scarce materials should apply a mild discount only");
+        assertTrue(abundant > 1.0 && abundant <= 1.1, "Abundant materials should apply a mild premium only");
+    }
 
-        assertEquals(10, finalCost, "Cost should be capped at 25% of available resources");
+    /**
+     * The recent-selection history is trimmed to a fixed size and must never throw,
+     * even when trimmed concurrently. Cost calculation runs on async threads
+     * (AsyncCostCalculationService), so an ArrayDeque here could throw
+     * NoSuchElementException on a concurrent removeFirst (issue #78).
+     */
+    @Test
+    public void testRememberSelectionIsBoundedAndThreadSafe() throws Exception {
+        Deque<Material> recent = new ConcurrentLinkedDeque<>();
+
+        // Single-threaded: history stays bounded
+        for (int i = 0; i < 20; i++) {
+            ResourceBasedMaterialStrategy.rememberSelection(recent, Material.OAK_LOG);
+        }
+        assertTrue(recent.size() <= 3, "Recent-selection history should stay bounded, was " + recent.size());
+
+        // Concurrent: many threads trimming the same deque must not throw
+        recent.clear();
+        int threads = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<?>> futures = new ArrayList<>();
+
+        for (int t = 0; t < threads; t++) {
+            futures.add(pool.submit(() -> {
+                start.await();
+                for (int i = 0; i < 500; i++) {
+                    ResourceBasedMaterialStrategy.rememberSelection(recent, Material.STONE);
+                }
+                return null;
+            }));
+        }
+
+        start.countDown();
+        for (Future<?> f : futures) {
+            f.get(10, TimeUnit.SECONDS); // throws if any thread threw
+        }
+        pool.shutdown();
+
+        assertTrue(recent.size() <= 3 + threads,
+            "History should remain near its bound under concurrency, was " + recent.size());
     }
 
     /**

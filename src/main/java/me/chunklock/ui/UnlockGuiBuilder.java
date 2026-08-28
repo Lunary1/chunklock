@@ -77,7 +77,7 @@ public class UnlockGuiBuilder {
                 );
             }
             addProgressBar(inv, player, requirement);
-            addRequirementDisplay(inv, player, requirement, paymentRequirement, eval.biome, biomeRegistry);
+            addRequirementDisplay(inv, player, requirement, paymentRequirement, economyManager, eval.biome, biomeRegistry);
             addUnlockButton(inv, player, requirement, paymentRequirement);
         }
         
@@ -230,6 +230,7 @@ public class UnlockGuiBuilder {
     
     private void addRequirementDisplay(Inventory inv, Player player, BiomeUnlockRegistry.UnlockRequirement requirement,
                                        me.chunklock.economy.EconomyManager.PaymentRequirement paymentRequirement,
+                                       me.chunklock.economy.EconomyManager economyManager,
                                        Biome biome, BiomeUnlockRegistry biomeRegistry) {
         // Use payment requirement's items for display/validation consistency with cost calculation
         List<ItemRequirement> allRequirements = (paymentRequirement != null && !paymentRequirement.getItemRequirements().isEmpty()) ?
@@ -314,6 +315,16 @@ public class UnlockGuiBuilder {
                     .decoration(TextDecoration.ITALIC, false));
             }
         }
+
+            if (economyManager != null
+                && economyManager.isResourceScanMode()
+                && paymentRequirement != null
+                && paymentRequirement.getType() == me.chunklock.economy.EconomyManager.EconomyType.MATERIALS) {
+                lore.add(Component.empty());
+                lore.add(Component.text("Cost is based on resources in your claimed chunks.")
+                .color(NamedTextColor.GRAY)
+                .decoration(TextDecoration.ITALIC, false));
+            }
             
         if (!hasEnough) {
             lore.add(Component.empty());

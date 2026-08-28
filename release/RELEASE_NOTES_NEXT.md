@@ -21,7 +21,10 @@
 - Fixed vanilla tooltip leak showing "minecraft:redstone_block 13 component(s)" on the unlock button
 - Fixed a regression where unlock could fail despite having enough vanilla materials in inventory, and corrected incorrect "missing" amounts shown in material unlock messages (#71)
 - Fixed materials-mode unlocks incorrectly requiring multiple resource types at once; unlocks now require a single resource again as expected
+- Fixed repetitive material unlock costs in resource-scan mode (especially repeated acacia/wood requirements) and improved progression scaling so required amounts vary more naturally instead of flattening around a fixed value (#76)
+- Fixed resource-scan pricing edge cases that could be gamed by artificially depleting a material in claimed chunks; pricing now uses bounded soft availability influence, deterministic material selection, smoother progression scaling, and clearer in-GUI messaging about dynamic resource-based costs (#77)
+- Fixed an error during async unlock cost calculation in resource-scan mode that could cause the unlock menu to fail to open or show incorrect requirements (#78)
 
 ## Known Issues
 
-- None currently
+- Some servers report high memory usage and degraded performance at higher player counts, particularly with heavy exploration (#74). Investigation is in progress; a fix is not included in this release.
