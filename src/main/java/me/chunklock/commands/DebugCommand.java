@@ -63,6 +63,10 @@ public class DebugCommand extends SubCommand {
             case "database":
                 debugDatabase(player);
                 break;
+            case "memory":
+            case "mem":
+                debugMemory(player);
+                break;
             default:
                 showUsage(player);
                 break;
@@ -93,6 +97,62 @@ public class DebugCommand extends SubCommand {
             .color(NamedTextColor.GRAY));
     }
     
+    /**
+     * Prints the hologram state cache counters in chat.
+     *
+     * <p>Added for issue #74: {@code cachedDespawnedStates} is the number that grew without
+     * bound before the eviction policy. Run this repeatedly while exploring - it should
+     * plateau rather than climb indefinitely.
+     */
+    private void debugMemory(Player player) {
+        player.sendMessage(Component.text("=== Hologram Memory ===")
+            .color(NamedTextColor.YELLOW));
+
+        java.util.Map<String, Object> stats;
+        try {
+            // getHologramService() throws if the plugin is not fully initialized
+            stats = ChunklockPlugin.getInstance().getHologramService().getStatistics();
+        } catch (IllegalStateException e) {
+            player.sendMessage(Component.text("HologramService is not initialized.")
+                .color(NamedTextColor.RED));
+            return;
+        }
+
+        int total = asInt(stats.get("totalHologramStates"));
+        int spawned = asInt(stats.get("spawnedHolograms"));
+        int cached = asInt(stats.get("cachedDespawnedStates"));
+        int softLimit = asInt(stats.get("hologramStateSoftLimit"));
+
+        sendStat(player, "Total states", String.valueOf(total));
+        sendStat(player, "Spawned (live)", String.valueOf(spawned));
+        sendStat(player, "Cached despawned", cached + (softLimit > 0 ? " / " + softLimit : ""));
+        sendStat(player, "Evicted so far", String.valueOf(stats.get("totalEvictedStates")));
+        sendStat(player, "Wall location cache", String.valueOf(stats.get("cachedWallLocations")));
+        sendStat(player, "Active players", String.valueOf(stats.get("activePlayers")));
+
+        // Percentage of the soft limit, so it is obvious when eviction is about to engage.
+        if (softLimit > 0) {
+            int percent = (int) Math.round((total * 100.0) / softLimit);
+            NamedTextColor color = percent >= 90 ? NamedTextColor.RED
+                : percent >= 50 ? NamedTextColor.GOLD : NamedTextColor.GREEN;
+            player.sendMessage(Component.text("Cache usage: " + percent + "% of soft limit")
+                .color(color));
+        }
+
+        player.sendMessage(Component.text(
+            "Run this again after exploring. 'Cached despawned' should plateau, not climb.")
+            .color(NamedTextColor.GRAY));
+    }
+
+    private void sendStat(Player player, String label, String value) {
+        player.sendMessage(Component.text(label + ": ").color(NamedTextColor.GRAY)
+            .append(Component.text(value).color(NamedTextColor.WHITE)));
+    }
+
+    private int asInt(Object value) {
+        return value instanceof Number number ? number.intValue() : 0;
+    }
+
     private void debugFull(Player player) {
         player.sendMessage(Component.text("=== Full Hologram Debug ===")
             .color(NamedTextColor.YELLOW));
@@ -268,7 +328,7 @@ public class DebugCommand extends SubCommand {
     }
     
     private void showUsage(Player player) {
-        player.sendMessage(Component.text("Usage: /chunklock debug <world|holograms|full|fix-ownership|deps|vault|database>")
+        player.sendMessage(Component.text("Usage: /chunklock debug <world|holograms|memory|full|fix-ownership|deps|vault|database>")
             .color(NamedTextColor.YELLOW));
         player.sendMessage(Component.text("  world - Test world detection")
             .color(NamedTextColor.GRAY));
@@ -289,7 +349,7 @@ public class DebugCommand extends SubCommand {
     @Override
     public List<String> getTabCompletions(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("world", "holograms", "full", "fix-ownership", "deps", "dependencies", "vault", "database", "db");
+            return Arrays.asList("world", "holograms", "memory", "mem", "full", "fix-ownership", "deps", "dependencies", "vault", "database", "db");
         }
         return List.of();
     }
@@ -301,6 +361,6 @@ public class DebugCommand extends SubCommand {
     
     @Override
     public String getUsage() {
-        return "/chunklock debug <world|holograms|full|fix-ownership>";
+        return "/chunklock debug <world|holograms|memory|full|fix-ownership>";
     }
 }
