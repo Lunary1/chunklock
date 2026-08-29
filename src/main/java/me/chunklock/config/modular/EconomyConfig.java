@@ -101,6 +101,16 @@ public class EconomyConfig {
         return config.getInt("materials.resource-scan.min-abundance", 10);
     }
 
+    /**
+     * Minutes a player must wait before re-rolling the same chunk's committed price (#83).
+     *
+     * <p>Applies on servers without Vault. Where Vault is present the cost is currency
+     * instead - see {@code ChunkPriceRerollService}.</p>
+     */
+    public int getRerollCooldownMinutes() {
+        return config.getInt("materials.price-commitment.reroll-cooldown-minutes", 60);
+    }
+
     public int getResourceScanCacheDuration() {
         return config.getInt("materials.resource-scan.cache-duration", 60);
     }

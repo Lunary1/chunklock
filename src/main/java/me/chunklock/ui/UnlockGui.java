@@ -46,7 +46,8 @@ public class UnlockGui {
     private final PlayerProgressTracker progressTracker;
     private final TeamManager teamManager;
     private final me.chunklock.economy.EconomyManager economyManager;
-    
+    private final me.chunklock.economy.ChunkPriceRerollService rerollService;
+
     // UI components
     private final UnlockGuiBuilder builder;
     private final UnlockGuiStateManager stateManager;
@@ -56,6 +57,8 @@ public class UnlockGui {
     
     // Constants - Updated for new GUI
     private static final int UNLOCK_BUTTON_SLOT = 31; // Updated slot for new layout
+    // Must match UnlockGuiBuilder.REROLL_BUTTON_SLOT
+    private static final int REROLL_BUTTON_SLOT = 33;
     
     public UnlockGui(ChunklockPlugin plugin,
                      ChunkLockManager chunkLockManager, 
@@ -70,6 +73,7 @@ public class UnlockGui {
         this.progressTracker = progressTracker;
         this.teamManager = teamManager;
         this.economyManager = economyManager;
+        this.rerollService = economyManager != null ? economyManager.getRerollService() : null;
         this.builder = new UnlockGuiBuilder();
         this.stateManager = new UnlockGuiStateManager();
         
@@ -214,6 +218,7 @@ public class UnlockGui {
         // Handle different slot clicks
         switch (clickedSlot) {
             case UNLOCK_BUTTON_SLOT -> processUnlockAttempt(player);
+            case REROLL_BUTTON_SLOT -> processRerollAttempt(player);
             case 49 -> { // Help book slot
                 player.playSound(player.getLocation(), Sound.ITEM_BOOK_PAGE_TURN, 1.0f, 1.0f);
                 sendHelpMessage(player);
@@ -324,6 +329,55 @@ public class UnlockGui {
     /**
      * Process an unlock attempt from a player.
      */
+    /**
+     * Handle a click on the re-roll button (#83).
+     *
+     * <p>Payment is taken by {@link me.chunklock.economy.EconomyManager#tryRerollChunkPrice},
+     * which only clears the stored requirement once the cost is actually paid - so a player
+     * who cannot afford it, or whose cooldown is still running, gets nothing rather than a
+     * free re-roll.</p>
+     *
+     * <p>The GUI is then reopened so the new requirement is visible immediately. Without
+     * that the player would be looking at the price they just paid to replace.</p>
+     */
+    private void processRerollAttempt(Player player) {
+        UUID playerId = player.getUniqueId();
+
+        PendingUnlock state = stateManager.getPendingUnlock(playerId);
+        if (state == null || state.isExpired()) {
+            String message = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_SESSION_EXPIRED);
+            player.sendMessage(Component.text(message).color(NamedTextColor.RED));
+            player.closeInventory();
+            stateManager.cleanupPlayer(playerId);
+            return;
+        }
+
+        var paymentRequirement = state.getPaymentRequirement();
+        double chunkPrice = paymentRequirement != null ? paymentRequirement.getVaultCost() : 0.0;
+
+        if (!economyManager.tryRerollChunkPrice(player, state.chunk, chunkPrice)) {
+            String message = MessageUtil.getMessage(LanguageKeys.GUI_REROLL_FAILED);
+            player.sendMessage(Component.text(message).color(NamedTextColor.RED));
+            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f);
+            return;
+        }
+
+        String message = MessageUtil.getMessage(LanguageKeys.GUI_REROLL_SUCCESS);
+        player.sendMessage(Component.text(message).color(NamedTextColor.LIGHT_PURPLE));
+        player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.0f, 1.2f);
+
+        if (debugLogging) {
+            logger.info("Re-roll accepted for " + player.getName()
+                + " - chunk " + state.chunk.getX() + "," + state.chunk.getZ());
+        }
+
+        // Reopen so the freshly committed requirement is what the player sees.
+        Chunk chunk = state.chunk;
+        stateManager.cleanupPlayer(playerId);
+        player.closeInventory();
+        open(player, chunk);
+    }
+
     private void processUnlockAttempt(Player player) {
         UUID playerId = player.getUniqueId();
         
@@ -562,6 +616,14 @@ public class UnlockGui {
             // chunk should lean towards a different one. This is the only place that advances
             // that history - display paths must not, or prices shift as players look at them (#82).
             economyManager.recordCompletedUnlock(player, paymentRequirement);
+
+            // The commitment for this chunk has been honoured and paid. Release it, along with
+            // any re-roll cooldown or escalating price attached to it (#83), so a future
+            // calculation for this location starts clean.
+            economyManager.clearCommittedRequirement(player, state.chunk);
+            if (rerollService != null) {
+                rerollService.clearForUnlockedChunk(player, state.chunk);
+            }
 
         } catch (Exception e) {
             logger.warning("Material payment processing failed: " + e.getMessage());

@@ -40,6 +40,23 @@ materials:
     min-abundance: 10 # Ignore materials with fewer than this many blocks in owned chunks
     cache-duration: 60 # Seconds to cache scan results per player (avoids lag)
 
+  # PRICE COMMITMENT (issue #83)
+  #
+  # Once a player has seen the price of a chunk, that price is honoured until they pay it
+  # or deliberately re-roll it. It survives relog, restart and cache expiry, so a player
+  # grinding towards an expensive material cannot have the goal changed underneath them.
+  #
+  # Re-rolling is the escape hatch for a genuine dead end - a player who can no longer
+  # obtain the required material. It always costs something, or it is simply the old
+  # exploit of reopening the GUI until a cheap material appears:
+  #
+  #   No Vault       -> a cooldown, per chunk (below)
+  #   Vault present  -> currency, doubling with each re-roll of the same chunk
+  #
+  # Prices are re-derived automatically when the economy settings above change.
+  price-commitment:
+    reroll-cooldown-minutes: 60
+
   # If true, fall back to Vault money when the player can't pay with materials.
   # Requires Vault to be installed.
   vault-fallback: false
