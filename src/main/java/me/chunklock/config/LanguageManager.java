@@ -5,6 +5,9 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.Plugin;
 
 import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -60,6 +63,13 @@ public class LanguageManager {
             plugin.saveResource("lang/" + DEFAULT_LANGUAGE + ".yml", false);
         }
         defaultLangConfig = YamlConfiguration.loadConfiguration(defaultLangFile);
+
+        // Back the on-disk file with the one bundled in the jar, so keys added by an update
+        // resolve on servers that already have a lang/en.yml. The file is only written when
+        // absent - by design, since admins edit it - which means a server that has ever run
+        // an older build keeps that older file forever. Without this fallback every message
+        // added after a server's first start renders as its raw key.
+        applyBundledDefaults(defaultLangConfig, "lang/" + DEFAULT_LANGUAGE + ".yml");
         
         // Load current language file
         if (currentLanguage.equals(DEFAULT_LANGUAGE)) {
@@ -72,10 +82,44 @@ public class LanguageManager {
                 this.currentLanguage = DEFAULT_LANGUAGE;
             } else {
                 currentLangConfig = YamlConfiguration.loadConfiguration(currentLangFile);
+                applyBundledDefaults(currentLangConfig, "lang/" + currentLanguage + ".yml");
             }
         }
-        
+
         logger.info("Language system loaded: " + currentLanguage);
+    }
+
+    /**
+     * Fall back to the copy of a language file bundled in the jar for any key the on-disk
+     * file does not define.
+     *
+     * <p>Language files are written to the data folder only when absent, because admins are
+     * expected to edit them. The consequence is that a server which has run any earlier build
+     * keeps its original file indefinitely, so every message key introduced by a later update
+     * is missing from it and renders as the raw key - for example
+     * {@code gui.builder.reroll-title} appearing verbatim in an item's lore.</p>
+     *
+     * <p>Bukkit's {@code setDefaults} resolves exactly this: the admin's file keeps priority
+     * for everything it defines, and anything it lacks falls through to the bundled copy.
+     * Admin edits are preserved and new keys work without touching their file.</p>
+     */
+    private void applyBundledDefaults(FileConfiguration config, String resourcePath) {
+        if (config == null) {
+            return;
+        }
+        try (InputStream in = plugin.getResource(resourcePath)) {
+            if (in == null) {
+                return; // No bundled copy for this language - nothing to fall back to.
+            }
+            try (InputStreamReader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
+                config.setDefaults(YamlConfiguration.loadConfiguration(reader));
+                config.options().copyDefaults(false);
+            }
+        } catch (Exception e) {
+            logger.warning("Could not load bundled defaults for " + resourcePath
+                + "; messages added since this server's language file was created may show as "
+                + "raw keys: " + e.getMessage());
+        }
     }
     
     /**
