@@ -223,33 +223,11 @@ public class BiomeUnlockRegistry {
         return true;
     }
 
-    public void consumeRequiredItem(Player player, Biome biome, int score) {
-        List<ItemRequirement> requirements = itemRequirements.getOrDefault(biome, new ArrayList<>());
-        if (requirements.isEmpty()) return;
-        
-        double multiplier = calculateMultiplier(player, score);
-        
-        for (ItemRequirement req : requirements) {
-            if (req instanceof me.chunklock.economy.items.VanillaItemRequirement vanillaReq) {
-                // Consume the multiplied amount
-                int adjustedAmount = (int) Math.ceil(vanillaReq.getAmount() * multiplier);
-                player.getInventory().removeItem(new ItemStack(vanillaReq.getMaterial(), adjustedAmount));
-            } else {
-                // For custom items, consume the standard amount
-                if (req.hasInInventory(player)) {
-                    req.consumeFromInventory(player);
-                }
-            }
-        }
-        
-        if (enhancedTeamManager != null) {
-            try {
-                enhancedTeamManager.recordChunkUnlock(player.getUniqueId(), getBiomeDisplayName(biome));
-            } catch (Exception e) {
-                // Ignore
-            }
-        }
-    }
+    // NOTE: consumeRequiredItem() was removed here. It was unreachable - nothing called it -
+    // and it consumed via Inventory.removeItem(), which can silently fail on stacks carrying
+    // metadata. That is the exact failure mode reported as #58. The live path consumes
+    // slot-by-slot in VanillaItemRequirement.consumeFromInventory(), reached through
+    // EconomyManager.processPayment(). Do not reintroduce removeItem() for payment.
 
     public List<ItemRequirement> getRequirementsForBiome(Biome biome) {
         return itemRequirements.getOrDefault(biome, new ArrayList<>());
