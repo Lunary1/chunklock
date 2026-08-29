@@ -136,6 +136,19 @@ public final class LanguageKeys {
     public static final String GUI_BUILDER_UNLOCK_BUTTON_MISSING = "gui.builder.unlock-button-missing";
     public static final String GUI_BUILDER_UNLOCK_BUTTON_NEED_MORE = "gui.builder.unlock-button-need-more";
     public static final String GUI_BUILDER_UNLOCK_BUTTON_GATHER = "gui.builder.unlock-button-gather";
+
+    // Re-roll button (#83) - the escape hatch for a committed price the player cannot meet
+    public static final String GUI_BUILDER_REROLL_TITLE = "gui.builder.reroll-title";
+    public static final String GUI_BUILDER_REROLL_EXPLAIN = "gui.builder.reroll-explain";
+    public static final String GUI_BUILDER_REROLL_LOCKED_PRICE = "gui.builder.reroll-locked-price";
+    public static final String GUI_BUILDER_REROLL_COST_CURRENCY = "gui.builder.reroll-cost-currency";
+    public static final String GUI_BUILDER_REROLL_COST_COOLDOWN = "gui.builder.reroll-cost-cooldown";
+    public static final String GUI_BUILDER_REROLL_CLICK = "gui.builder.reroll-click";
+    public static final String GUI_BUILDER_REROLL_UNAVAILABLE_TITLE = "gui.builder.reroll-unavailable-title";
+    public static final String GUI_BUILDER_REROLL_WAIT = "gui.builder.reroll-wait";
+    public static final String GUI_BUILDER_REROLL_CANNOT_AFFORD = "gui.builder.reroll-cannot-afford";
+    public static final String GUI_REROLL_SUCCESS = "gui.reroll-success";
+    public static final String GUI_REROLL_FAILED = "gui.reroll-failed";
     
     public static final String GUI_BUILDER_HELP_TITLE = "gui.builder.help-title";
     public static final String GUI_BUILDER_HELP_PROCESS_TITLE = "gui.builder.help-process-title";

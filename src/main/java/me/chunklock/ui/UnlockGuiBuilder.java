@@ -33,6 +33,9 @@ public class UnlockGuiBuilder {
     private static final int PROGRESS_SLOT = 13;
     private static final int UNLOCK_BUTTON_SLOT = 31;
     private static final int HELP_SLOT = 49;
+    // Two slots right of the unlock button: same row so it reads as part of the same
+    // decision, with a gap so a misclick does not spend money or burn an hour cooldown.
+    private static final int REROLL_BUTTON_SLOT = 33;
     
     public Inventory build(Player player, Chunk chunk, ChunkEvaluator.ChunkValueData eval,
                            BiomeUnlockRegistry.UnlockRequirement requirement,
@@ -81,10 +84,106 @@ public class UnlockGuiBuilder {
             addUnlockButton(inv, player, requirement, paymentRequirement);
         }
         
+        addRerollButton(inv, player, chunk, paymentRequirement, economyManager);
         addHelpItem(inv);
         addTeamInfo(inv, player);
-        
+
         return inv;
+    }
+
+    /**
+     * The escape hatch for a committed price the player cannot meet (#83).
+     *
+     * <p>Prices are a commitment: what a player sees for a chunk is what they pay. That
+     * creates one genuine dead end - the required material may be something they cannot
+     * obtain at all - so a deliberate, priced re-roll exists to escape it.</p>
+     *
+     * <p>The button is placed two slots right of the unlock button rather than beside it.
+     * Adjacent would invite the misclick that costs money or burns an hour-long cooldown,
+     * and this action is the opposite of the one next to it.</p>
+     *
+     * <p>The lore leads with <em>why</em> the price is fixed before offering to change it.
+     * A player who does not understand the commitment reads a re-roll button as an
+     * invitation to shop for a cheaper material, which is exactly the behaviour #83 removes.</p>
+     */
+    private void addRerollButton(Inventory inv, Player player, Chunk chunk,
+                                 me.chunklock.economy.EconomyManager.PaymentRequirement paymentRequirement,
+                                 me.chunklock.economy.EconomyManager economyManager) {
+        if (economyManager == null || chunk == null || paymentRequirement == null) {
+            return;
+        }
+
+        var rerollService = economyManager.getRerollService();
+        if (rerollService == null) {
+            return;
+        }
+
+        var quote = rerollService.quote(player, chunk, paymentRequirement.getVaultCost());
+
+        ItemStack button = new ItemStack(quote.available() ? Material.AMETHYST_SHARD : Material.GRAY_DYE);
+        ItemMeta meta = button.getItemMeta();
+
+        String title = MessageUtil.getMessage(quote.available()
+            ? LanguageKeys.GUI_BUILDER_REROLL_TITLE
+            : LanguageKeys.GUI_BUILDER_REROLL_UNAVAILABLE_TITLE);
+        meta.displayName(Component.text(title)
+            .color(quote.available() ? NamedTextColor.LIGHT_PURPLE : NamedTextColor.GRAY)
+            .decoration(TextDecoration.ITALIC, false)
+            .decoration(TextDecoration.BOLD, true));
+
+        List<Component> lore = new ArrayList<>();
+        lore.add(Component.empty());
+
+        // Explain the commitment first - the button only makes sense once that is understood.
+        lore.add(Component.text(MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REROLL_EXPLAIN))
+            .color(NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false));
+
+        Material material = paymentRequirement.getMaterial();
+        if (material != null) {
+            java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+            placeholders.put("amount", String.valueOf(paymentRequirement.getMaterialAmount()));
+            placeholders.put("material", formatMaterialName(material));
+            lore.add(Component.text(MessageUtil.getMessage(
+                    LanguageKeys.GUI_BUILDER_REROLL_LOCKED_PRICE, placeholders))
+                .color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+        }
+
+        lore.add(Component.empty());
+
+        if (quote.currencyBased()) {
+            java.util.Map<String, String> costPlaceholders = new java.util.HashMap<>();
+            costPlaceholders.put("cost", economyManager.getVaultService().format(quote.price()));
+            lore.add(Component.text(MessageUtil.getMessage(
+                    quote.available()
+                        ? LanguageKeys.GUI_BUILDER_REROLL_COST_CURRENCY
+                        : LanguageKeys.GUI_BUILDER_REROLL_CANNOT_AFFORD,
+                    costPlaceholders))
+                .color(quote.available() ? NamedTextColor.GOLD : NamedTextColor.RED)
+                .decoration(TextDecoration.ITALIC, false));
+        } else if (quote.available()) {
+            java.util.Map<String, String> cooldownPlaceholders = new java.util.HashMap<>();
+            cooldownPlaceholders.put("minutes",
+                String.valueOf(me.chunklock.economy.ChunkPriceRerollService.DEFAULT_COOLDOWN_MINUTES));
+            lore.add(Component.text(MessageUtil.getMessage(
+                    LanguageKeys.GUI_BUILDER_REROLL_COST_COOLDOWN, cooldownPlaceholders))
+                .color(NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
+        } else {
+            java.util.Map<String, String> waitPlaceholders = new java.util.HashMap<>();
+            waitPlaceholders.put("minutes", String.valueOf(quote.cooldownRemainingMinutes()));
+            lore.add(Component.text(MessageUtil.getMessage(
+                    LanguageKeys.GUI_BUILDER_REROLL_WAIT, waitPlaceholders))
+                .color(NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
+        }
+
+        if (quote.available()) {
+            lore.add(Component.empty());
+            lore.add(Component.text(MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REROLL_CLICK))
+                .color(NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false));
+        }
+
+        meta.lore(lore);
+        button.setItemMeta(meta);
+        inv.setItem(REROLL_BUTTON_SLOT, button);
     }
     
     private void addBorderDecoration(Inventory inv) {

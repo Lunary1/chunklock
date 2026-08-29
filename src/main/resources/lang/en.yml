@@ -151,6 +151,8 @@ gui:
     success-contested: "⚔ Contested chunk claimed!"
     success-message: "✨ You can now build and explore in this chunk!"
   
+  reroll-success: "🎲 New material required. Check the chunk price."
+  reroll-failed: "❌ You cannot change this chunk's material right now."
   builder:
     chunk-info-title: "📍 Chunk Information"
     chunk-info-location: "📌 Location: %location%"
@@ -182,6 +184,15 @@ gui:
     unlock-button-need-more: "Need %amount% more %material%"
     unlock-button-gather: "💡 Gather the required items first"
     
+    reroll-title: "🎲 Change Required Material"
+    reroll-explain: "This chunk's price is locked in."
+    reroll-locked-price: "It stays %amount%x %material% until you pay it."
+    reroll-cost-currency: "💰 Change it for %cost%"
+    reroll-cost-cooldown: "⏳ Change it once every %minutes% minutes"
+    reroll-click: "➤ Click if you cannot obtain this material"
+    reroll-unavailable-title: "🎲 Change Unavailable"
+    reroll-wait: "⏳ Available again in %minutes% minutes"
+    reroll-cannot-afford: "❌ You need %cost%"
     help-title: "📖 How to Unlock Chunks"
     help-process-title: "🔓 Unlocking Process:"
     help-step-1: "  1. Gather required materials"
