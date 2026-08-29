@@ -1,38 +1,46 @@
 ---
 name: Bug report
-about: Create a report to help us improve
+about: Something in Chunklock behaves incorrectly
 title: ''
-labels: ''
+labels: bug
 assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+**What happened**
+A clear description of the incorrect behavior.
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+**What you expected instead**
+What should have happened.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**Steps to reproduce**
+1.
+2.
+3.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+If it only happens sometimes, say roughly how often and what seems to trigger it.
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+**Server details**
+- Chunklock version: <!-- /version chunklock -->
+- Server software and version: <!-- e.g. Paper 1.21.4 -->
+- Java version:
+- Other plugins that might interact: <!-- Vault, an economy plugin, a hologram plugin, WorldGuard... -->
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+**Chunklock configuration**
+- Cost strategy: <!-- resource-based (default) or traditional/Vault -->
+- Holograms enabled, and which provider:
+- Storage backend: <!-- MapDB (default) or MySQL -->
+
+**Console output**
+Any errors or stack traces from the server console or `logs/latest.log`. Paste inside a code
+block, and include the lines before the error too — they are often where the real cause is.
+
+```
+paste here
+```
+
+**Screenshots or video**
+Especially helpful for GUI, border, and hologram problems.
 
 **Additional context**
-Add any other context about the problem here.
+Anything else — how long the server had been running, player count, whether a restart fixes it.
