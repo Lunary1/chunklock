@@ -593,9 +593,27 @@ public class EconomyManager {
         if (rerollService == null || player == null || chunk == null) {
             return false;
         }
+
+        // Capture what is being rejected before the stored price is discarded.
+        PaymentRequirement rejected = getCommittedRequirement(player, chunk);
+
         if (!rerollService.tryConsumeRerollCost(player, chunk, chunkVaultPrice)) {
             return false;
         }
+
+        // Record the rejection BEFORE clearing, so the recalculation that follows sees it.
+        //
+        // Without this the re-roll does nothing visible: selectMaterial is deterministic
+        // (the #82 fix), so clearing a price and recalculating from unchanged inputs returns
+        // the identical material. The player pays and sees no change. Advancing the
+        // anti-repeat history is what actually moves selection to a different candidate.
+        if (rejected != null && calculationStrategy instanceof ResourceBasedMaterialStrategy resourceStrategy) {
+            Material rejectedMaterial = rejected.getMaterial();
+            if (rejectedMaterial != null) {
+                resourceStrategy.recordRejectedSelection(player.getUniqueId(), rejectedMaterial);
+            }
+        }
+
         clearCommittedRequirement(player, chunk);
         return true;
     }

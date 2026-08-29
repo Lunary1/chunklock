@@ -294,24 +294,29 @@ public class ChunkCostDatabase {
         String cacheKey = getCacheKey(chunk, player.getUniqueId());
         memoryCache.remove(cacheKey);
 
-        CompletableFuture.runAsync(() -> {
-            if (connection == null) {
-                return;
+        // Deliberately synchronous, unlike the other database work here.
+        //
+        // The caller re-opens the unlock GUI immediately after this returns, which
+        // recalculates and reads the stored cost back. Running the DELETE asynchronously
+        // races that read: the row is often still present, the old price is returned, and
+        // the player sees the requirement they just paid to replace. Correctness of a paid
+        // action beats saving a few milliseconds on a click the player initiated.
+        if (connection == null) {
+            return;
+        }
+        try {
+            String sql = "DELETE FROM chunk_costs WHERE world_name = ? AND chunk_x = ? "
+                + "AND chunk_z = ? AND player_id = ?";
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setString(1, chunk.getWorld().getName());
+                stmt.setInt(2, chunk.getX());
+                stmt.setInt(3, chunk.getZ());
+                stmt.setString(4, player.getUniqueId().toString());
+                stmt.executeUpdate();
             }
-            try {
-                String sql = "DELETE FROM chunk_costs WHERE world_name = ? AND chunk_x = ? "
-                    + "AND chunk_z = ? AND player_id = ?";
-                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                    stmt.setString(1, chunk.getWorld().getName());
-                    stmt.setInt(2, chunk.getX());
-                    stmt.setInt(3, chunk.getZ());
-                    stmt.setString(4, player.getUniqueId().toString());
-                    stmt.executeUpdate();
-                }
-            } catch (SQLException e) {
-                plugin.getLogger().warning("Failed to clear stored cost: " + e.getMessage());
-            }
-        });
+        } catch (SQLException e) {
+            plugin.getLogger().warning("Failed to clear stored cost: " + e.getMessage());
+        }
     }
     
     /**

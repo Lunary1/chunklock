@@ -191,6 +191,34 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
         rememberSelection(recent, material);
     }
 
+    /**
+     * Record that a player paid to <em>reject</em> a material, so recalculating this chunk
+     * produces a different requirement (#83 re-roll).
+     *
+     * <p>This is needed because {@link #selectMaterial} is deterministic - deliberately so,
+     * since that is the #82 fix. Given the same candidates, progression and history it
+     * returns the same material every time. Clearing a committed price and recalculating
+     * therefore reproduces the price that was just cleared, and a player who paid for a
+     * re-roll would see nothing change.</p>
+     *
+     * <p>Advancing the recent-selection history applies the same -350 anti-repeat penalty an
+     * unlock does, which is what actually moves selection to a different candidate. It is
+     * kept separate from {@link #recordUnlockSelection} because the two mean different
+     * things - one is "paid for", the other "paid to avoid" - and because only completed
+     * unlocks and explicit re-rolls may ever touch this history. Display paths must not, or
+     * prices shift as players look at them.</p>
+     *
+     * @return true if the history was advanced
+     */
+    public boolean recordRejectedSelection(UUID playerId, Material material) {
+        if (playerId == null || material == null) {
+            return false;
+        }
+        Deque<Material> recent = recentSelections.computeIfAbsent(playerId, id -> new ConcurrentLinkedDeque<>());
+        rememberSelection(recent, material);
+        return true;
+    }
+
     private List<OwnedChunkScanner.ResourceEntry> sortCandidates(List<OwnedChunkScanner.ResourceEntry> candidates) {
         List<OwnedChunkScanner.ResourceEntry> sorted = new ArrayList<>(candidates);
         sorted.sort(Comparator
