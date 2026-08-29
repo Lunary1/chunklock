@@ -46,7 +46,8 @@ public class UnlockGui {
     private final PlayerProgressTracker progressTracker;
     private final TeamManager teamManager;
     private final me.chunklock.economy.EconomyManager economyManager;
-    
+    private final me.chunklock.economy.ChunkPriceRerollService rerollService;
+
     // UI components
     private final UnlockGuiBuilder builder;
     private final UnlockGuiStateManager stateManager;
@@ -70,6 +71,7 @@ public class UnlockGui {
         this.progressTracker = progressTracker;
         this.teamManager = teamManager;
         this.economyManager = economyManager;
+        this.rerollService = economyManager != null ? economyManager.getRerollService() : null;
         this.builder = new UnlockGuiBuilder();
         this.stateManager = new UnlockGuiStateManager();
         
@@ -562,6 +564,14 @@ public class UnlockGui {
             // chunk should lean towards a different one. This is the only place that advances
             // that history - display paths must not, or prices shift as players look at them (#82).
             economyManager.recordCompletedUnlock(player, paymentRequirement);
+
+            // The commitment for this chunk has been honoured and paid. Release it, along with
+            // any re-roll cooldown or escalating price attached to it (#83), so a future
+            // calculation for this location starts clean.
+            economyManager.clearCommittedRequirement(player, state.chunk);
+            if (rerollService != null) {
+                rerollService.clearForUnlockedChunk(player, state.chunk);
+            }
 
         } catch (Exception e) {
             logger.warning("Material payment processing failed: " + e.getMessage());

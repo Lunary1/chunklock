@@ -136,6 +136,7 @@ public class EconomyManager {
     
     private final ChunklockPlugin plugin;
     private final VaultEconomyService vaultService;
+    private final ChunkPriceRerollService rerollService;
     private final BiomeUnlockRegistry biomeRegistry;
     private final PlayerProgressTracker progressTracker;
     
@@ -150,6 +151,12 @@ public class EconomyManager {
     
     // Calculation strategy (selected based on economy type and AI enabled state)
     private CostCalculationStrategy calculationStrategy;
+
+    // How long a main-thread caller will wait for the committed-price lookup before giving up
+    // and recalculating. Short on purpose: the lookup normally hits an in-memory cache, and a
+    // slow disk must never stall the server tick. Missing the commitment costs price
+    // stability for one view; blocking the main thread costs everyone their TPS.
+    private static final long COMMITTED_PRICE_LOOKUP_TIMEOUT_MS = 50L;
     
     private EconomyType currentType;
     private boolean materialsEnabled;
@@ -166,6 +173,7 @@ public class EconomyManager {
         this.biomeRegistry = biomeRegistry;
         this.progressTracker = progressTracker;
         this.vaultService = new VaultEconomyService(plugin);
+        this.rerollService = new ChunkPriceRerollService(plugin, vaultService);
         
         // Load configs once from ConfigManager
         me.chunklock.config.ConfigManager configManager = plugin.getConfigManager();
@@ -209,6 +217,10 @@ public class EconomyManager {
         }
         
         // Vault settings
+        if (rerollService != null && economyConfig != null) {
+            rerollService.setCooldownMinutes(economyConfig.getRerollCooldownMinutes());
+        }
+
         baseCost = economyConfig != null ? economyConfig.getVaultBaseCost() : 100.0;
         costPerUnlocked = economyConfig != null ? economyConfig.getVaultCostPerUnlocked() : 25.0;
         
@@ -280,14 +292,92 @@ public class EconomyManager {
             return result;
         }
         
-        plugin.getLogger().fine("Calculating requirement for " + player.getName() + 
-            " - Type: " + effectiveType.getConfigName() + 
-            ", Biome: " + BiomeUtil.getBiomeName(biome) + 
-            ", Difficulty: " + evaluation.difficulty.name() + 
+        plugin.getLogger().fine("Calculating requirement for " + player.getName() +
+            " - Type: " + effectiveType.getConfigName() +
+            ", Biome: " + BiomeUtil.getBiomeName(biome) +
+            ", Difficulty: " + evaluation.difficulty.name() +
             ", Score: " + evaluation.score);
-        
-        // Use strategy pattern for calculation
-        return calculationStrategy.calculate(player, chunk, biome, evaluation);
+
+        // A price the player has already been shown is a commitment (#83). Honour it before
+        // recalculating anything.
+        PaymentRequirement committed = getCommittedRequirement(player, chunk);
+        if (committed != null) {
+            return committed;
+        }
+
+        PaymentRequirement calculated = calculationStrategy.calculate(player, chunk, biome, evaluation);
+        commitRequirement(player, chunk, biome, evaluation, calculated);
+        return calculated;
+    }
+
+    /**
+     * Look up a previously committed requirement for this chunk, or null if there is none.
+     *
+     * <p>The lookup is asynchronous underneath, but this method is called from the main
+     * thread by GUI and hologram paths, so it waits briefly rather than restructuring every
+     * caller. A miss, a timeout, or a storage error all return null, which simply means
+     * "calculate it" - the commitment is a guarantee about price stability, never a reason
+     * to block the server or fail an unlock.</p>
+     */
+    private PaymentRequirement getCommittedRequirement(Player player, org.bukkit.Chunk chunk) {
+        if (chunk == null) {
+            return null;
+        }
+        try {
+            var costDatabase = plugin.getCostDatabase();
+            String configHash = costDatabase.generateConfigHash();
+            return costDatabase.getCachedCost(player, chunk, configHash)
+                .get(COMMITTED_PRICE_LOOKUP_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            plugin.getLogger().fine("Committed-price lookup timed out for " + player.getName()
+                + "; recalculating");
+            return null;
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.FINE, "Committed-price lookup failed; recalculating", e);
+            return null;
+        }
+    }
+
+    /**
+     * Store a freshly calculated requirement so it becomes this chunk's committed price.
+     *
+     * <p>Storage failures are logged and swallowed: an unstored price degrades to the old
+     * recalculate-every-time behaviour, which is worse but not broken.</p>
+     */
+    private void commitRequirement(Player player, org.bukkit.Chunk chunk, Biome biome,
+                                   ChunkEvaluator.ChunkValueData evaluation,
+                                   PaymentRequirement requirement) {
+        if (chunk == null || requirement == null) {
+            return;
+        }
+        try {
+            var costDatabase = plugin.getCostDatabase();
+            costDatabase.storeCost(player, chunk, requirement,
+                BiomeUtil.getBiomeName(biome),
+                evaluation.difficulty.name(), evaluation.score,
+                false, "", costDatabase.generateConfigHash());
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.FINE, "Failed to commit chunk price; "
+                + "price will be recalculated on next view", e);
+        }
+    }
+
+    /**
+     * Discard this chunk's committed price so the next calculation produces a new one.
+     *
+     * <p>Called after a completed unlock, and after
+     * {@link me.chunklock.economy.ChunkPriceRerollService} has taken payment for a
+     * deliberate re-roll.</p>
+     */
+    public void clearCommittedRequirement(Player player, org.bukkit.Chunk chunk) {
+        if (chunk == null) {
+            return;
+        }
+        try {
+            plugin.getCostDatabase().clearStoredCost(player, chunk);
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.FINE, "Failed to clear committed chunk price", e);
+        }
     }
     
     
@@ -479,6 +569,37 @@ public class EconomyManager {
      * leave it untouched, or the requirement shown for a chunk changes as the player looks
      * at it (issue #82).</p>
      */
+    /**
+     * The re-roll policy for committed chunk prices (#83).
+     *
+     * <p>Lives here because it needs the Vault service, which this class already owns, and
+     * because every caller that can trigger a re-roll already holds an EconomyManager.</p>
+     */
+    public ChunkPriceRerollService getRerollService() {
+        return rerollService;
+    }
+
+    /**
+     * Charge for and perform a deliberate re-roll of a chunk's committed price.
+     *
+     * <p>The cost is a cooldown on servers without Vault, and escalating currency where
+     * Vault is present - see {@link ChunkPriceRerollService}. Payment is taken first; only
+     * then is the stored requirement discarded, so a failed payment cannot hand out a free
+     * re-roll.</p>
+     *
+     * @return true if the player paid and the chunk's price was cleared
+     */
+    public boolean tryRerollChunkPrice(Player player, org.bukkit.Chunk chunk, double chunkVaultPrice) {
+        if (rerollService == null || player == null || chunk == null) {
+            return false;
+        }
+        if (!rerollService.tryConsumeRerollCost(player, chunk, chunkVaultPrice)) {
+            return false;
+        }
+        clearCommittedRequirement(player, chunk);
+        return true;
+    }
+
     public void recordCompletedUnlock(Player player, PaymentRequirement requirement) {
         if (player == null || requirement == null) return;
         if (!(calculationStrategy instanceof ResourceBasedMaterialStrategy resourceStrategy)) {

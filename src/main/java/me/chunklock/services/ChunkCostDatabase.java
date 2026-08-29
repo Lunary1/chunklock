@@ -156,17 +156,23 @@ public class ChunkCostDatabase {
                     try (ResultSet rs = stmt.executeQuery()) {
                         if (rs.next()) {
                             long calculatedAt = rs.getLong("calculated_at");
-                            
-                            // Check if cost is still valid (not older than 1 hour)
-                            if (System.currentTimeMillis() - calculatedAt < 60 * 60 * 1000) {
-                                EconomyManager.PaymentRequirement requirement = createRequirementFromResult(rs);
-                                
-                                // Cache in memory for quick access
-                                memoryCache.put(cacheKey, new CachedChunkCost(requirement, configHash, calculatedAt));
-                                
-                                plugin.getLogger().fine("Retrieved cost from database for " + cacheKey);
-                                return requirement;
-                            }
+
+                            // No age check. A stored requirement is a commitment to the
+                            // player (#83): once they have seen a price for a chunk, that
+                            // price holds until they pay it or deliberately re-roll it.
+                            // This used to expire after an hour, which is shorter than a
+                            // real collection goal - a player grinding for diamonds would
+                            // return to a different requirement through no action of their
+                            // own, which is precisely the grind-invalidation #83 exists to
+                            // stop. config_hash is still part of the lookup key, so an admin
+                            // changing economy config still re-derives prices legitimately.
+                            EconomyManager.PaymentRequirement requirement = createRequirementFromResult(rs);
+
+                            // Cache in memory for quick access
+                            memoryCache.put(cacheKey, new CachedChunkCost(requirement, configHash, calculatedAt));
+
+                            plugin.getLogger().fine("Retrieved committed cost from database for " + cacheKey);
+                            return requirement;
                         }
                     }
                 }
@@ -237,30 +243,73 @@ public class ChunkCostDatabase {
     }
     
     /**
-     * Clean up old cached costs
+     * Remove stored costs whose configuration no longer applies.
+     *
+     * <p><strong>Age is deliberately not a criterion.</strong> This method used to delete
+     * every row older than 24 hours. Under #83 that would silently break the price
+     * commitment: a player grinding for an expensive material across two evenings would
+     * return to a different requirement, which is the exact bug the commitment exists to
+     * prevent. The method had no callers at the time, so nothing was actually expiring - but
+     * scheduling it would have quietly undone the feature.</p>
+     *
+     * <p>What is safe to remove is any row whose {@code config_hash} differs from the
+     * current configuration. Those can never be read again - {@code getCachedCost} matches
+     * on {@code config_hash} - so they are dead rows rather than commitments.</p>
      */
-    public void cleanupOldCosts() {
+    public void cleanupOrphanedCosts() {
         CompletableFuture.runAsync(() -> {
             // Check if database connection is available
             if (connection == null) {
                 plugin.getLogger().fine("Database connection not available, skipping cleanup");
                 return;
             }
-            
+
             try {
-                long cutoff = System.currentTimeMillis() - (24 * 60 * 60 * 1000); // 24 hours
-                
-                String sql = "DELETE FROM chunk_costs WHERE calculated_at < ?";
+                String currentHash = generateConfigHash();
+
+                String sql = "DELETE FROM chunk_costs WHERE config_hash <> ?";
                 try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                    stmt.setLong(1, cutoff);
+                    stmt.setString(1, currentHash);
                     int deleted = stmt.executeUpdate();
-                    
+
                     if (deleted > 0) {
-                        plugin.getLogger().info("Cleaned up " + deleted + " old cached costs");
+                        plugin.getLogger().info("Cleaned up " + deleted
+                            + " chunk costs from superseded economy configurations");
                     }
                 }
             } catch (SQLException e) {
-                plugin.getLogger().warning("Failed to cleanup old costs: " + e.getMessage());
+                plugin.getLogger().warning("Failed to cleanup orphaned costs: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Forget the committed cost for one chunk, so the next calculation commits a fresh one.
+     *
+     * <p>This is the storage half of a deliberate re-roll (#83). It is only ever reached
+     * after {@link me.chunklock.economy.ChunkPriceRerollService} has taken payment, and
+     * after an unlock completes.</p>
+     */
+    public void clearStoredCost(Player player, Chunk chunk) {
+        String cacheKey = getCacheKey(chunk, player.getUniqueId());
+        memoryCache.remove(cacheKey);
+
+        CompletableFuture.runAsync(() -> {
+            if (connection == null) {
+                return;
+            }
+            try {
+                String sql = "DELETE FROM chunk_costs WHERE world_name = ? AND chunk_x = ? "
+                    + "AND chunk_z = ? AND player_id = ?";
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, chunk.getWorld().getName());
+                    stmt.setInt(2, chunk.getX());
+                    stmt.setInt(3, chunk.getZ());
+                    stmt.setString(4, player.getUniqueId().toString());
+                    stmt.executeUpdate();
+                }
+            } catch (SQLException e) {
+                plugin.getLogger().warning("Failed to clear stored cost: " + e.getMessage());
             }
         });
     }
@@ -269,11 +318,21 @@ public class ChunkCostDatabase {
      * Generate a configuration hash to detect config changes
      */
     public String generateConfigHash() {
-        // Create a hash based on key configuration values that affect cost calculation
+        // Every setting that can change a calculated price belongs here. Under #83 a stored
+        // requirement is honored indefinitely, so this hash is now the ONLY mechanism that
+        // re-derives prices after an admin retunes the economy. Anything omitted becomes a
+        // price that can never be corrected without clearing the table by hand.
+        var config = plugin.getConfig();
         StringBuilder configData = new StringBuilder();
-        configData.append(plugin.getConfig().getString("economy.type", "materials"));
-        configData.append(plugin.getConfig().getDouble("economy.vault.base-cost", 100.0));
-        
+        configData.append(config.getString("economy.type", "materials")).append('|');
+        configData.append(config.getString("economy.materials.cost-mode", "biome")).append('|');
+        configData.append(config.getDouble("economy.vault.base-cost", 100.0)).append('|');
+        configData.append(config.getDouble("economy.vault.cost-per-unlocked", 25.0)).append('|');
+        configData.append(config.getInt("economy.materials.resource-scan.base-cost", 16)).append('|');
+        configData.append(config.getInt("economy.materials.resource-scan.min-cost", 1)).append('|');
+        configData.append(config.getInt("economy.materials.resource-scan.max-cost", 128)).append('|');
+        configData.append(config.getInt("economy.materials.resource-scan.min-abundance", 10));
+
         return String.valueOf(configData.toString().hashCode());
     }
     
