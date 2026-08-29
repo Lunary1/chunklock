@@ -554,10 +554,15 @@ public class UnlockGui {
             }
             
             if (debugLogging) {
-                logger.info("Consumed items for " + player.getName() + 
+                logger.info("Consumed items for " + player.getName() +
                     " using EconomyManager.processPayment");
             }
-            
+
+            // Payment succeeded, so this material counts as "recently used" and the next
+            // chunk should lean towards a different one. This is the only place that advances
+            // that history - display paths must not, or prices shift as players look at them (#82).
+            economyManager.recordCompletedUnlock(player, paymentRequirement);
+
         } catch (Exception e) {
             logger.warning("Material payment processing failed: " + e.getMessage());
             String message = MessageUtil.getMessage(LanguageKeys.GUI_UNLOCK_PAYMENT_PROCESSING_FAILED);

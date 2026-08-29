@@ -471,6 +471,27 @@ public class EconomyManager {
     }
 
     /**
+     * Record that a player completed an unlock paying the given requirement, so the
+     * resource-scan strategy can vary what it asks for next time.
+     *
+     * <p>Only completed unlocks advance that history. Calculating a cost for display -
+     * opening the unlock GUI, drawing a hologram, pre-calculating adjacent chunks - must
+     * leave it untouched, or the requirement shown for a chunk changes as the player looks
+     * at it (issue #82).</p>
+     */
+    public void recordCompletedUnlock(Player player, PaymentRequirement requirement) {
+        if (player == null || requirement == null) return;
+        if (!(calculationStrategy instanceof ResourceBasedMaterialStrategy resourceStrategy)) {
+            return;
+        }
+        Material paid = requirement.getMaterial();
+        if (paid == null) {
+            return;
+        }
+        resourceStrategy.recordUnlockSelection(player.getUniqueId(), paid);
+    }
+
+    /**
      * Reload configuration
      */
     public void reload() {

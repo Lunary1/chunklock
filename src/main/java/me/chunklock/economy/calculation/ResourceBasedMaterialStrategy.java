@@ -130,11 +130,33 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
     private OwnedChunkScanner.ResourceEntry selectMaterial(Player player,
                                                            List<OwnedChunkScanner.ResourceEntry> sortedCandidates,
                                                            int unlockedChunks) {
-        int windowSize = Math.min(4, sortedCandidates.size());
-        List<OwnedChunkScanner.ResourceEntry> topCandidates = sortedCandidates.subList(0, windowSize);
-
         UUID playerId = player.getUniqueId();
         Deque<Material> recent = recentSelections.computeIfAbsent(playerId, id -> new ConcurrentLinkedDeque<>());
+
+        return selectMaterial(sortedCandidates, unlockedChunks, recent);
+    }
+
+    /**
+     * Choose the material to require, given the candidate list and the player's recent
+     * selection history.
+     *
+     * <p>This method is a <strong>pure query</strong>: it does not modify {@code recent}.
+     * That is deliberate and is the fix for issue #82. Selection used to record its own
+     * result here, but {@code calculate} is reached from display paths - opening the unlock
+     * GUI, rendering a hologram, and the async pre-calculation of adjacent chunks - so
+     * recording on every call made merely <em>looking</em> at a chunk change its price.
+     * With a memory of {@value #RECENT_SELECTION_MEMORY} against a four-candidate window,
+     * the top materials rotated in a strict cycle.</p>
+     *
+     * <p>The anti-repeat variety this history provides is still applied, but the history is
+     * now only advanced by {@link #recordUnlockSelection(UUID, Material)} when an unlock
+     * actually completes.</p>
+     */
+    static OwnedChunkScanner.ResourceEntry selectMaterial(List<OwnedChunkScanner.ResourceEntry> sortedCandidates,
+                                                          int unlockedChunks,
+                                                          Deque<Material> recent) {
+        int windowSize = Math.min(4, sortedCandidates.size());
+        List<OwnedChunkScanner.ResourceEntry> topCandidates = sortedCandidates.subList(0, windowSize);
 
         OwnedChunkScanner.ResourceEntry best = null;
         double bestScore = Double.NEGATIVE_INFINITY;
@@ -151,8 +173,22 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
             best = topCandidates.get(unlockedChunks % windowSize);
         }
 
-        rememberSelection(recent, best.material());
         return best;
+    }
+
+    /**
+     * Record that a player actually unlocked a chunk paying the given material, so the next
+     * chunk they price is nudged towards a different requirement.
+     *
+     * <p>Called only from the completed-unlock path. See {@link #selectMaterial} for why
+     * display paths must not advance this history (#82).</p>
+     */
+    public void recordUnlockSelection(UUID playerId, Material material) {
+        if (playerId == null || material == null) {
+            return;
+        }
+        Deque<Material> recent = recentSelections.computeIfAbsent(playerId, id -> new ConcurrentLinkedDeque<>());
+        rememberSelection(recent, material);
     }
 
     private List<OwnedChunkScanner.ResourceEntry> sortCandidates(List<OwnedChunkScanner.ResourceEntry> candidates) {
@@ -164,7 +200,7 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
         return sorted;
     }
 
-    private double computeSelectionScore(OwnedChunkScanner.ResourceEntry entry, int unlockedChunks, Deque<Material> recent) {
+    static double computeSelectionScore(OwnedChunkScanner.ResourceEntry entry, int unlockedChunks, Deque<Material> recent) {
         double score = (entry.tier() * 1000.0) + Math.min(entry.count(), 250);
 
         if (isWoodLike(entry.material()) && unlockedChunks >= 5) {
@@ -223,7 +259,7 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
         recentSelections.clear();
     }
 
-    private boolean isWoodLike(Material material) {
+    static boolean isWoodLike(Material material) {
         String name = material.name();
         return name.endsWith("_LOG") || name.endsWith("_STEM") || name.endsWith("_WOOD");
     }
