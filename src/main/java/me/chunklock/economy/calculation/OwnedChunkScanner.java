@@ -198,6 +198,16 @@ public class OwnedChunkScanner {
     }
 
     /**
+     * Whether a material counts as a harvestable resource worth pricing against.
+     *
+     * <p>Exposed so per-chunk profiling (#86) filters by exactly the same definition this
+     * scanner uses, rather than keeping a second copy of the set that could drift.</p>
+     */
+    public static boolean isHarvestable(Material material) {
+        return HARVESTABLE_MATERIALS.contains(material);
+    }
+
+    /**
      * Get the tier of a material.
      */
     public static int getMaterialTier(Material material) {
