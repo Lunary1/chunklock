@@ -107,13 +107,46 @@ public class ChunkCostDatabase {
             )
         """;
         
+        // What a scan found in one chunk (#86). Keyed on the chunk alone - a chunk's contents
+        // do not depend on who is looking at them, unlike chunk_costs which is per-(player,
+        // chunk). One row per material found, so a profile is a set of rows sharing a chunk.
+        String createProfileSQL = """
+            CREATE TABLE IF NOT EXISTS chunk_profiles (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                world_name VARCHAR(255) NOT NULL,
+                chunk_x INTEGER NOT NULL,
+                chunk_z INTEGER NOT NULL,
+                material VARCHAR(255) NOT NULL,
+                block_count INTEGER NOT NULL,
+                tier INTEGER NOT NULL,
+                scanned_at BIGINT NOT NULL,
+                CONSTRAINT unique_chunk_profile UNIQUE(world_name, chunk_x, chunk_z, material)
+            )
+        """;
+
+        // The running world-wide average count per material, which #86's scoring needs: a
+        // material is characteristic of a chunk when the chunk holds more of it than a
+        // typical chunk does. Stored as a running total plus a chunk count rather than a
+        // mean, so a new profile updates it without re-reading every profile.
+        String createBaselineSQL = """
+            CREATE TABLE IF NOT EXISTS chunk_material_baseline (
+                material VARCHAR(255) NOT NULL PRIMARY KEY,
+                total_count BIGINT NOT NULL,
+                chunks_counted BIGINT NOT NULL,
+                updated_at BIGINT NOT NULL
+            )
+        """;
+
         try (Statement stmt = connection.createStatement()) {
             stmt.execute(createTableSQL);
-            
+            stmt.execute(createProfileSQL);
+            stmt.execute(createBaselineSQL);
+
             // Create indexes for better performance
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_chunk_location ON chunk_costs(world_name, chunk_x, chunk_z)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_player_costs ON chunk_costs(player_id)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_calculated_at ON chunk_costs(calculated_at)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_profile_location ON chunk_profiles(world_name, chunk_x, chunk_z)");
         }
     }
     
@@ -349,6 +382,18 @@ public class ChunkCostDatabase {
         return String.valueOf(configData.toString().hashCode());
     }
     
+    /**
+     * The live connection, for sibling stores that share this database file.
+     *
+     * <p>Package-private on purpose: {@link ChunkProfileStore} keeps #86's chunk profiles in
+     * the same H2 file rather than standing up a second database with its own lifecycle and
+     * its own copy of the shaded-driver loading workaround. Null when the database failed to
+     * initialize, and every caller must handle that - the plugin runs without persistence.</p>
+     */
+    Connection getConnection() {
+        return connection;
+    }
+
     /**
      * Close database connection
      */
