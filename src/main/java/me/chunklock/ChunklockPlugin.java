@@ -78,6 +78,8 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     private me.chunklock.economy.EconomyManager economyManager;
     private me.chunklock.services.AsyncCostCalculationService asyncCostCalculationService;
     private me.chunklock.services.ChunkCostDatabase costDatabase;
+    private me.chunklock.services.ChunkProfileStore chunkProfileStore;
+    private me.chunklock.services.ChunkProfilingService chunkProfilingService;
     
     // Database system
     private me.chunklock.services.ChunkStore chunkDatabase;
@@ -350,6 +352,11 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                 getLogger().warning("⚠️ Failed to initialize cost database - performance may be reduced");
             }
             
+            // Per-chunk resource profiling (#86). Capture happens on the main thread while a
+            // chunk is loaded; pricing reads the stored profile later, on any thread.
+            this.chunkProfileStore = new me.chunklock.services.ChunkProfileStore(this, costDatabase);
+            this.chunkProfilingService = new me.chunklock.services.ChunkProfilingService(this, chunkProfileStore);
+
             // Initialize async cost calculation service for improved GUI performance
             this.asyncCostCalculationService = new me.chunklock.services.AsyncCostCalculationService(this, economyManager, chunkLockManager);
             
@@ -757,6 +764,20 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
     public me.chunklock.services.AsyncCostCalculationService getAsyncCostCalculationService() {
         if (asyncCostCalculationService == null) throw new IllegalStateException("AsyncCostCalculationService not initialized");
         return asyncCostCalculationService;
+    }
+
+    /**
+     * Per-chunk resource profiles (#86). Null until initialization reaches it, and callers on
+     * hot paths should tolerate that rather than throwing - a missing profile means pricing
+     * falls back to owned-chunk behaviour, which is not an error.
+     */
+    public me.chunklock.services.ChunkProfileStore getChunkProfileStore() {
+        return chunkProfileStore;
+    }
+
+    /** Main-thread chunk profiling (#86). Null until initialization reaches it. */
+    public me.chunklock.services.ChunkProfilingService getChunkProfilingService() {
+        return chunkProfilingService;
     }
 
     public me.chunklock.services.ChunkCostDatabase getCostDatabase() {

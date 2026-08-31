@@ -2,6 +2,7 @@ package me.chunklock.listeners;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
+import org.bukkit.World;
 import org.bukkit.Location;
 import me.chunklock.util.chunk.ChunkUtils;
 import me.chunklock.managers.ChunkLockManager;
@@ -318,6 +319,48 @@ public class PlayerListener implements Listener {
         }
     }
 
+    /**
+     * Profile the chunk the player entered and its four orthogonal neighbours (#86).
+     *
+     * <p>The neighbours are the point. A player standing in an unlocked chunk is looking at
+     * <em>locked</em> ones, and those are the chunks that need a price. Profiling only the
+     * chunk underfoot would mean every locked chunk is first priced before it has ever been
+     * profiled, and would fall back to owned-chunk pricing exactly when target-chunk pricing
+     * matters most.</p>
+     *
+     * <p>Orthogonal only, not all eight: diagonals are rarely the next unlock and each one is
+     * another ~24,000 block reads. The profiling service enforces a per-tick budget anyway, so
+     * these are requests rather than commands - anything skipped is picked up on a later
+     * crossing.</p>
+     */
+    private void profileChunkForPricing(Chunk chunk) {
+        try {
+            var profilingService = ChunklockPlugin.getInstance().getChunkProfilingService();
+            if (profilingService == null || chunk == null) {
+                return;
+            }
+
+            profilingService.profileIfNeeded(chunk);
+
+            World world = chunk.getWorld();
+            int[] xOffsets = {1, -1, 0, 0};
+            int[] zOffsets = {0, 0, 1, -1};
+            for (int i = 0; i < xOffsets.length; i++) {
+                int nx = chunk.getX() + xOffsets[i];
+                int nz = chunk.getZ() + zOffsets[i];
+                // isChunkLoaded first: getChunkAt on an unloaded chunk would load it, which is
+                // the exact cost this whole design exists to avoid.
+                if (world.isChunkLoaded(nx, nz)) {
+                    profilingService.profileIfNeeded(world.getChunkAt(nx, nz));
+                }
+            }
+        } catch (Exception e) {
+            // Profiling is an optimisation for pricing, never a requirement for movement.
+            ChunklockPlugin.getInstance().getLogger()
+                .log(Level.FINE, "Chunk profiling skipped", e);
+        }
+    }
+
     private void handleChunkChange(PlayerMoveEvent event, Player player, Chunk toChunk) {
         try {
             // NEW: Check if player is in enabled world before processing chunk change
@@ -329,7 +372,13 @@ public class PlayerListener implements Listener {
             }
             
             chunkLockManager.initializeChunk(toChunk, player.getUniqueId());
-            
+
+            // Capture what this chunk contains, for #86 target-chunk pricing. This is the
+            // main thread and the chunk is loaded (the player is standing in it), which is
+            // the combination the scan needs and that the async pricing path cannot offer.
+            // The service owns its own throttling, so calling it on every crossing is safe.
+            profileChunkForPricing(toChunk);
+
             if (chunkLockManager.isBypassing(player)) {
                 return;
             }
