@@ -202,12 +202,20 @@ public class ChunkCostDatabase {
             }
             
             try {
-                // H2 uses MERGE instead of INSERT OR REPLACE
+                // H2 uses MERGE instead of INSERT OR REPLACE.
+                //
+                // The KEY clause is load-bearing (#90). Without it H2 matches rows on the
+                // PRIMARY KEY, which here is the auto-increment `id` this statement never
+                // supplies - so every write failed with 90081 and `chunk_costs` stayed empty
+                // on every server. Keying on the columns of the `unique_chunk_cost`
+                // constraint is what makes this an upsert of "this player's price for this
+                // chunk under this config", which is what the commitment in #83 needs.
                 String sql = """
-                    MERGE INTO chunk_costs 
-                    (world_name, chunk_x, chunk_z, player_id, biome, difficulty, score, cost_type, 
-                     vault_cost, material_type, material_amount, ai_processed, ai_explanation, 
+                    MERGE INTO chunk_costs
+                    (world_name, chunk_x, chunk_z, player_id, biome, difficulty, score, cost_type,
+                     vault_cost, material_type, material_amount, ai_processed, ai_explanation,
                      calculated_at, config_hash)
+                    KEY (world_name, chunk_x, chunk_z, player_id, config_hash)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
                 
