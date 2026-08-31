@@ -580,6 +580,28 @@ public class EconomyManager {
     }
 
     /**
+     * Whether a re-roll could actually hand this player a different material.
+     *
+     * <p>A player whose territory yields exactly one obtainable material has nothing to
+     * re-roll into: selection is deterministic (#82), so recalculating returns what it just
+     * returned no matter what they pay. The GUI uses this to grey the button out and
+     * {@link #tryRerollChunkPrice} to refuse the click.</p>
+     *
+     * <p>Only the resource-scan strategy derives requirements from owned chunks. Every other
+     * mode picks from biome configuration, where the question does not arise - so they report
+     * true and behave exactly as before.</p>
+     */
+    public boolean hasRerollAlternatives(Player player) {
+        if (player == null) {
+            return false;
+        }
+        if (!(calculationStrategy instanceof ResourceBasedMaterialStrategy resourceStrategy)) {
+            return true;
+        }
+        return resourceStrategy.countSelectableCandidates(player) > 1;
+    }
+
+    /**
      * Charge for and perform a deliberate re-roll of a chunk's committed price.
      *
      * <p>The cost is a cooldown on servers without Vault, and escalating currency where
@@ -587,10 +609,20 @@ public class EconomyManager {
      * then is the stored requirement discarded, so a failed payment cannot hand out a free
      * re-roll.</p>
      *
+     * <p>Refuses outright when the player has only one material to be asked for. The GUI
+     * greys the button out in that case, but this check is the one that matters: an
+     * already-open inventory still holds a clickable button, so guarding only the rendering
+     * would still charge a player whose last alternative disappeared while the screen was
+     * open.</p>
+     *
      * @return true if the player paid and the chunk's price was cleared
      */
     public boolean tryRerollChunkPrice(Player player, org.bukkit.Chunk chunk, double chunkVaultPrice) {
         if (rerollService == null || player == null || chunk == null) {
+            return false;
+        }
+
+        if (!hasRerollAlternatives(player)) {
             return false;
         }
 

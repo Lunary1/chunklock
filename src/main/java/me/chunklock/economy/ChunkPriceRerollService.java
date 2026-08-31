@@ -82,18 +82,24 @@ public class ChunkPriceRerollService {
 
     /**
      * What the next re-roll of this chunk would cost the player, for display in the GUI.
+     *
+     * @param alternativesExist whether the player has more than one material to be asked
+     *                          for. False greys the button out: with a single candidate a
+     *                          re-roll cannot change anything, so offering it would take
+     *                          payment for an impossibility.
      */
-    public RerollQuote quote(Player player, Chunk chunk, double chunkVaultPrice) {
+    public RerollQuote quote(Player player, Chunk chunk, double chunkVaultPrice,
+                             boolean alternativesExist) {
         String key = key(player, chunk);
 
         if (usesCurrency()) {
             double price = priceFor(key, chunkVaultPrice);
             boolean affordable = vaultService.hasEnoughMoney(player, price);
-            return RerollQuote.currency(price, affordable);
+            return RerollQuote.currency(price, affordable, alternativesExist);
         }
 
         long remaining = cooldownRemainingMillis(key);
-        return RerollQuote.cooldown(remaining);
+        return RerollQuote.cooldown(remaining, alternativesExist);
     }
 
     /**
@@ -176,15 +182,23 @@ public class ChunkPriceRerollService {
     /**
      * What a re-roll would cost right now, in whichever currency this server uses.
      */
+    /**
+     * @param available          whether the button should be clickable at all
+     * @param alternativesExist  whether a re-roll could produce a different material. False
+     *                           forces {@code available} false and is reported separately so
+     *                           the GUI can explain <em>why</em> - "nothing else to ask for"
+     *                           is a different message from "you cannot afford it".
+     */
     public record RerollQuote(boolean currencyBased, double price, long cooldownRemainingMillis,
-                              boolean available) {
+                              boolean available, boolean alternativesExist) {
 
-        static RerollQuote currency(double price, boolean affordable) {
-            return new RerollQuote(true, price, 0L, affordable);
+        static RerollQuote currency(double price, boolean affordable, boolean alternativesExist) {
+            return new RerollQuote(true, price, 0L, affordable && alternativesExist, alternativesExist);
         }
 
-        static RerollQuote cooldown(long remainingMillis) {
-            return new RerollQuote(false, 0.0, remainingMillis, remainingMillis <= 0L);
+        static RerollQuote cooldown(long remainingMillis, boolean alternativesExist) {
+            return new RerollQuote(false, 0.0, remainingMillis,
+                remainingMillis <= 0L && alternativesExist, alternativesExist);
         }
 
         /** Minutes remaining, rounded up, for display. Zero when currency-based. */
