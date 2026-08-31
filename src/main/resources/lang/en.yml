@@ -193,6 +193,7 @@ gui:
     reroll-unavailable-title: "🎲 Change Unavailable"
     reroll-wait: "⏳ Available again in %minutes% minutes"
     reroll-cannot-afford: "❌ You need %cost%"
+    reroll-no-alternatives: "❌ Your land holds nothing else to ask for"
     help-title: "📖 How to Unlock Chunks"
     help-process-title: "🔓 Unlocking Process:"
     help-step-1: "  1. Gather required materials"

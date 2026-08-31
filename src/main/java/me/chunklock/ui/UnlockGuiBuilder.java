@@ -118,7 +118,8 @@ public class UnlockGuiBuilder {
             return;
         }
 
-        var quote = rerollService.quote(player, chunk, paymentRequirement.getVaultCost());
+        var quote = rerollService.quote(player, chunk, paymentRequirement.getVaultCost(),
+            economyManager.hasRerollAlternatives(player));
 
         ItemStack button = new ItemStack(quote.available() ? Material.AMETHYST_SHARD : Material.GRAY_DYE);
         ItemMeta meta = button.getItemMeta();
@@ -150,7 +151,12 @@ public class UnlockGuiBuilder {
 
         lore.add(Component.empty());
 
-        if (quote.currencyBased()) {
+        if (!quote.alternativesExist()) {
+            // Checked before cost, because cost is not the reason. A wealthy player told
+            // "you cannot afford this" would go earn money that cannot help them.
+            lore.add(Component.text(MessageUtil.getMessage(LanguageKeys.GUI_BUILDER_REROLL_NO_ALTERNATIVES))
+                .color(NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
+        } else if (quote.currencyBased()) {
             java.util.Map<String, String> costPlaceholders = new java.util.HashMap<>();
             costPlaceholders.put("cost", economyManager.getVaultService().format(quote.price()));
             lore.add(Component.text(MessageUtil.getMessage(

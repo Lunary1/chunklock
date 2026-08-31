@@ -54,6 +54,14 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
     private int minCost = 1;
     private static final int RECENT_SELECTION_MEMORY = 3;
 
+    /**
+     * How many of the top-sorted candidates selection actually chooses between.
+     *
+     * <p>Named because two separate things depend on it: the anti-repeat weighting, and
+     * whether a re-roll has anywhere to go. See {@link #countSelectableCandidates}.</p>
+     */
+    private static final int SELECTION_WINDOW = 4;
+
     // Cost calculation runs on async threads (see AsyncCostCalculationService), so this
     // map and the deques inside it must both be safe for concurrent access.
     private final Map<UUID, Deque<Material>> recentSelections = new ConcurrentHashMap<>();
@@ -145,7 +153,7 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
      * result here, but {@code calculate} is reached from display paths - opening the unlock
      * GUI, rendering a hologram, and the async pre-calculation of adjacent chunks - so
      * recording on every call made merely <em>looking</em> at a chunk change its price.
-     * With a memory of {@value #RECENT_SELECTION_MEMORY} against a four-candidate window,
+     * With a memory of {@value #RECENT_SELECTION_MEMORY} against a {@value #SELECTION_WINDOW}-candidate window,
      * the top materials rotated in a strict cycle.</p>
      *
      * <p>The anti-repeat variety this history provides is still applied, but the history is
@@ -155,7 +163,7 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
     static OwnedChunkScanner.ResourceEntry selectMaterial(List<OwnedChunkScanner.ResourceEntry> sortedCandidates,
                                                           int unlockedChunks,
                                                           Deque<Material> recent) {
-        int windowSize = Math.min(4, sortedCandidates.size());
+        int windowSize = Math.min(SELECTION_WINDOW, sortedCandidates.size());
         List<OwnedChunkScanner.ResourceEntry> topCandidates = sortedCandidates.subList(0, windowSize);
 
         OwnedChunkScanner.ResourceEntry best = null;
@@ -219,6 +227,45 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
         return true;
     }
 
+    /**
+     * How many distinct materials this player could actually be asked for right now.
+     *
+     * <p>Used to decide whether a re-roll can change anything (#83). Selection only ever
+     * considers the top {@value #SELECTION_WINDOW} candidates, so "has an alternative" means
+     * <em>the window</em> holds more than one entry, not the raw scan. A player sitting on a
+     * hundred kinds of stone still has nothing to re-roll into if progression caps them to
+     * one obtainable tier.</p>
+     *
+     * <p>The filtering here deliberately mirrors {@link #calculate} - same scan, same tier
+     * cap, same window - because a count that disagreed with what selection actually does
+     * would grey out a usable button, or charge for a re-roll that cannot move. Returns 0
+     * when the scan is empty, which is the biome-based fallback path rather than a
+     * resource-scan selection at all.</p>
+     */
+    public int countSelectableCandidates(Player player) {
+        try {
+            List<OwnedChunkScanner.ResourceEntry> resources = scanner.scanPlayerResources(player);
+            if (resources.isEmpty()) {
+                return 0;
+            }
+
+            int unlocked = progressTracker.getUnlockedChunkCount(player.getUniqueId());
+            int maxTier = getMaxTierForProgression(unlocked);
+
+            long obtainable = resources.stream()
+                .filter(r -> r.tier() <= maxTier)
+                .count();
+
+            return (int) Math.min(SELECTION_WINDOW, obtainable);
+        } catch (Exception e) {
+            // A failure here must not block the button. Reporting "more than one" leaves the
+            // re-roll offered, which is the behaviour that existed before this check.
+            plugin.getLogger().log(Level.FINE,
+                "Failed to count re-roll candidates for " + player.getName(), e);
+            return SELECTION_WINDOW;
+        }
+    }
+
     private List<OwnedChunkScanner.ResourceEntry> sortCandidates(List<OwnedChunkScanner.ResourceEntry> candidates) {
         List<OwnedChunkScanner.ResourceEntry> sorted = new ArrayList<>(candidates);
         sorted.sort(Comparator
@@ -244,7 +291,7 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
 
     private double calculateAvailabilityModifier(OwnedChunkScanner.ResourceEntry selected,
                                                  List<OwnedChunkScanner.ResourceEntry> sortedCandidates) {
-        int windowSize = Math.min(4, sortedCandidates.size());
+        int windowSize = Math.min(SELECTION_WINDOW, sortedCandidates.size());
         double averageCount = sortedCandidates.stream()
             .limit(windowSize)
             .mapToInt(OwnedChunkScanner.ResourceEntry::count)

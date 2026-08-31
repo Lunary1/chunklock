@@ -147,6 +147,7 @@ public final class LanguageKeys {
     public static final String GUI_BUILDER_REROLL_UNAVAILABLE_TITLE = "gui.builder.reroll-unavailable-title";
     public static final String GUI_BUILDER_REROLL_WAIT = "gui.builder.reroll-wait";
     public static final String GUI_BUILDER_REROLL_CANNOT_AFFORD = "gui.builder.reroll-cannot-afford";
+    public static final String GUI_BUILDER_REROLL_NO_ALTERNATIVES = "gui.builder.reroll-no-alternatives";
     public static final String GUI_REROLL_SUCCESS = "gui.reroll-success";
     public static final String GUI_REROLL_FAILED = "gui.reroll-failed";
     
