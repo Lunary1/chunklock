@@ -118,6 +118,11 @@ public class ChunkProfilingService {
         }
 
         // Database check only after the cheap guards, since it is the expensive one.
+        //
+        // This ordering matters more since #95 than when it was written: on a MySQL server
+        // this is a network round trip on the main thread. The in-memory set above absorbs the
+        // common case and the tick budget caps the rest at one per tick, so a player crossing
+        // chunks cannot turn into a burst of queries. Do not move this check above them.
         if (profileStore.hasProfile(chunk.getWorld().getName(), chunk.getX(), chunk.getZ())) {
             knownProfiled.add(key);
             return false;

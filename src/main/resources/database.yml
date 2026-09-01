@@ -1,6 +1,19 @@
 # ===== DATABASE CONFIGURATION =====
-# Storage backend for core chunk/player data.
+# Storage backend for ALL persistent data: chunk and player data, committed chunk prices,
+# and the per-chunk resource profiles used to price chunks.
 # Supported types: mapdb, mysql
+#
+# mapdb - local files in the plugin folder. Fine for a single server.
+# mysql - one shared database. Use this for a network: every node then reads the same
+#         committed prices and the same material baseline, so a chunk costs the same
+#         whichever server a player joins.
+#
+# Note for servers upgrading from 2.2.0 or earlier: chunk prices and profiles previously
+# always went to a local H2 file (chunk_costs.mv.db) even when mysql was configured. They now
+# follow this setting. On the first start after upgrading a MySQL server, that old local data
+# is not migrated - prices are simply recalculated and chunks re-profiled as players move
+# through them. Nothing is lost that the game cannot rebuild, but existing committed prices
+# will be re-derived once.
 
 database:
   type: "mapdb"

@@ -342,14 +342,22 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
             // Initialize economy manager after biome registry and chunk evaluator
             this.economyManager = new me.chunklock.economy.EconomyManager(this, biomeUnlockRegistry, progressTracker, chunkEvaluator);
             
-            // Initialize chunk cost database for persistent caching
-            this.costDatabase = new me.chunklock.services.ChunkCostDatabase(this);
+            // Pricing storage - committed costs (#83) and chunk profiles (#86).
+            //
+            // Routed on database.type like every other store (#95). This used to open an H2
+            // file unconditionally, so a MySQL server ran two backends: a network gave each
+            // node its own committed prices and its own material baseline, and an admin
+            // backing up MySQL captured none of it.
+            me.chunklock.services.CostStorageBackend costStorageBackend =
+                me.chunklock.services.StorageFactory.createCostStorageBackend(this, storageSelection);
+            this.costDatabase = new me.chunklock.services.ChunkCostDatabase(this, costStorageBackend);
             try {
                 if (!costDatabase.initialize()) {
-                    getLogger().warning("⚠️ Failed to initialize cost database - performance may be reduced");
+                    getLogger().warning("⚠️ Failed to initialize pricing storage ("
+                        + costStorageBackend.describe() + ") - prices will not survive a restart");
                 }
             } catch (Exception e) {
-                getLogger().warning("⚠️ Failed to initialize cost database - performance may be reduced");
+                getLogger().warning("⚠️ Failed to initialize pricing storage - prices will not survive a restart");
             }
             
             // Per-chunk resource profiling (#86). Capture happens on the main thread while a

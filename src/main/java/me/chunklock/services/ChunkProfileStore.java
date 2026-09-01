@@ -60,6 +60,20 @@ public class ChunkProfileStore {
      */
     public record ProfileEntry(Material material, int blockCount, int tier) {}
 
+    /** Pricing storage, shared with {@link ChunkCostDatabase} so both follow database.type. */
+    private CostStorageBackend backend() {
+        return database.getBackend();
+    }
+
+    private SqlDialect dialect() {
+        return backend().dialect();
+    }
+
+    private boolean unavailable() {
+        CostStorageBackend backend = database.getBackend();
+        return backend == null || !backend.isAvailable();
+    }
+
     /**
      * Store what a scan found in one chunk, and fold the result into the world baseline.
      *
@@ -74,35 +88,35 @@ public class ChunkProfileStore {
      * @return true if the profile was written
      */
     public boolean storeProfile(String worldName, int chunkX, int chunkZ, List<ProfileEntry> entries) {
-        Connection connection = database.getConnection();
-        if (connection == null) {
-            plugin.getLogger().fine("Database unavailable, skipping profile store");
+        if (unavailable()) {
+            plugin.getLogger().fine("Pricing storage unavailable, skipping profile store");
             return false;
         }
         if (entries == null || entries.isEmpty()) {
             return false;
         }
 
-        // The MERGE below carries an explicit KEY clause. Without one H2 keys on the primary
-        // key - the auto-increment id no statement supplies - and every write fails with
-        // 90081. That is exactly what #90 was, undetected for months because only one code
-        // path reached it. Do not remove the KEY clause.
-        String upsert = """
-            MERGE INTO chunk_profiles
-            (world_name, chunk_x, chunk_z, material, block_count, tier, scanned_at)
-            KEY (world_name, chunk_x, chunk_z, material)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """;
+        // The upsert keys on unique_chunk_profile, never on the auto-increment id. Keying on
+        // the id is what #90 was - every write failing with 90081, undetected for months
+        // because only one code path reached it. Both dialects express that; see SqlDialect.
+        String upsert = dialect().upsertChunkProfile();
 
         String deleteStale = """
             DELETE FROM chunk_profiles
             WHERE world_name = ? AND chunk_x = ? AND chunk_z = ?
         """;
 
-        boolean firstProfile = !hasProfile(worldName, chunkX, chunkZ);
         long now = System.currentTimeMillis();
 
-        try {
+        try (CostStorageBackend.BorrowedConnection borrowed = backend().borrow()) {
+            Connection connection = borrowed.get();
+
+            // Checked on the connection already borrowed rather than through hasProfile(),
+            // which would borrow a second one and hold both. Harmless at one scan per tick
+            // against a pool of ten, but nesting borrows is the habit that exhausts a pool
+            // once something starts calling this in a loop.
+            boolean firstProfile = !hasProfile(connection, worldName, chunkX, chunkZ);
+
             // Clear first so materials that are no longer present cannot linger and headline
             // a price. Re-profiling happens after terrain changes, so this is not hypothetical.
             try (PreparedStatement stmt = connection.prepareStatement(deleteStale)) {
@@ -147,8 +161,7 @@ public class ChunkProfileStore {
      * which is the signal to fall back to owned-chunk pricing rather than an error.
      */
     public List<ProfileEntry> getProfile(String worldName, int chunkX, int chunkZ) {
-        Connection connection = database.getConnection();
-        if (connection == null) {
+        if (unavailable()) {
             return List.of();
         }
 
@@ -160,7 +173,8 @@ public class ChunkProfileStore {
         """;
 
         List<ProfileEntry> entries = new ArrayList<>();
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (CostStorageBackend.BorrowedConnection borrowed = backend().borrow();
+             PreparedStatement stmt = borrowed.get().prepareStatement(sql)) {
             stmt.setString(1, worldName);
             stmt.setInt(2, chunkX);
             stmt.setInt(3, chunkZ);
@@ -186,11 +200,19 @@ public class ChunkProfileStore {
 
     /** Whether this chunk has been profiled. Used to keep baseline contributions one-per-chunk. */
     public boolean hasProfile(String worldName, int chunkX, int chunkZ) {
-        Connection connection = database.getConnection();
-        if (connection == null) {
+        if (unavailable()) {
             return false;
         }
+        try (CostStorageBackend.BorrowedConnection borrowed = backend().borrow()) {
+            return hasProfile(borrowed.get(), worldName, chunkX, chunkZ);
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.FINE, "Failed to check chunk profile presence", e);
+            return false;
+        }
+    }
 
+    /** As above, on a connection the caller already holds. */
+    private boolean hasProfile(Connection connection, String worldName, int chunkX, int chunkZ) {
         String sql = """
             SELECT 1 FROM chunk_profiles
             WHERE world_name = ? AND chunk_x = ? AND chunk_z = ?
@@ -218,15 +240,15 @@ public class ChunkProfileStore {
      * distinctive.</p>
      */
     public Map<Material, Double> getBaseline() {
-        Connection connection = database.getConnection();
-        if (connection == null) {
+        if (unavailable()) {
             return Map.of();
         }
 
         String sql = "SELECT material, total_count, chunks_counted FROM chunk_material_baseline";
 
         Map<Material, Double> baseline = new LinkedHashMap<>();
-        try (PreparedStatement stmt = connection.prepareStatement(sql);
+        try (CostStorageBackend.BorrowedConnection borrowed = backend().borrow();
+             PreparedStatement stmt = borrowed.get().prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
             while (rs.next()) {
                 Material material = Material.matchMaterial(rs.getString("material"));
@@ -248,8 +270,7 @@ public class ChunkProfileStore {
 
     /** How many chunks have contributed to the baseline. Drives the warm-up decision. */
     public long getBaselineChunkCount() {
-        Connection connection = database.getConnection();
-        if (connection == null) {
+        if (unavailable()) {
             return 0L;
         }
 
@@ -257,7 +278,8 @@ public class ChunkProfileStore {
         // profiled. Not a SUM: each row counts chunks, not materials.
         String sql = "SELECT COALESCE(MAX(chunks_counted), 0) AS profiled FROM chunk_material_baseline";
 
-        try (PreparedStatement stmt = connection.prepareStatement(sql);
+        try (CostStorageBackend.BorrowedConnection borrowed = backend().borrow();
+             PreparedStatement stmt = borrowed.get().prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
             return rs.next() ? rs.getLong("profiled") : 0L;
         } catch (SQLException e) {
@@ -285,7 +307,7 @@ public class ChunkProfileStore {
         // Bump chunks_counted for every material already tracked. Materials this chunk does
         // contain keep that bumped count; their totals are added immediately below.
         try (PreparedStatement stmt = connection.prepareStatement(
-                "UPDATE chunk_material_baseline SET chunks_counted = chunks_counted + 1, updated_at = ?")) {
+                dialect().bumpAllBaselineChunkCounts())) {
             stmt.setLong(1, now);
             stmt.executeUpdate();
         }
@@ -297,23 +319,12 @@ public class ChunkProfileStore {
         // The earlier chunks genuinely are evidence that they contained none of it.
         long chunksProfiled = countProfiledChunks(connection);
 
-        String upsert = """
-            MERGE INTO chunk_material_baseline (material, total_count, chunks_counted, updated_at)
-            KEY (material)
-            VALUES (?,
-                    COALESCE((SELECT total_count FROM chunk_material_baseline WHERE material = ?), 0) + ?,
-                    COALESCE((SELECT chunks_counted FROM chunk_material_baseline WHERE material = ?), ?),
-                    ?)
-        """;
-
-        try (PreparedStatement stmt = connection.prepareStatement(upsert)) {
+        // The two engines accumulate differently - H2 reads the row it writes, MySQL cannot -
+        // so the dialect owns both the statement and its binding. See SqlDialect.
+        SqlDialect dialect = dialect();
+        try (PreparedStatement stmt = connection.prepareStatement(dialect.upsertBaseline())) {
             for (Map.Entry<String, Integer> entry : counts.entrySet()) {
-                stmt.setString(1, entry.getKey());
-                stmt.setString(2, entry.getKey());
-                stmt.setInt(3, entry.getValue());
-                stmt.setString(4, entry.getKey());
-                stmt.setLong(5, chunksProfiled);
-                stmt.setLong(6, now);
+                dialect.bindBaselineUpsert(stmt, entry.getKey(), entry.getValue(), chunksProfiled, now);
                 stmt.addBatch();
             }
             stmt.executeBatch();
@@ -328,8 +339,9 @@ public class ChunkProfileStore {
      * about a material it has never seen.</p>
      */
     private long countProfiledChunks(Connection connection) throws SQLException {
-        String sql = "SELECT COUNT(DISTINCT (world_name || ':' || chunk_x || ',' || chunk_z)) AS profiled "
-            + "FROM chunk_profiles";
+        // Dialect-owned: H2 concatenates with ||, which in MySQL is logical OR and would
+        // silently collapse every chunk to one key. See SqlDialect.countProfiledChunks.
+        String sql = dialect().countProfiledChunks();
         try (PreparedStatement stmt = connection.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
             return rs.next() ? rs.getLong("profiled") : 1L;

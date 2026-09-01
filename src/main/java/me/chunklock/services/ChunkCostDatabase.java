@@ -6,7 +6,6 @@ import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 
-import java.io.File;
 import java.sql.*;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -14,275 +13,184 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 /**
- * Persistent H2 database for storing chunk cost calculations.
- * Dramatically improves performance by avoiding repeated AI calculations.
- * Uses H2 (pure Java) instead of SQLite for smaller plugin size.
+ * Committed chunk prices (#83) and the queries over them.
+ *
+ * <p>Storage is whatever {@code database.type} selects - H2 by default, MySQL when the server
+ * is configured for it. This class no longer opens a database itself; it asks a
+ * {@link CostStorageBackend} for a connection per unit of work. Before #95 it opened an H2
+ * file unconditionally, so a MySQL server ran two backends and a network gave each node its
+ * own private prices.</p>
+ *
+ * <p>SQL that differs between the engines lives in {@link SqlDialect}. Everything here is
+ * plain enough to be shared.</p>
  */
 public class ChunkCostDatabase {
-    
+
     private final ChunklockPlugin plugin;
-    private final File databaseFile;
-    private Connection connection;
-    
+    private final CostStorageBackend backend;
+
     // In-memory cache for frequently accessed costs
     private final Map<String, CachedChunkCost> memoryCache = new ConcurrentHashMap<>();
     private static final long MEMORY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-    
-    public ChunkCostDatabase(ChunklockPlugin plugin) {
+
+    public ChunkCostDatabase(ChunklockPlugin plugin, CostStorageBackend backend) {
         this.plugin = plugin;
-        // H2 creates .mv.db file automatically, but we specify base name
-        this.databaseFile = new File(plugin.getDataFolder(), "chunk_costs");
+        this.backend = backend;
     }
-    
+
     /**
-     * Initialize the database connection and create tables
+     * Open the underlying storage.
+     *
+     * @return true when pricing persistence is available; false leaves the plugin running
+     *         without it rather than failing startup
      */
     public boolean initialize() {
-        try {
-            // Ensure the data folder exists
-            if (!plugin.getDataFolder().exists()) {
-                plugin.getDataFolder().mkdirs();
-            }
-            
-            // Explicitly load H2 driver (needed after shading/relocation)
-            try {
-                // Try relocated package first (after Maven Shade relocation)
-                Class.forName("me.chunklock.libs.h2.Driver");
-            } catch (ClassNotFoundException e) {
-                // Fallback to standard package if not relocated
-                try {
-                    Class.forName("org.h2.Driver");
-                } catch (ClassNotFoundException e2) {
-                    plugin.getLogger().warning("H2 driver class not found in either location");
-                    throw new SQLException("H2 JDBC driver not found", e2);
-                }
-            }
-            
-            // Create database connection (H2 format: jdbc:h2:file:path)
-            String url = "jdbc:h2:file:" + databaseFile.getAbsolutePath() + ";AUTO_SERVER=TRUE";
-            connection = DriverManager.getConnection(url);
-            
-            // Create the table
-            createTables();
-            
-            plugin.getLogger().info("Chunk cost database initialized: " + databaseFile.getName());
-            return true;
-            
-        } catch (SQLException e) {
-            plugin.getLogger().severe("❌ Failed to initialize chunk cost database: " + e.getMessage());
-            e.printStackTrace();
-            connection = null; // Ensure connection is null on failure
-            return false;
-        } catch (Exception e) {
-            plugin.getLogger().severe("❌ Unexpected error initializing chunk cost database: " + e.getMessage());
-            e.printStackTrace();
-            connection = null; // Ensure connection is null on failure
-            return false;
-        }
+        return backend != null && backend.initialize();
     }
-    
+
     /**
-     * Create the database tables
+     * The backend, for sibling stores that share it.
+     *
+     * <p>Package-private on purpose: {@link ChunkProfileStore} keeps #86's profiles in the
+     * same database so both follow {@code database.type} together and share one lifecycle.</p>
      */
-    private void createTables() throws SQLException {
-            String createTableSQL = """
-            CREATE TABLE IF NOT EXISTS chunk_costs (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                world_name VARCHAR(255) NOT NULL,
-                chunk_x INTEGER NOT NULL,
-                chunk_z INTEGER NOT NULL,
-                player_id VARCHAR(36) NOT NULL,
-                biome VARCHAR(255) NOT NULL,
-                difficulty VARCHAR(50) NOT NULL,
-                score INTEGER NOT NULL,
-                cost_type VARCHAR(50) NOT NULL,
-                vault_cost DOUBLE,
-                material_type VARCHAR(255),
-                material_amount INTEGER,
-                ai_processed BOOLEAN NOT NULL,
-                ai_explanation VARCHAR(1000),
-                calculated_at BIGINT NOT NULL,
-                config_hash VARCHAR(255) NOT NULL,
-                CONSTRAINT unique_chunk_cost UNIQUE(world_name, chunk_x, chunk_z, player_id, config_hash)
-            )
-        """;
-        
-        // What a scan found in one chunk (#86). Keyed on the chunk alone - a chunk's contents
-        // do not depend on who is looking at them, unlike chunk_costs which is per-(player,
-        // chunk). One row per material found, so a profile is a set of rows sharing a chunk.
-        String createProfileSQL = """
-            CREATE TABLE IF NOT EXISTS chunk_profiles (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                world_name VARCHAR(255) NOT NULL,
-                chunk_x INTEGER NOT NULL,
-                chunk_z INTEGER NOT NULL,
-                material VARCHAR(255) NOT NULL,
-                block_count INTEGER NOT NULL,
-                tier INTEGER NOT NULL,
-                scanned_at BIGINT NOT NULL,
-                CONSTRAINT unique_chunk_profile UNIQUE(world_name, chunk_x, chunk_z, material)
-            )
-        """;
-
-        // The running world-wide average count per material, which #86's scoring needs: a
-        // material is characteristic of a chunk when the chunk holds more of it than a
-        // typical chunk does. Stored as a running total plus a chunk count rather than a
-        // mean, so a new profile updates it without re-reading every profile.
-        String createBaselineSQL = """
-            CREATE TABLE IF NOT EXISTS chunk_material_baseline (
-                material VARCHAR(255) NOT NULL PRIMARY KEY,
-                total_count BIGINT NOT NULL,
-                chunks_counted BIGINT NOT NULL,
-                updated_at BIGINT NOT NULL
-            )
-        """;
-
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute(createTableSQL);
-            stmt.execute(createProfileSQL);
-            stmt.execute(createBaselineSQL);
-
-            // Create indexes for better performance
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_chunk_location ON chunk_costs(world_name, chunk_x, chunk_z)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_player_costs ON chunk_costs(player_id)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_calculated_at ON chunk_costs(calculated_at)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_profile_location ON chunk_profiles(world_name, chunk_x, chunk_z)");
-        }
+    CostStorageBackend getBackend() {
+        return backend;
     }
-    
+
+    private boolean unavailable() {
+        return backend == null || !backend.isAvailable();
+    }
+
     /**
-     * Get cached cost for a chunk
+     * Get the committed cost for a chunk, or null when none is stored.
      */
     public CompletableFuture<EconomyManager.PaymentRequirement> getCachedCost(Player player, Chunk chunk, String configHash) {
+        // Read the chunk's coordinates on the calling thread. Bukkit's Chunk and Player are
+        // not safe to touch from the async task below, and the values are all that is needed.
+        String worldName = chunk.getWorld().getName();
+        int chunkX = chunk.getX();
+        int chunkZ = chunk.getZ();
+        UUID playerId = player.getUniqueId();
+        String cacheKey = getCacheKey(worldName, chunkX, chunkZ, playerId);
+
         return CompletableFuture.supplyAsync(() -> {
-            String cacheKey = getCacheKey(chunk, player.getUniqueId());
-            
-            // Check memory cache first
             CachedChunkCost memoryCached = memoryCache.get(cacheKey);
             if (memoryCached != null && !memoryCached.isExpired() && memoryCached.configHash.equals(configHash)) {
                 plugin.getLogger().fine("Retrieved cost from memory cache for " + cacheKey);
                 return memoryCached.requirement;
             }
-            
-            // Check if database connection is available
-            if (connection == null) {
-                plugin.getLogger().fine("Database connection not available, skipping cache lookup for " + cacheKey);
-                return null; // Return null to indicate cache miss, calculation will proceed
+
+            if (unavailable()) {
+                plugin.getLogger().fine("Pricing storage unavailable, skipping cache lookup for " + cacheKey);
+                return null; // Cache miss; the caller recalculates.
             }
-            
-            // Check database
-            try {
-                String sql = """
-                    SELECT vault_cost, material_type, material_amount, cost_type, ai_processed, ai_explanation, calculated_at
-                    FROM chunk_costs 
-                    WHERE world_name = ? AND chunk_x = ? AND chunk_z = ? AND player_id = ? AND config_hash = ?
-                    ORDER BY calculated_at DESC LIMIT 1
-                """;
-                
-                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                    stmt.setString(1, chunk.getWorld().getName());
-                    stmt.setInt(2, chunk.getX());
-                    stmt.setInt(3, chunk.getZ());
-                    stmt.setString(4, player.getUniqueId().toString());
-                    stmt.setString(5, configHash);
-                    
-                    try (ResultSet rs = stmt.executeQuery()) {
-                        if (rs.next()) {
-                            long calculatedAt = rs.getLong("calculated_at");
 
-                            // No age check. A stored requirement is a commitment to the
-                            // player (#83): once they have seen a price for a chunk, that
-                            // price holds until they pay it or deliberately re-roll it.
-                            // This used to expire after an hour, which is shorter than a
-                            // real collection goal - a player grinding for diamonds would
-                            // return to a different requirement through no action of their
-                            // own, which is precisely the grind-invalidation #83 exists to
-                            // stop. config_hash is still part of the lookup key, so an admin
-                            // changing economy config still re-derives prices legitimately.
-                            EconomyManager.PaymentRequirement requirement = createRequirementFromResult(rs);
+            String sql = """
+                SELECT vault_cost, material_type, material_amount, cost_type, ai_processed, ai_explanation, calculated_at
+                FROM chunk_costs
+                WHERE world_name = ? AND chunk_x = ? AND chunk_z = ? AND player_id = ? AND config_hash = ?
+                ORDER BY calculated_at DESC LIMIT 1
+            """;
 
-                            // Cache in memory for quick access
-                            memoryCache.put(cacheKey, new CachedChunkCost(requirement, configHash, calculatedAt));
+            try (CostStorageBackend.BorrowedConnection borrowed = backend.borrow();
+                 PreparedStatement stmt = borrowed.get().prepareStatement(sql)) {
 
-                            plugin.getLogger().fine("Retrieved committed cost from database for " + cacheKey);
-                            return requirement;
-                        }
+                stmt.setString(1, worldName);
+                stmt.setInt(2, chunkX);
+                stmt.setInt(3, chunkZ);
+                stmt.setString(4, playerId.toString());
+                stmt.setString(5, configHash);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        long calculatedAt = rs.getLong("calculated_at");
+
+                        // No age check. A stored requirement is a commitment to the player
+                        // (#83): once they have seen a price for a chunk, that price holds
+                        // until they pay it or deliberately re-roll it. This used to expire
+                        // after an hour, which is shorter than a real collection goal - a
+                        // player grinding for diamonds would return to a different requirement
+                        // through no action of their own, which is precisely the
+                        // grind-invalidation #83 exists to stop. config_hash is still part of
+                        // the lookup key, so an admin changing economy config still re-derives
+                        // prices legitimately.
+                        EconomyManager.PaymentRequirement requirement = createRequirementFromResult(rs);
+
+                        memoryCache.put(cacheKey, new CachedChunkCost(requirement, configHash, calculatedAt));
+
+                        plugin.getLogger().fine("Retrieved committed cost from storage for " + cacheKey);
+                        return requirement;
                     }
                 }
             } catch (SQLException e) {
                 plugin.getLogger().warning("Failed to retrieve cached cost: " + e.getMessage());
             }
-            
+
             return null; // No valid cache found
         });
     }
-    
+
     /**
-     * Store calculated cost in database
+     * Commit a calculated cost.
      */
-    public void storeCost(Player player, Chunk chunk, EconomyManager.PaymentRequirement requirement, 
-                         String biome, String difficulty, int score, boolean aiProcessed, 
+    public void storeCost(Player player, Chunk chunk, EconomyManager.PaymentRequirement requirement,
+                         String biome, String difficulty, int score, boolean aiProcessed,
                          String aiExplanation, String configHash) {
-        
+
+        // Snapshot everything off the Bukkit objects before leaving the calling thread.
+        String worldName = chunk.getWorld().getName();
+        int chunkX = chunk.getX();
+        int chunkZ = chunk.getZ();
+        UUID playerId = player.getUniqueId();
+        String cacheKey = getCacheKey(worldName, chunkX, chunkZ, playerId);
+        String materialName = requirement.getMaterial() != null
+            ? me.chunklock.util.item.MaterialUtil.getMaterialName(requirement.getMaterial())
+            : null;
+
         CompletableFuture.runAsync(() -> {
-            // Check if database connection is available
-            if (connection == null) {
-                plugin.getLogger().fine("Database connection not available, skipping cost storage");
-                // Still cache in memory even if database is unavailable
-                String cacheKey = getCacheKey(chunk, player.getUniqueId());
-                memoryCache.put(cacheKey, new CachedChunkCost(requirement, configHash, System.currentTimeMillis()));
+            // Cache in memory regardless, so a storage outage does not also cost the session
+            // its prices.
+            memoryCache.put(cacheKey, new CachedChunkCost(requirement, configHash, System.currentTimeMillis()));
+
+            if (unavailable()) {
+                plugin.getLogger().fine("Pricing storage unavailable, skipping cost storage");
                 return;
             }
-            
-            try {
-                // H2 uses MERGE instead of INSERT OR REPLACE.
-                //
-                // The KEY clause is load-bearing (#90). Without it H2 matches rows on the
-                // PRIMARY KEY, which here is the auto-increment `id` this statement never
-                // supplies - so every write failed with 90081 and `chunk_costs` stayed empty
-                // on every server. Keying on the columns of the `unique_chunk_cost`
-                // constraint is what makes this an upsert of "this player's price for this
-                // chunk under this config", which is what the commitment in #83 needs.
-                String sql = """
-                    MERGE INTO chunk_costs
-                    (world_name, chunk_x, chunk_z, player_id, biome, difficulty, score, cost_type,
-                     vault_cost, material_type, material_amount, ai_processed, ai_explanation,
-                     calculated_at, config_hash)
-                    KEY (world_name, chunk_x, chunk_z, player_id, config_hash)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """;
-                
-                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                    stmt.setString(1, chunk.getWorld().getName());
-                    stmt.setInt(2, chunk.getX());
-                    stmt.setInt(3, chunk.getZ());
-                    stmt.setString(4, player.getUniqueId().toString());
-                    stmt.setString(5, biome);
-                    stmt.setString(6, difficulty);
-                    stmt.setInt(7, score);
-                    stmt.setString(8, requirement.getType().getConfigName());
-                    stmt.setDouble(9, requirement.getVaultCost());
-                    stmt.setString(10, requirement.getMaterial() != null ? me.chunklock.util.item.MaterialUtil.getMaterialName(requirement.getMaterial()) : null);
-                    stmt.setInt(11, requirement.getMaterialAmount());
-                    stmt.setBoolean(12, aiProcessed);
-                    stmt.setString(13, aiExplanation);
-                    stmt.setLong(14, System.currentTimeMillis());
-                    stmt.setString(15, configHash);
-                    
-                    stmt.executeUpdate();
-                    
-                    // Also cache in memory
-                    String cacheKey = getCacheKey(chunk, player.getUniqueId());
-                    memoryCache.put(cacheKey, new CachedChunkCost(requirement, configHash, System.currentTimeMillis()));
-                    
-                    plugin.getLogger().fine("Stored cost in database for " + cacheKey);
-                }
+
+            // The upsert keys on unique_chunk_cost, never on the auto-increment id. Keying on
+            // the id is what #90 was: every write failed with 90081 and chunk_costs stayed
+            // empty on every server for months. Both dialects express that; see SqlDialect.
+            String sql = backend.dialect().upsertChunkCost();
+
+            try (CostStorageBackend.BorrowedConnection borrowed = backend.borrow();
+                 PreparedStatement stmt = borrowed.get().prepareStatement(sql)) {
+
+                stmt.setString(1, worldName);
+                stmt.setInt(2, chunkX);
+                stmt.setInt(3, chunkZ);
+                stmt.setString(4, playerId.toString());
+                stmt.setString(5, biome);
+                stmt.setString(6, difficulty);
+                stmt.setInt(7, score);
+                stmt.setString(8, requirement.getType().getConfigName());
+                stmt.setDouble(9, requirement.getVaultCost());
+                stmt.setString(10, materialName);
+                stmt.setInt(11, requirement.getMaterialAmount());
+                stmt.setBoolean(12, aiProcessed);
+                stmt.setString(13, aiExplanation);
+                stmt.setLong(14, System.currentTimeMillis());
+                stmt.setString(15, configHash);
+
+                stmt.executeUpdate();
+
+                plugin.getLogger().fine("Stored cost for " + cacheKey);
             } catch (SQLException e) {
-                plugin.getLogger().warning("Failed to store cost in database: " + e.getMessage());
+                plugin.getLogger().warning("Failed to store cost: " + e.getMessage());
             }
         });
     }
-    
+
     /**
      * Remove stored costs whose configuration no longer applies.
      *
@@ -298,25 +206,24 @@ public class ChunkCostDatabase {
      * on {@code config_hash} - so they are dead rows rather than commitments.</p>
      */
     public void cleanupOrphanedCosts() {
+        String currentHash = generateConfigHash();
+
         CompletableFuture.runAsync(() -> {
-            // Check if database connection is available
-            if (connection == null) {
-                plugin.getLogger().fine("Database connection not available, skipping cleanup");
+            if (unavailable()) {
+                plugin.getLogger().fine("Pricing storage unavailable, skipping cleanup");
                 return;
             }
 
-            try {
-                String currentHash = generateConfigHash();
+            String sql = "DELETE FROM chunk_costs WHERE config_hash <> ?";
+            try (CostStorageBackend.BorrowedConnection borrowed = backend.borrow();
+                 PreparedStatement stmt = borrowed.get().prepareStatement(sql)) {
 
-                String sql = "DELETE FROM chunk_costs WHERE config_hash <> ?";
-                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                    stmt.setString(1, currentHash);
-                    int deleted = stmt.executeUpdate();
+                stmt.setString(1, currentHash);
+                int deleted = stmt.executeUpdate();
 
-                    if (deleted > 0) {
-                        plugin.getLogger().info("Cleaned up " + deleted
-                            + " chunk costs from superseded economy configurations");
-                    }
+                if (deleted > 0) {
+                    plugin.getLogger().info("Cleaned up " + deleted
+                        + " chunk costs from superseded economy configurations");
                 }
             } catch (SQLException e) {
                 plugin.getLogger().warning("Failed to cleanup orphaned costs: " + e.getMessage());
@@ -332,8 +239,12 @@ public class ChunkCostDatabase {
      * after an unlock completes.</p>
      */
     public void clearStoredCost(Player player, Chunk chunk) {
-        String cacheKey = getCacheKey(chunk, player.getUniqueId());
-        memoryCache.remove(cacheKey);
+        String worldName = chunk.getWorld().getName();
+        int chunkX = chunk.getX();
+        int chunkZ = chunk.getZ();
+        UUID playerId = player.getUniqueId();
+
+        memoryCache.remove(getCacheKey(worldName, chunkX, chunkZ, playerId));
 
         // Deliberately synchronous, unlike the other database work here.
         //
@@ -342,24 +253,25 @@ public class ChunkCostDatabase {
         // races that read: the row is often still present, the old price is returned, and
         // the player sees the requirement they just paid to replace. Correctness of a paid
         // action beats saving a few milliseconds on a click the player initiated.
-        if (connection == null) {
+        if (unavailable()) {
             return;
         }
-        try {
-            String sql = "DELETE FROM chunk_costs WHERE world_name = ? AND chunk_x = ? "
-                + "AND chunk_z = ? AND player_id = ?";
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, chunk.getWorld().getName());
-                stmt.setInt(2, chunk.getX());
-                stmt.setInt(3, chunk.getZ());
-                stmt.setString(4, player.getUniqueId().toString());
-                stmt.executeUpdate();
-            }
+
+        String sql = "DELETE FROM chunk_costs WHERE world_name = ? AND chunk_x = ? "
+            + "AND chunk_z = ? AND player_id = ?";
+        try (CostStorageBackend.BorrowedConnection borrowed = backend.borrow();
+             PreparedStatement stmt = borrowed.get().prepareStatement(sql)) {
+
+            stmt.setString(1, worldName);
+            stmt.setInt(2, chunkX);
+            stmt.setInt(3, chunkZ);
+            stmt.setString(4, playerId.toString());
+            stmt.executeUpdate();
         } catch (SQLException e) {
             plugin.getLogger().warning("Failed to clear stored cost: " + e.getMessage());
         }
     }
-    
+
     /**
      * Generate a configuration hash to detect config changes
      */
@@ -381,43 +293,26 @@ public class ChunkCostDatabase {
 
         return String.valueOf(configData.toString().hashCode());
     }
-    
-    /**
-     * The live connection, for sibling stores that share this database file.
-     *
-     * <p>Package-private on purpose: {@link ChunkProfileStore} keeps #86's chunk profiles in
-     * the same H2 file rather than standing up a second database with its own lifecycle and
-     * its own copy of the shaded-driver loading workaround. Null when the database failed to
-     * initialize, and every caller must handle that - the plugin runs without persistence.</p>
-     */
-    Connection getConnection() {
-        return connection;
-    }
 
     /**
-     * Close database connection
+     * Close pricing storage.
      */
     public void close() {
-        try {
-            if (connection != null && !connection.isClosed()) {
-                connection.close();
-                plugin.getLogger().info("Closed chunk cost database connection");
-            }
-        } catch (SQLException e) {
-            plugin.getLogger().warning("Error closing database: " + e.getMessage());
+        if (backend != null) {
+            backend.close();
         }
     }
-    
-    private String getCacheKey(Chunk chunk, UUID playerId) {
-        return chunk.getWorld().getName() + ":" + chunk.getX() + "," + chunk.getZ() + ":" + playerId;
+
+    private String getCacheKey(String worldName, int chunkX, int chunkZ, UUID playerId) {
+        return worldName + ":" + chunkX + "," + chunkZ + ":" + playerId;
     }
-    
+
     private EconomyManager.PaymentRequirement createRequirementFromResult(ResultSet rs) throws SQLException {
         EconomyManager.EconomyType type = EconomyManager.EconomyType.fromString(rs.getString("cost_type"));
         double vaultCost = rs.getDouble("vault_cost");
         String materialName = rs.getString("material_type");
         int materialAmount = rs.getInt("material_amount");
-        
+
         if (type == EconomyManager.EconomyType.VAULT) {
             return new EconomyManager.PaymentRequirement(vaultCost);
         } else {
@@ -425,7 +320,7 @@ public class ChunkCostDatabase {
             return new EconomyManager.PaymentRequirement(material, materialAmount);
         }
     }
-    
+
     /**
      * Inner class for memory cache
      */
@@ -433,13 +328,13 @@ public class ChunkCostDatabase {
         final EconomyManager.PaymentRequirement requirement;
         final String configHash;
         final long cachedAt;
-        
+
         CachedChunkCost(EconomyManager.PaymentRequirement requirement, String configHash, long cachedAt) {
             this.requirement = requirement;
             this.configHash = configHash;
             this.cachedAt = cachedAt;
         }
-        
+
         boolean isExpired() {
             return System.currentTimeMillis() - cachedAt > MEMORY_CACHE_TTL;
         }
