@@ -38,6 +38,50 @@ public final class StorageFactory {
         return createMapDbStores(plugin);
     }
 
+    /**
+     * Where pricing data goes: chunk costs (#83) and chunk profiles plus the material
+     * baseline (#86).
+     *
+     * <p>Routed off the <em>selection</em> rather than off {@code database.type} directly, so
+     * it follows the decision actually taken. That matters in one case: with
+     * {@code fail-fast: false} a MySQL server whose database is unreachable falls back to
+     * MapDB, and pricing must fall back with it rather than pointing at a pool that never
+     * initialized.</p>
+     *
+     * <p>Before #95 this was not routed at all - {@link ChunkCostDatabase} opened an H2 file
+     * unconditionally, so a MySQL network gave every node its own prices and its own
+     * baseline.</p>
+     */
+    public static CostStorageBackend createCostStorageBackend(ChunklockPlugin plugin,
+                                                              StorageSelection selection) {
+        MySqlConnectionProvider provider =
+            selection != null ? selection.getMySqlConnectionProvider() : null;
+        boolean mysqlMode = selection != null && selection.isMysqlMode();
+
+        if (resolveCostStorage(mysqlMode, provider != null) == CostStorageDecision.MYSQL) {
+            return new MySqlCostStorageBackend(plugin, provider);
+        }
+        return new H2CostStorageBackend(plugin);
+    }
+
+    /**
+     * The routing decision on its own, so it can be tested without a live plugin.
+     *
+     * <p>Both conditions are required, and the second is not paranoia: with
+     * {@code fail-fast: false} a MySQL server whose database is unreachable falls back to
+     * MapDB and its selection carries no provider. Routing pricing to MySQL on the strength of
+     * the config alone would then hand every query a pool that never initialized.</p>
+     */
+    static CostStorageDecision resolveCostStorage(boolean mysqlMode, boolean hasProvider) {
+        return mysqlMode && hasProvider ? CostStorageDecision.MYSQL : CostStorageDecision.H2;
+    }
+
+    /** Where pricing data goes. */
+    enum CostStorageDecision {
+        H2,
+        MYSQL
+    }
+
     static StartupDecision resolveStartupDecision(String configuredType, boolean mysqlInitialized, boolean failFast) {
         if (!"mysql".equalsIgnoreCase(configuredType)) {
             return StartupDecision.MAPDB;
