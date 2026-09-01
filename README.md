@@ -140,7 +140,7 @@ When updating from v1.1 or earlier, the plugin automatically migrates legacy YAM
 
 3. **Install the plugin**
    ```bash
-   # Copy from target/Chunklock-1.2.7.jar to your server's plugins folder
+   # Copy the built jar from target/ to your server's plugins folder
    cp target/Chunklock-*.jar /path/to/server/plugins/
    ```
 
