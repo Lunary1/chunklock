@@ -8,3 +8,8 @@ COMPATIBILITY_GUIDE.md
 .env
 .github/agents/coder.agent.md
 docs/CODEX-CONTEXT.md
+
+# Maven Shade artifact. createDependencyReducedPom is false, so this should never
+# be generated - but if that flag is ever flipped, do not commit the result: a stale
+# copy sat in the repo root advertising version 1.2.7 for three releases.
+dependency-reduced-pom.xml

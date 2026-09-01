@@ -1,5 +1,25 @@
 # Chunklock Plugin - Project Charter
 
+> **This is a vision document, written before 2.2.0. It is not a status report.**
+>
+> Last reviewed: September 1, 2026. It is kept for the product direction it records, not as
+> a description of what ships today. Where it says a thing is complete or production-ready,
+> read that as *the goal that was set*, not as a verified claim.
+>
+> **Known gaps between this document and reality**, as of September 1, 2026:
+>
+> - **"200+ concurrent players" and "enterprise-grade reliability" are unproven at that
+>   scale.** GitHub **#74** is an open P0: a server reported up to 64GB RAM consumption. A
+>   hologram-state leak was found, fixed and validated locally, but validation was
+>   single-player - the 100-player deployment that reported it has not been reproduced.
+> - **"Automatic configuration validation"** does not exist. There is exactly one validation
+>   across the ten modular config classes. Tracked as **#98**.
+> - The **"✅ Production Ready"** headings below predate the current bug queue.
+>
+> For what actually ships today, see the README and the GitHub issue tracker. For why this
+> distinction is taken seriously on a paid product, see the release notes: this project has
+> previously shipped docs claiming "Known Issues: None" while a severe bug was open.
+
 ## Premium Product Vision
 
 Chunklock is positioned as a premium Minecraft plugin that transforms traditional survival gameplay into a strategic, progression-based experience. As a one-time purchase product, it delivers exceptional value through:
