@@ -590,15 +590,25 @@ public class EconomyManager {
      * <p>Only the resource-scan strategy derives requirements from owned chunks. Every other
      * mode picks from biome configuration, where the question does not arise - so they report
      * true and behave exactly as before.</p>
+     *
+     * <p>The chunk is passed through because under #86 a re-roll walks down <em>that chunk's</em>
+     * ranked materials rather than the player's whole territory, so the count has to be asked
+     * of the same chunk being priced. Passing null asks the owned-chunk question, which is
+     * what callers without a chunk in hand want.</p>
      */
-    public boolean hasRerollAlternatives(Player player) {
+    public boolean hasRerollAlternatives(Player player, org.bukkit.Chunk chunk) {
         if (player == null) {
             return false;
         }
         if (!(calculationStrategy instanceof ResourceBasedMaterialStrategy resourceStrategy)) {
             return true;
         }
-        return resourceStrategy.countSelectableCandidates(player) > 1;
+        return resourceStrategy.countSelectableCandidates(player, chunk) > 1;
+    }
+
+    /** As above, without a specific chunk. */
+    public boolean hasRerollAlternatives(Player player) {
+        return hasRerollAlternatives(player, null);
     }
 
     /**
@@ -622,7 +632,7 @@ public class EconomyManager {
             return false;
         }
 
-        if (!hasRerollAlternatives(player)) {
+        if (!hasRerollAlternatives(player, chunk)) {
             return false;
         }
 
