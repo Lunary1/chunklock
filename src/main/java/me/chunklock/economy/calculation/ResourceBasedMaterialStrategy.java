@@ -163,7 +163,8 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
                 sortedCandidates = sortCandidates(obtainable);
             }
 
-            OwnedChunkScanner.ResourceEntry selected = selectMaterial(player, sortedCandidates, unlocked);
+            OwnedChunkScanner.ResourceEntry selected =
+                selectMaterial(player, sortedCandidates, unlocked, fromTargetChunk);
 
             // Convert ore blocks to their drop material for the payment requirement
             Material paymentMaterial = mapToDropMaterial(selected.material());
@@ -299,11 +300,29 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
 
     private OwnedChunkScanner.ResourceEntry selectMaterial(Player player,
                                                            List<OwnedChunkScanner.ResourceEntry> sortedCandidates,
-                                                           int unlockedChunks) {
+                                                           int unlockedChunks,
+                                                           boolean fromTargetChunk) {
         UUID playerId = player.getUniqueId();
         Deque<Material> recent = recentSelections.computeIfAbsent(playerId, id -> new ConcurrentLinkedDeque<>());
 
-        return selectMaterial(sortedCandidates, unlockedChunks, recent);
+        return selectForPool(fromTargetChunk, sortedCandidates, unlockedChunks, recent);
+    }
+
+    /**
+     * Route selection to the strategy that matches the pool the candidates came from.
+     *
+     * <p>Extracted so the <em>routing</em> is testable and not just the two strategies it
+     * routes between. Reverting this branch leaves both strategies individually correct while
+     * pricing silently uses the wrong one - which is precisely how the tier-first selection
+     * survived task 4 unnoticed until play-testing.</p>
+     */
+    static OwnedChunkScanner.ResourceEntry selectForPool(boolean fromTargetChunk,
+                                                         List<OwnedChunkScanner.ResourceEntry> sortedCandidates,
+                                                         int unlockedChunks,
+                                                         Deque<Material> recent) {
+        return fromTargetChunk
+            ? selectFromTargetChunk(sortedCandidates, recent)
+            : selectMaterial(sortedCandidates, unlockedChunks, recent);
     }
 
     /**
@@ -344,6 +363,54 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
         }
 
         return best;
+    }
+
+    /**
+     * Choose from a target chunk's candidates, honouring the distinctiveness ranking.
+     *
+     * <p><strong>Why this cannot reuse {@link #selectMaterial}.</strong> That method scores by
+     * {@code tier * 1000 + count}, which is consistent on the owned-chunk path because the list
+     * it receives is already sorted by tier then count - re-scoring agrees with the ordering.
+     *
+     * <p>The target-chunk list is sorted by <em>distinctiveness</em>, so tier-first scoring
+     * discards the ranking {@link TargetChunkCandidateSource} just computed. The effect was not
+     * subtle: stone is tier 4 against dirt and clay at tier 1, so once a player's progression
+     * lifted the cap to tier 4 the stone column outscored every characteristic material and
+     * <strong>#86's original bug returned through selection</strong> - the metric was right and
+     * the pick ignored it. Before the cap lifts, the same scoring collapses every chunk to
+     * whichever of dirt/gravel/clay/log ranks highest by tier, which is the rotation reported
+     * in the September 5 play-test.
+     *
+     * <p>So selection here takes the ranking as given. Tier keeps both of its real jobs -
+     * capping what a player can be asked for, and setting the amount via
+     * {@link OwnedChunkScanner#getTierCostMultiplier} - but it no longer decides <em>which</em>
+     * material describes the chunk. Owner's call, September 5.
+     *
+     * <p>Anti-repeat still applies, so a re-roll walks down the chunk's own ranked list rather
+     * than repeating the head material. Wood is not penalised here: that rule exists to stop
+     * the owned-chunk pool leaning on logs forever, whereas on this path wood only wins when
+     * the chunk is genuinely wooded.
+     *
+     * @param sortedCandidates candidates in distinctiveness order, highest first
+     */
+    static OwnedChunkScanner.ResourceEntry selectFromTargetChunk(
+            List<OwnedChunkScanner.ResourceEntry> sortedCandidates,
+            Deque<Material> recent) {
+        int windowSize = Math.min(SELECTION_WINDOW, sortedCandidates.size());
+        List<OwnedChunkScanner.ResourceEntry> topCandidates = sortedCandidates.subList(0, windowSize);
+
+        // The list is already in preference order, so the first candidate not recently used is
+        // the answer. Walking it this way is what makes a re-roll move to the chunk's
+        // next-most-distinctive material rather than to its highest tier.
+        for (OwnedChunkScanner.ResourceEntry candidate : topCandidates) {
+            if (!recent.contains(candidate.material())) {
+                return candidate;
+            }
+        }
+
+        // Everything in the window was recently used - the chunk is out of variety, so the
+        // most distinctive material stands rather than falling back to an arbitrary pick.
+        return topCandidates.get(0);
     }
 
     /**

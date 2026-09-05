@@ -5,12 +5,15 @@ import org.bukkit.Material;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -223,6 +226,171 @@ class TargetChunkAmountTest {
 
         assertTrue(clamped <= maxCost, "max-cost must still cap the result");
         assertEquals(17, clamped);
+    }
+
+    // ---- Selection must honour the ranking (#86, September 5 play-test) ------------------
+
+    /**
+     * A dark forest as the September 5 play-test would have profiled it: distinctive wood,
+     * ordinary surface materials, and the stone column every chunk has.
+     */
+    private static List<ChunkProfileStore.ProfileEntry> darkForest() {
+        return profile(
+            entry(Material.DARK_OAK_LOG, 210),
+            entry(Material.DIRT, 340),
+            entry(Material.GRAVEL, 120),
+            entry(Material.CLAY, 60),
+            entry(Material.STONE, 5200),
+            entry(Material.DEEPSLATE, 3100));
+    }
+
+    /** The plains chunk next door: no wood at all, otherwise the same shape. */
+    private static List<ChunkProfileStore.ProfileEntry> plainsNextDoor() {
+        return profile(
+            entry(Material.DIRT, 400),
+            entry(Material.GRAVEL, 150),
+            entry(Material.CLAY, 90),
+            entry(Material.STONE, 5300),
+            entry(Material.DEEPSLATE, 3050));
+    }
+
+    private static Map<Material, Double> rotationBaseline() {
+        Map<Material, Double> b = new LinkedHashMap<>();
+        b.put(Material.STONE, 5200.0);
+        b.put(Material.DEEPSLATE, 3100.0);
+        b.put(Material.DIRT, 260.0);
+        b.put(Material.GRAVEL, 100.0);
+        b.put(Material.CLAY, 40.0);
+        b.put(Material.DARK_OAK_LOG, 45.0);
+        return b;
+    }
+
+    /**
+     * The regression reported in play-testing, and the more serious one hiding behind it.
+     *
+     * <p>Selection scored candidates by {@code tier * 1000 + count}, which discards the
+     * distinctiveness ranking on this path. Stone is tier 4 against clay and dirt at tier 1, so
+     * as soon as a player's progression lifted the cap to tier 4 <strong>every chunk priced as
+     * stone</strong> - #86's original bug, returning through selection rather than through the
+     * metric.</p>
+     */
+    @Test
+    @DisplayName("stone does not take over once the tier cap lifts (#86 via selection)")
+    void stoneDoesNotWinOnceTheCapLifts() {
+        // maxTier 4 is the cap from 3 unlocked chunks onward - stone is in the candidate list.
+        List<OwnedChunkScanner.ResourceEntry> ranked =
+            ResourceBasedMaterialStrategy.rankObtainableScored(plainsNextDoor(), rotationBaseline(), 4)
+                .stream().map(TargetChunkCandidateSource.ScoredCandidate::toResourceEntry).toList();
+
+        assertTrue(ranked.stream().anyMatch(r -> r.material() == Material.STONE),
+            "fixture sanity: stone must be present as a candidate for this test to mean anything");
+
+        Material picked = ResourceBasedMaterialStrategy
+            .selectFromTargetChunk(ranked, new ArrayDeque<>()).material();
+
+        assertNotEquals(Material.STONE, picked,
+            "a chunk must not price as stone just because stone is the highest tier present");
+        assertEquals(Material.CLAY, picked,
+            "the most distinctive material should win - clay at 90 against a 40 baseline");
+    }
+
+    @Test
+    @DisplayName("adjacent chunks with different contents produce different requirements")
+    void adjacentChunksDiffer() {
+        Material forestPick = ResourceBasedMaterialStrategy.selectFromTargetChunk(
+            ResourceBasedMaterialStrategy.rankObtainableScored(darkForest(), rotationBaseline(), 4)
+                .stream().map(TargetChunkCandidateSource.ScoredCandidate::toResourceEntry).toList(),
+            new ArrayDeque<>()).material();
+
+        Material plainsPick = ResourceBasedMaterialStrategy.selectFromTargetChunk(
+            ResourceBasedMaterialStrategy.rankObtainableScored(plainsNextDoor(), rotationBaseline(), 4)
+                .stream().map(TargetChunkCandidateSource.ScoredCandidate::toResourceEntry).toList(),
+            new ArrayDeque<>()).material();
+
+        assertEquals(Material.DARK_OAK_LOG, forestPick, "a dark forest should cost dark oak");
+        assertNotEquals(forestPick, plainsPick,
+            "two adjacent chunks with different contents must not cost the same material");
+    }
+
+    /**
+     * The early-game half of the same report: below 3 unlocked chunks the cap is tier 3, so
+     * stone is filtered out entirely and only dirt/gravel/clay/logs remain. Those must still
+     * differ per chunk rather than collapsing to one material.
+     */
+    @Test
+    @DisplayName("early game, with stone capped out, chunks still differ from each other")
+    void earlyGameChunksStillDiffer() {
+        Material forestPick = ResourceBasedMaterialStrategy.selectFromTargetChunk(
+            ResourceBasedMaterialStrategy.rankObtainableScored(darkForest(), rotationBaseline(), 3)
+                .stream().map(TargetChunkCandidateSource.ScoredCandidate::toResourceEntry).toList(),
+            new ArrayDeque<>()).material();
+
+        Material plainsPick = ResourceBasedMaterialStrategy.selectFromTargetChunk(
+            ResourceBasedMaterialStrategy.rankObtainableScored(plainsNextDoor(), rotationBaseline(), 3)
+                .stream().map(TargetChunkCandidateSource.ScoredCandidate::toResourceEntry).toList(),
+            new ArrayDeque<>()).material();
+
+        assertEquals(Material.DARK_OAK_LOG, forestPick);
+        assertNotEquals(forestPick, plainsPick);
+    }
+
+    @Test
+    @DisplayName("a re-roll walks down the chunk's own ranked list")
+    void rerollWalksTheRankedList() {
+        List<OwnedChunkScanner.ResourceEntry> ranked =
+            ResourceBasedMaterialStrategy.rankObtainableScored(darkForest(), rotationBaseline(), 4)
+                .stream().map(TargetChunkCandidateSource.ScoredCandidate::toResourceEntry).toList();
+
+        Deque<Material> recent = new ArrayDeque<>();
+        Material first = ResourceBasedMaterialStrategy.selectFromTargetChunk(ranked, recent).material();
+        recent.addLast(first);
+        Material second = ResourceBasedMaterialStrategy.selectFromTargetChunk(ranked, recent).material();
+
+        assertNotEquals(first, second, "a re-roll must move to a different material");
+        assertNotEquals(Material.STONE, second, "and not to stone just because it is a higher tier");
+    }
+
+    /**
+     * Pins the routing, not just the two selection strategies.
+     *
+     * <p>The same lesson as {@link #targetChunkPathUsesDistinctiveness()}: proving
+     * {@code selectFromTargetChunk} correct proves nothing if {@code calculate()} does not call
+     * it. Both were caught by reverting the branch and watching every test still pass.</p>
+     */
+    @Test
+    @DisplayName("target-chunk pricing routes to distinctiveness selection, not tier selection")
+    void targetChunkPathRoutesToRankedSelection() {
+        List<OwnedChunkScanner.ResourceEntry> ranked =
+            ResourceBasedMaterialStrategy.rankObtainableScored(plainsNextDoor(), rotationBaseline(), 4)
+                .stream().map(TargetChunkCandidateSource.ScoredCandidate::toResourceEntry).toList();
+
+        Material viaTargetPool = ResourceBasedMaterialStrategy
+            .selectForPool(true, ranked, 7, new ArrayDeque<>()).material();
+        assertNotEquals(Material.STONE, viaTargetPool,
+            "routed to the tier-first strategy - a target chunk must not price as stone");
+        assertEquals(Material.CLAY, viaTargetPool);
+
+        // The owned-chunk path keeps its own tier-first behaviour untouched.
+        Material viaOwnedPool = ResourceBasedMaterialStrategy
+            .selectForPool(false, ranked, 7, new ArrayDeque<>()).material();
+        assertEquals(Material.STONE, viaOwnedPool,
+            "the owned-chunk path should still prefer the highest tier available");
+    }
+
+    @Test
+    @DisplayName("selection stays deterministic - #82 must not regress")
+    void selectionIsDeterministic() {
+        List<OwnedChunkScanner.ResourceEntry> ranked =
+            ResourceBasedMaterialStrategy.rankObtainableScored(darkForest(), rotationBaseline(), 4)
+                .stream().map(TargetChunkCandidateSource.ScoredCandidate::toResourceEntry).toList();
+
+        Material first = ResourceBasedMaterialStrategy
+            .selectFromTargetChunk(ranked, new ArrayDeque<>()).material();
+        for (int i = 0; i < 25; i++) {
+            assertEquals(first, ResourceBasedMaterialStrategy
+                .selectFromTargetChunk(ranked, new ArrayDeque<>()).material(),
+                "repeated calls on identical input must return the same material");
+        }
     }
 
     // ---- Helpers -------------------------------------------------------------------------
