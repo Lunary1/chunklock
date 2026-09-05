@@ -683,14 +683,19 @@ public class UnlockGui {
         try {
             // Unlock chunk
             chunkLockManager.unlockChunk(state.chunk, teamId);
+
+            // Advance the progression counter. This drives getMaxTierForProgression, the
+            // progression cost multiplier and /chunklock info - none of which moved before,
+            // because unlockChunk only flips the chunk's locked flag and nothing else called
+            // this. Every player sat at 0 unlocked chunks forever, permanently capped to
+            // tier 3 (found in the September 5 play-test).
+            progressTracker.incrementUnlockedChunks(player.getUniqueId());
+
             if (state.contested) {
                 progressTracker.incrementContestedClaims(teamId);
             }
-            logger.info("Unlocked chunk " + state.chunk.getX() + 
+            logger.info("Unlocked chunk " + state.chunk.getX() +
                 "," + state.chunk.getZ() + " for player " + player.getName());
-
-            // Note: Data persistence is handled automatically by ChunkDatabase and PlayerDatabase
-            // Both databases commit on save operations (unlockChunk() and incrementUnlockedChunks() already save)
 
             // Invalidate resource scan cache since owned territory changed
             if (economyManager != null && economyManager.getOwnedChunkScanner() != null) {
