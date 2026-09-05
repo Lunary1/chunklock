@@ -15,6 +15,7 @@ Chunklock transforms Minecraft into a strategic progression-based survival game.
 ## 🧠 Core Mechanics
 
 - **Strategic chunk-by-chunk progression** - Start with one chunk, unlock adjacent areas
+- **Costs derived from the chunk being unlocked** - a forest costs wood, a mountain andesite, ranked by what makes each chunk distinctive rather than by what it holds most of
 - **Dynamic cost calculation** - Prices scale with distance, biome type, and progress
 - **Dual economy system** - Materials-based or Vault currency support
 - **Team collaboration** - Share territory and costs with team members

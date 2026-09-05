@@ -132,8 +132,13 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
             // been profiled and the baseline is warm. Reads the chunk's coordinates here, on
             // the calling thread, because calculate() runs async (AsyncCostCalculationService)
             // and touching Bukkit objects off the main thread is what #78 was.
-            List<OwnedChunkScanner.ResourceEntry> sortedCandidates = targetChunkCandidates(chunk, maxTier);
-            boolean fromTargetChunk = !sortedCandidates.isEmpty();
+            List<TargetChunkCandidateSource.ScoredCandidate> scoredTarget = targetChunkScored(chunk, maxTier);
+            boolean fromTargetChunk = !scoredTarget.isEmpty();
+
+            List<OwnedChunkScanner.ResourceEntry> sortedCandidates = new ArrayList<>(scoredTarget.size());
+            for (TargetChunkCandidateSource.ScoredCandidate candidate : scoredTarget) {
+                sortedCandidates.add(candidate.toResourceEntry());
+            }
 
             // Rung 3: the player's owned chunks. Guarantees obtainability (#69), and is also
             // where warm-up sits until enough chunks are profiled.
@@ -166,7 +171,10 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
             // Calculate cost amount
             double progressionMultiplier = calculateProgressionMultiplier(player, evaluation.score);
             double tierMultiplier = OwnedChunkScanner.getTierCostMultiplier(selected.tier());
-            double availabilityModifier = calculateAvailabilityModifier(selected, sortedCandidates);
+            // Each pool is modulated by the quantity it actually ranks by: distinctiveness for
+            // the target chunk, held count for owned chunks. See computeDistinctivenessModifier.
+            double availabilityModifier =
+                selectAmountModifier(fromTargetChunk, selected, scoredTarget, sortedCandidates);
             int amount = (int) Math.ceil(baseCost * tierMultiplier * progressionMultiplier * availabilityModifier);
 
             // Clamp
@@ -175,7 +183,9 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
             plugin.getLogger().fine("Resource-based cost for " + player.getName() +
                 ": " + amount + "x " + paymentMaterial +
                 " (source: " + (fromTargetChunk ? "target-chunk" : "owned-chunks") +
-                ", tier " + selected.tier() + ", available: " + selected.count() + ", availability-mod: " + String.format("%.2f", availabilityModifier) + ")");
+                ", tier " + selected.tier() + ", available: " + selected.count() +
+                ", " + (fromTargetChunk ? "distinctiveness-mod: " : "availability-mod: ")
+                + String.format("%.2f", availabilityModifier) + ")");
 
             List<ItemRequirement> requirements = new ArrayList<>();
             requirements.add(new VanillaItemRequirement(paymentMaterial, amount));
@@ -209,10 +219,14 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
      * describes the chunk. Only when none of them qualifies does pricing leave the chunk
      * behind.</p>
      *
+     * <p>Candidates keep their distinctiveness rather than being converted straight to
+     * {@code ResourceEntry}, because amount calculation needs the score ranking used and that
+     * type has nowhere to carry it. See {@link #computeDistinctivenessModifier}.</p>
+     *
      * @param chunk the chunk being priced; its coordinates are read on the calling thread
      * @return ranked obtainable candidates, or empty to fall through to the owned-chunk rung
      */
-    private List<OwnedChunkScanner.ResourceEntry> targetChunkCandidates(Chunk chunk, int maxTier) {
+    private List<TargetChunkCandidateSource.ScoredCandidate> targetChunkScored(Chunk chunk, int maxTier) {
         ChunkProfileStore store = profileStore();
         if (store == null || chunk == null) {
             return List.of();
@@ -233,7 +247,7 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
                 return List.of();
             }
 
-            return rankObtainable(profile, store.getBaseline(), maxTier);
+            return rankObtainableScored(profile, store.getBaseline(), maxTier);
         } catch (Exception e) {
             // Pricing must never fail because profiles are unreadable - fall back instead.
             plugin.getLogger().log(Level.FINE, "Target-chunk profile unavailable, using owned chunks", e);
@@ -257,12 +271,27 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
             Map<Material, Double> baseline,
             int maxTier) {
         List<TargetChunkCandidateSource.ScoredCandidate> ranked =
-            TargetChunkCandidateSource.rank(profile, baseline);
+            rankObtainableScored(profile, baseline, maxTier);
 
         List<OwnedChunkScanner.ResourceEntry> obtainable = new ArrayList<>(ranked.size());
         for (TargetChunkCandidateSource.ScoredCandidate candidate : ranked) {
+            obtainable.add(candidate.toResourceEntry());
+        }
+        return obtainable;
+    }
+
+    /** As {@link #rankObtainable}, keeping the distinctiveness score amount calculation needs. */
+    static List<TargetChunkCandidateSource.ScoredCandidate> rankObtainableScored(
+            List<ChunkProfileStore.ProfileEntry> profile,
+            Map<Material, Double> baseline,
+            int maxTier) {
+        List<TargetChunkCandidateSource.ScoredCandidate> ranked =
+            TargetChunkCandidateSource.rank(profile, baseline);
+
+        List<TargetChunkCandidateSource.ScoredCandidate> obtainable = new ArrayList<>(ranked.size());
+        for (TargetChunkCandidateSource.ScoredCandidate candidate : ranked) {
             if (candidate.tier() <= maxTier) {
-                obtainable.add(candidate.toResourceEntry());
+                obtainable.add(candidate);
             }
         }
         return obtainable;
@@ -390,7 +419,7 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
             int unlocked = progressTracker.getUnlockedChunkCount(player.getUniqueId());
             int maxTier = getMaxTierForProgression(unlocked);
 
-            List<OwnedChunkScanner.ResourceEntry> targetCandidates = targetChunkCandidates(chunk, maxTier);
+            List<TargetChunkCandidateSource.ScoredCandidate> targetCandidates = targetChunkScored(chunk, maxTier);
             if (!targetCandidates.isEmpty()) {
                 return Math.min(SELECTION_WINDOW, targetCandidates.size());
             }
@@ -437,16 +466,91 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
         return score;
     }
 
-    private double calculateAvailabilityModifier(OwnedChunkScanner.ResourceEntry selected,
-                                                 List<OwnedChunkScanner.ResourceEntry> sortedCandidates) {
+    /**
+     * Locate the selected material among the ranked candidates and modulate by its
+     * distinctiveness relative to the same selection window.
+     *
+     * <p>Matching is by material rather than by index because selection may pick any entry in
+     * the window, not just the head. A material that cannot be found - which should not happen,
+     * since selection chooses from this very list - yields a neutral modifier rather than
+     * guessing.</p>
+     */
+    static double calculateDistinctivenessModifier(OwnedChunkScanner.ResourceEntry selected,
+                                                   List<TargetChunkCandidateSource.ScoredCandidate> ranked) {
+        double selectedScore = -1.0;
+        for (TargetChunkCandidateSource.ScoredCandidate candidate : ranked) {
+            if (candidate.material() == selected.material()) {
+                selectedScore = candidate.distinctiveness();
+                break;
+            }
+        }
+        if (selectedScore < 0) {
+            return 1.0;
+        }
+
+        int windowSize = Math.min(SELECTION_WINDOW, ranked.size());
+        double averageScore = ranked.stream()
+            .limit(windowSize)
+            .mapToDouble(TargetChunkCandidateSource.ScoredCandidate::distinctiveness)
+            .average()
+            .orElse(selectedScore);
+
+        return computeDistinctivenessModifier(selectedScore, averageScore);
+    }
+
+    /**
+     * Pick the amount modifier for whichever pool the price came from.
+     *
+     * <p>Extracted from {@code calculate()} so the <em>routing</em> is testable, not just the
+     * two modifiers it routes between. Without this, reverting the target-chunk path to the
+     * count-based modifier leaves every unit test passing - the functions are each still
+     * correct in isolation, and nothing pins which one pricing actually uses.</p>
+     *
+     * @param fromTargetChunk whether the price came from rungs 1-2 rather than owned chunks
+     */
+    static double selectAmountModifier(boolean fromTargetChunk,
+                                       OwnedChunkScanner.ResourceEntry selected,
+                                       List<TargetChunkCandidateSource.ScoredCandidate> scoredTarget,
+                                       List<OwnedChunkScanner.ResourceEntry> sortedCandidates) {
+        if (fromTargetChunk) {
+            return calculateDistinctivenessModifier(selected, scoredTarget);
+        }
         int windowSize = Math.min(SELECTION_WINDOW, sortedCandidates.size());
         double averageCount = sortedCandidates.stream()
             .limit(windowSize)
             .mapToInt(OwnedChunkScanner.ResourceEntry::count)
             .average()
             .orElse(selected.count());
-
         return computeAvailabilityModifier(selected.count(), averageCount);
+    }
+
+    /**
+     * The amount modifier for the target-chunk rungs, expressed in distinctiveness (#86 task 5).
+     *
+     * <p><strong>Why this cannot reuse {@link #calculateAvailabilityModifier}.</strong> That
+     * method compares the selected material's {@code count} against the window average, which
+     * is meaningful for owned chunks - {@code count} there is how much the player holds, and
+     * the list is ordered by tier then count, so the comparison is like-for-like.
+     *
+     * <p>On this path both halves of that break. {@code count} is raw blocks in the chunk, and
+     * the list is ordered by <em>distinctiveness</em>. Comparing a raw count against a window
+     * ranked by a different quantity inverts the intent: a rare-but-distinctive material - the
+     * exact thing #86 exists to surface - sits far below a window average that stone and
+     * deepslate dominate, and would be priced <em>cheaper</em> for being notable.
+     *
+     * <p>So the modifier is computed over the quantity this path actually ranks by. A material
+     * well above its world baseline is what makes the chunk worth buying, and costs slightly
+     * more; an ordinary one costs slightly less. The envelope is deliberately the same bounded
+     * ±10% as the owned-chunk path - this adjusts a price, it does not set one.
+     */
+    static double computeDistinctivenessModifier(double selectedDistinctiveness,
+                                                 double averageDistinctiveness) {
+        if (averageDistinctiveness <= 0 || selectedDistinctiveness <= 0) {
+            return 1.0;
+        }
+        double ratio = selectedDistinctiveness / averageDistinctiveness;
+        double modifier = 1.0 + ((ratio - 1.0) * 0.15);
+        return Math.max(0.9, Math.min(1.1, modifier));
     }
 
     static double computeAvailabilityModifier(int selectedCount, double averageCount) {
