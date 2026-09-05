@@ -37,6 +37,11 @@ materials:
   #                       falls back to scanning the chunks you already own.
   #                       Prevents early-game soft-locks.
   #
+  #                       A chunk with no real character - flat plains, nothing on the
+  #                       surface - is not forced to invent one. It falls back to
+  #                       your owned chunks rather than asking for the bulk stone
+  #                       or deepslate that fills every chunk at depth.
+  #
   #                       Until enough chunks have been explored for "distinctive" to
   #                       mean anything, pricing uses your owned chunks and switches
   #                       over on its own as the world is explored. Nothing to set.

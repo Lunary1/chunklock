@@ -248,7 +248,17 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
                 return List.of();
             }
 
-            return rankObtainableScored(profile, store.getBaseline(), maxTier);
+            List<TargetChunkCandidateSource.ScoredCandidate> ranked =
+                rankObtainableScored(profile, store.getBaseline(), maxTier);
+
+            // A chunk with no characteristic material has nothing to say about itself, and
+            // forcing an answer prices it by noise - the September 5 play-test found a
+            // featureless plains chunk asking for deepslate at 1.09x average. Falling back is
+            // the same honest "no opinion" as an unprofiled chunk or a cold baseline.
+            if (!TargetChunkCandidateSource.hasDistinctiveMaterial(ranked)) {
+                return List.of();
+            }
+            return ranked;
         } catch (Exception e) {
             // Pricing must never fail because profiles are unreadable - fall back instead.
             plugin.getLogger().log(Level.FINE, "Target-chunk profile unavailable, using owned chunks", e);
