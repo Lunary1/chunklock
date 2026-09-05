@@ -24,11 +24,27 @@ materials:
   #                       Simple and predictable, but players can get stuck if their
   #                       starting chunk doesn't contain the required material.
   #
-  #   "resource-scan"  →  Scans blocks in the player's owned chunks and picks a
-  #                       material they can actually gather. Costs scale with rarity.
-  #                       Example: a player on a plains chunk with no trees pays
-  #                       Cobblestone or Wheat instead of Oak Logs.
+  #   "resource-scan"  →  The chunk you are BUYING decides what it costs. A forest
+  #                       chunk costs wood, a mountain costs andesite, a desert sand.
+  #
+  #                       A chunk is priced by what makes it DISTINCTIVE, not by what
+  #                       it holds most of - chunks are sampled bedrock to sky, so
+  #                       ranking by sheer quantity would price everything as stone.
+  #
+  #                       You are never asked for something you cannot obtain. If the
+  #                       target chunk's standout material is beyond your progression,
+  #                       Chunklock walks down that chunk's own list, and only then
+  #                       falls back to scanning the chunks you already own.
   #                       Prevents early-game soft-locks.
+  #
+  #                       A chunk with no real character - flat plains, nothing on the
+  #                       surface - is not forced to invent one. It falls back to
+  #                       your owned chunks rather than asking for the bulk stone
+  #                       or deepslate that fills every chunk at depth.
+  #
+  #                       Until enough chunks have been explored for "distinctive" to
+  #                       mean anything, pricing uses your owned chunks and switches
+  #                       over on its own as the world is explored. Nothing to set.
   #
   cost-mode: "resource-scan"
 
@@ -37,6 +53,8 @@ materials:
     base-cost: 16 # Starting item amount (adjusted by material rarity & progression)
     min-cost: 1 # Floor — never ask for fewer than this
     max-cost: 128 # Cap — never ask for more than this
+    # Only applies to the owned-chunk fallback, not to target-chunk pricing, which ranks
+    # by distinctiveness rather than by raw quantity.
     min-abundance: 10 # Ignore materials with fewer than this many blocks in owned chunks
     cache-duration: 60 # Seconds to cache scan results per player (avoids lag)
 

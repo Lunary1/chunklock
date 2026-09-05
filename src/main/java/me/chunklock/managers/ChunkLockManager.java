@@ -147,6 +147,33 @@ public class ChunkLockManager {
     }
 
     /**
+     * Counts the unlocked chunks owned by one team, from the chunk data itself.
+     *
+     * <p>The chunk database is the source of truth for what a team actually owns, whereas
+     * {@code PlayerStore}'s counter is a running tally maintained separately. Until the
+     * September 5 fix nothing incremented that tally, so it read 0 for every player no matter
+     * how much territory they held - which pinned everyone to the tier-3 progression cap and
+     * made {@code /chunklock info} report nothing. This recomputes the true figure so an
+     * existing world can be repaired rather than having to start again.</p>
+     *
+     * <p>Walks every stored chunk, so it is for repair and admin use - not for anything on a
+     * hot path.</p>
+     */
+    public int countUnlockedChunksForOwner(UUID ownerId) {
+        if (ownerId == null) {
+            return 0;
+        }
+        int count = 0;
+        for (String chunkKey : chunkDatabase.getAllChunkKeys()) {
+            ChunkData data = chunkDatabase.getChunk(chunkKey);
+            if (data != null && !data.isLocked() && ownerId.equals(data.getOwnerId())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
      * Forces a re-evaluation and re-locking of all chunks
      */
     public void resetAllChunks() {
