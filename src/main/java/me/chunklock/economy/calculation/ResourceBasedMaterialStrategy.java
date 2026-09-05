@@ -7,6 +7,7 @@ import me.chunklock.economy.items.ItemRequirement;
 import me.chunklock.managers.BiomeUnlockRegistry;
 import me.chunklock.managers.ChunkEvaluator;
 import me.chunklock.managers.PlayerProgressTracker;
+import me.chunklock.services.ChunkProfileStore;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.block.Biome;
@@ -33,13 +34,35 @@ import java.util.logging.Level;
  *
  * <h3>Algorithm:</h3>
  * <ol>
- *   <li>Scan all player-owned chunks for harvestable resources</li>
+ *   <li>Rank the <em>target</em> chunk's stored profile by distinctiveness (#86)</li>
+ *   <li>Fall back to scanning the player's owned chunks when that is unavailable</li>
  *   <li>Select a deterministic best candidate (tier, abundance, and anti-repeat weighting)</li>
  *   <li>Calculate amount from tier, diminishing-return progression, and soft availability modifier</li>
  *   <li>Fall back to biome-based calculation if no resources found</li>
  * </ol>
  *
+ * <h3>The #69 obtainability ladder (#86)</h3>
+ *
+ * <p>A price should describe the chunk being bought - the forest costs wood, the mountain
+ * costs stone - but never at the cost of naming something the player cannot get. That is what
+ * {@code resource-scan} mode exists to prevent: #69 was players on a treeless plains chunk
+ * being told to pay oak logs. So target-chunk candidates are tried in order and each rung
+ * falls through to the next:</p>
+ *
+ * <ol>
+ *   <li>the target chunk's most distinctive material, if within the progression tier cap</li>
+ *   <li>down the target chunk's <em>own</em> ranked list, so the price still describes it</li>
+ *   <li>the player's owned chunks - today's behaviour, and the rung that guarantees
+ *       obtainability</li>
+ *   <li>biome-based, when nothing has been scanned at all</li>
+ * </ol>
+ *
+ * <p>Rung 3 is load-bearing rather than a safety net, and it is also what warm-up reuses:
+ * until enough chunks are profiled for the baseline to mean anything
+ * ({@link TargetChunkCandidateSource#MIN_BASELINE_CHUNKS}), pricing simply stays on it.</p>
+ *
  * @see OwnedChunkScanner
+ * @see TargetChunkCandidateSource
  */
 public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
 
@@ -76,6 +99,23 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
         this.progressTracker = progressTracker;
     }
 
+    /**
+     * The profile store, or null when pricing must fall back to owned-chunk behaviour.
+     *
+     * <p>Resolved per call rather than injected because this strategy is constructed fresh on
+     * every economy reload, and {@link EconomyManager#selectCalculationStrategy} can run
+     * before the store exists. Null is an ordinary answer here, not a failure: it means
+     * "profiles unavailable", which is rung 3 of the ladder.</p>
+     */
+    private ChunkProfileStore profileStore() {
+        try {
+            return plugin.getChunkProfileStore();
+        } catch (Exception e) {
+            // Never let a missing service break pricing - fall back rather than fail.
+            return null;
+        }
+    }
+
     public void setBaseCost(int baseCost) { this.baseCost = baseCost; }
     public void setMaxCost(int maxCost) { this.maxCost = maxCost; }
     public void setMinCost(int minCost) { this.minCost = minCost; }
@@ -84,28 +124,40 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
     public EconomyManager.PaymentRequirement calculate(Player player, Chunk chunk, Biome biome,
                                                        ChunkEvaluator.ChunkValueData evaluation) {
         try {
-            List<OwnedChunkScanner.ResourceEntry> resources = scanner.scanPlayerResources(player);
-
-            if (resources.isEmpty()) {
-                plugin.getLogger().fine("Resource scan empty for " + player.getName() + ", falling back to biome-based");
-                return fallbackToBiomeBased(player, biome, evaluation);
-            }
-
             // Determine max tier based on player progression
             int unlocked = progressTracker.getUnlockedChunkCount(player.getUniqueId());
             int maxTier = getMaxTierForProgression(unlocked);
 
-            // Filter to obtainable materials (within progression tier cap)
-            List<OwnedChunkScanner.ResourceEntry> obtainable = resources.stream()
-                .filter(r -> r.tier() <= maxTier)
-                .toList();
+            // Rungs 1-2 of the ladder: price from the target chunk's own contents when it has
+            // been profiled and the baseline is warm. Reads the chunk's coordinates here, on
+            // the calling thread, because calculate() runs async (AsyncCostCalculationService)
+            // and touching Bukkit objects off the main thread is what #78 was.
+            List<OwnedChunkScanner.ResourceEntry> sortedCandidates = targetChunkCandidates(chunk, maxTier);
+            boolean fromTargetChunk = !sortedCandidates.isEmpty();
 
-            if (obtainable.isEmpty()) {
-                plugin.getLogger().fine("No obtainable resources (max tier " + maxTier + ") for " + player.getName() + ", falling back to biome-based");
-                return fallbackToBiomeBased(player, biome, evaluation);
+            // Rung 3: the player's owned chunks. Guarantees obtainability (#69), and is also
+            // where warm-up sits until enough chunks are profiled.
+            if (!fromTargetChunk) {
+                List<OwnedChunkScanner.ResourceEntry> resources = scanner.scanPlayerResources(player);
+
+                if (resources.isEmpty()) {
+                    plugin.getLogger().fine("Resource scan empty for " + player.getName() + ", falling back to biome-based");
+                    return fallbackToBiomeBased(player, biome, evaluation);
+                }
+
+                // Filter to obtainable materials (within progression tier cap)
+                List<OwnedChunkScanner.ResourceEntry> obtainable = resources.stream()
+                    .filter(r -> r.tier() <= maxTier)
+                    .toList();
+
+                if (obtainable.isEmpty()) {
+                    plugin.getLogger().fine("No obtainable resources (max tier " + maxTier + ") for " + player.getName() + ", falling back to biome-based");
+                    return fallbackToBiomeBased(player, biome, evaluation);
+                }
+
+                sortedCandidates = sortCandidates(obtainable);
             }
 
-            List<OwnedChunkScanner.ResourceEntry> sortedCandidates = sortCandidates(obtainable);
             OwnedChunkScanner.ResourceEntry selected = selectMaterial(player, sortedCandidates, unlocked);
 
             // Convert ore blocks to their drop material for the payment requirement
@@ -120,9 +172,10 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
             // Clamp
             amount = Math.max(minCost, Math.min(maxCost, amount));
 
-            plugin.getLogger().fine("Resource-based cost for " + player.getName() + 
-                ": " + amount + "x " + paymentMaterial + 
-                " (tier " + selected.tier() + ", available: " + selected.count() + ", availability-mod: " + String.format("%.2f", availabilityModifier) + ")");
+            plugin.getLogger().fine("Resource-based cost for " + player.getName() +
+                ": " + amount + "x " + paymentMaterial +
+                " (source: " + (fromTargetChunk ? "target-chunk" : "owned-chunks") +
+                ", tier " + selected.tier() + ", available: " + selected.count() + ", availability-mod: " + String.format("%.2f", availabilityModifier) + ")");
 
             List<ItemRequirement> requirements = new ArrayList<>();
             requirements.add(new VanillaItemRequirement(paymentMaterial, amount));
@@ -133,6 +186,86 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
                 ", falling back to biome-based", e);
             return fallbackToBiomeBased(player, biome, evaluation);
         }
+    }
+
+    /**
+     * Rungs 1-2: the target chunk's own materials, ranked by distinctiveness and capped to
+     * what the player's progression can obtain.
+     *
+     * <p>Returns empty whenever target-chunk pricing cannot honestly answer - the store is
+     * unavailable, the baseline is still warming up, the chunk has never been profiled, or
+     * everything in it is above the tier cap. Every one of those is an ordinary outcome
+     * meaning "use the owned-chunk rung", not an error.</p>
+     *
+     * <p><strong>Ordering matters for cost, not just correctness.</strong> The warm-up gate is
+     * checked before the profile read, because {@code getBaselineChunkCount()} is one cheap
+     * aggregate whereas {@code getProfile} is a per-chunk lookup - and on a MySQL server both
+     * are network round trips. Before warm-up completes the answer is "fall back" regardless
+     * of what the profile holds, so reading it first would be a query per priced chunk whose
+     * result is thrown away.</p>
+     *
+     * <p>Walking down the ranked list is rung 2: the head material may be above the tier cap
+     * on a chunk full of diamond, and the next-most-distinctive obtainable material still
+     * describes the chunk. Only when none of them qualifies does pricing leave the chunk
+     * behind.</p>
+     *
+     * @param chunk the chunk being priced; its coordinates are read on the calling thread
+     * @return ranked obtainable candidates, or empty to fall through to the owned-chunk rung
+     */
+    private List<OwnedChunkScanner.ResourceEntry> targetChunkCandidates(Chunk chunk, int maxTier) {
+        ChunkProfileStore store = profileStore();
+        if (store == null || chunk == null) {
+            return List.of();
+        }
+
+        try {
+            if (!TargetChunkCandidateSource.isBaselineReady(store.getBaselineChunkCount())) {
+                return List.of();
+            }
+
+            // Bukkit reads stay on the calling thread (#78).
+            String worldName = chunk.getWorld().getName();
+            int chunkX = chunk.getX();
+            int chunkZ = chunk.getZ();
+
+            List<ChunkProfileStore.ProfileEntry> profile = store.getProfile(worldName, chunkX, chunkZ);
+            if (profile.isEmpty()) {
+                return List.of();
+            }
+
+            return rankObtainable(profile, store.getBaseline(), maxTier);
+        } catch (Exception e) {
+            // Pricing must never fail because profiles are unreadable - fall back instead.
+            plugin.getLogger().log(Level.FINE, "Target-chunk profile unavailable, using owned chunks", e);
+            return List.of();
+        }
+    }
+
+    /**
+     * Rank a chunk's profile and keep only what the player's progression can obtain.
+     *
+     * <p>Rung 2 of the ladder, as a pure function so it can be tested without a server: the
+     * ordering is {@link TargetChunkCandidateSource}'s distinctiveness ranking, and the tier
+     * filter is applied <em>after</em> ranking so removing an unobtainable head material
+     * promotes the next-most-distinctive one rather than reshuffling by abundance.</p>
+     *
+     * <p>Returning empty means every material in the chunk is above the cap, which is the
+     * signal to fall through to owned chunks (#69).</p>
+     */
+    static List<OwnedChunkScanner.ResourceEntry> rankObtainable(
+            List<ChunkProfileStore.ProfileEntry> profile,
+            Map<Material, Double> baseline,
+            int maxTier) {
+        List<TargetChunkCandidateSource.ScoredCandidate> ranked =
+            TargetChunkCandidateSource.rank(profile, baseline);
+
+        List<OwnedChunkScanner.ResourceEntry> obtainable = new ArrayList<>(ranked.size());
+        for (TargetChunkCandidateSource.ScoredCandidate candidate : ranked) {
+            if (candidate.tier() <= maxTier) {
+                obtainable.add(candidate.toResourceEntry());
+            }
+        }
+        return obtainable;
     }
 
     private OwnedChunkScanner.ResourceEntry selectMaterial(Player player,
@@ -236,21 +369,36 @@ public class ResourceBasedMaterialStrategy implements CostCalculationStrategy {
      * hundred kinds of stone still has nothing to re-roll into if progression caps them to
      * one obtainable tier.</p>
      *
-     * <p>The filtering here deliberately mirrors {@link #calculate} - same scan, same tier
+     * <p>The filtering here deliberately mirrors {@link #calculate} - same source, same tier
      * cap, same window - because a count that disagreed with what selection actually does
      * would grey out a usable button, or charge for a re-roll that cannot move. Returns 0
      * when the scan is empty, which is the biome-based fallback path rather than a
      * resource-scan selection at all.</p>
+     *
+     * <p><strong>Under #86 this counts the target chunk's own materials</strong>, because a
+     * re-roll walks down that chunk's ranked list rather than widening to the player's
+     * territory. Widening would keep the button alive more often but the re-rolled price
+     * would stop describing the chunk, which is the exact thing #86 exists to fix - better to
+     * grey the button out honestly. Expect it to fire considerably more often than it does
+     * today: a sparse chunk may genuinely offer only one obtainable material. That is correct
+     * behaviour, not a regression.</p>
+     *
+     * @param chunk the chunk whose re-roll is being offered, or null to count owned chunks
      */
-    public int countSelectableCandidates(Player player) {
+    public int countSelectableCandidates(Player player, Chunk chunk) {
         try {
+            int unlocked = progressTracker.getUnlockedChunkCount(player.getUniqueId());
+            int maxTier = getMaxTierForProgression(unlocked);
+
+            List<OwnedChunkScanner.ResourceEntry> targetCandidates = targetChunkCandidates(chunk, maxTier);
+            if (!targetCandidates.isEmpty()) {
+                return Math.min(SELECTION_WINDOW, targetCandidates.size());
+            }
+
             List<OwnedChunkScanner.ResourceEntry> resources = scanner.scanPlayerResources(player);
             if (resources.isEmpty()) {
                 return 0;
             }
-
-            int unlocked = progressTracker.getUnlockedChunkCount(player.getUniqueId());
-            int maxTier = getMaxTierForProgression(unlocked);
 
             long obtainable = resources.stream()
                 .filter(r -> r.tier() <= maxTier)

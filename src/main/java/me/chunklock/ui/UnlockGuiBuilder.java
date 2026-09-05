@@ -119,7 +119,7 @@ public class UnlockGuiBuilder {
         }
 
         var quote = rerollService.quote(player, chunk, paymentRequirement.getVaultCost(),
-            economyManager.hasRerollAlternatives(player));
+            economyManager.hasRerollAlternatives(player, chunk));
 
         ItemStack button = new ItemStack(quote.available() ? Material.AMETHYST_SHARD : Material.GRAY_DYE);
         ItemMeta meta = button.getItemMeta();
