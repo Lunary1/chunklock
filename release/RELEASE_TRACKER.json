@@ -1,179 +1,468 @@
-[
-  {
-    "id": "mysql-db-command",
-    "type": "feature",
-    "title": "Add /chunklock database command for MySQL status",
-    "description": "Admin command to check active storage backend, MySQL connection pool status, and trigger operations",
-    "status": "done",
-    "user_note": "Added '/chunklock database' command to view storage backend status (MapDB or MySQL) with connection pool metrics, performance stats, and migration status",
-    "risk": "low",
-    "files_touched": [
-      "src/main/java/me/chunklock/commands/DatabaseCommand.java",
-      "src/main/java/me/chunklock/commands/ChunklockCommandExecutor.java",
-      "src/main/java/me/chunklock/ChunklockPlugin.java"
-    ],
-    "tests": ["All 26 existing unit tests pass"],
-    "notes": "Provides visibility into MySQL vs MapDB usage, connection health, and pool statistics"
-  },
-  {
-    "id": "mysql-setup-guide",
-    "type": "feature",
-    "title": "Create comprehensive MySQL setup documentation",
-    "description": "Dedicated guide covering MySQL installation, configuration, migration, and troubleshooting",
-    "status": "done",
-    "user_note": "Created comprehensive MySQL Setup Guide with step-by-step instructions for server setup, configuration, migration, performance tuning, and troubleshooting",
-    "risk": "low",
-    "files_touched": ["docs/MySQL-Setup-Guide.md"],
-    "tests": ["Documentation review"],
-    "notes": "Should include complete step-by-step setup, performance tuning, and common issues"
-  },
-  {
-    "id": "mysql-admin-docs",
-    "type": "feature",
-    "title": "Update admin commands documentation with database command",
-    "description": "Add database status command documentation to Admin-Commands.md wiki page",
-    "status": "done",
-    "user_note": "Updated Admin Commands documentation with comprehensive /chunklock database command reference including example outputs for both MapDB and MySQL modes",
-    "risk": "low",
-    "files_touched": ["docs/wiki/Admin-Commands.md"],
-    "tests": ["Documentation review"],
-    "notes": "Integrate with existing admin commands documentation"
-  },
-  {
-    "id": "mysql-debug-enhance",
-    "type": "feature",
-    "title": "Enhance debug command to show MySQL connection details",
-    "description": "Update /chunklock debug output to include MySQL-specific metrics when MySQL is active",
-    "status": "done",
-    "user_note": "Added '/chunklock debug database' subcommand showing connection status, query performance, and pool statistics for MySQL or file sizes for MapDB",
-    "risk": "low",
-    "files_touched": ["src/main/java/me/chunklock/commands/DebugCommand.java"],
-    "tests": ["All 26 unit tests pass"],
-    "notes": "Show connection pool stats, active connections, query performance if MySQL mode"
-  },
-  {
-    "id": "fix-69-resource-based-unlock",
-    "type": "bugfix",
-    "title": "Fix resource-based unlock: players stuck without required materials",
-    "description": "Players spawning in chunks without biome-required materials (e.g., Plains with no trees) could not progress. Added resource-scan cost mode that bases unlock costs on materials actually available in the player's owned chunks. Fixed GUI display/validation mismatch where biome items were shown but PaymentRequirement items were validated. Fixed items never being consumed on material unlock.",
-    "status": "done",
-    "user_note": "Added new 'resource-scan' cost mode that scans your owned chunks and only requires materials you can actually gather. Fixed unlock GUI showing wrong material requirements and items not being consumed on unlock.",
-    "risk": "med",
-    "files_touched": [
-      "src/main/java/me/chunklock/economy/calculation/OwnedChunkScanner.java",
-      "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java",
-      "src/main/java/me/chunklock/economy/EconomyManager.java",
-      "src/main/java/me/chunklock/config/modular/EconomyConfig.java",
-      "src/main/resources/economy.yml",
-      "src/main/java/me/chunklock/ui/UnlockGui.java",
-      "src/main/java/me/chunklock/ui/UnlockGuiBuilder.java"
-    ],
-    "tests": [
-      "src/test/java/me/chunklock/economy/calculation/ResourceBasedCostTest.java"
-    ],
-    "notes": "Enable with materials.cost-mode: 'resource-scan' in economy.yml. Falls back to biome-based if scan returns no resources. Scans cached per-player with configurable TTL."
-  },
-  {
-    "id": "fix-71-material-unlock-regression",
-    "type": "bugfix",
-    "title": "Fix false insufficient-material unlock failures",
-    "description": "Fix regression where vanilla material unlock checks could fail despite sufficient inventory and show incorrect missing amounts.",
-    "status": "done",
-    "user_note": "Fixed a regression where chunk unlock could fail even when you had enough vanilla materials in inventory. Missing-item messages now show correct non-negative values.",
-    "risk": "low",
-    "files_touched": [
-      "src/main/java/me/chunklock/economy/items/VanillaItemRequirement.java",
-      "src/main/java/me/chunklock/ui/UnlockGui.java",
-      "src/main/java/me/chunklock/ui/UnlockGuiBuilder.java"
-    ],
-    "tests": ["mvn clean package (28 tests passed)"],
-    "notes": "GitHub issue: #71"
-  },
-  {
-    "id": "fix-72-single-material-enforcement",
-    "type": "bugfix",
-    "title": "Restore single-resource requirement in materials mode",
-    "description": "Material unlocks were enforcing multiple biome resources at once in some flows. Restored single-resource requirement behavior for affordability and payment consistency.",
-    "status": "done",
-    "user_note": "Materials unlock now requires one resource again (not multiple at once), matching legacy behavior and expected gameplay.",
-    "risk": "low",
-    "files_touched": [
-      "src/main/java/me/chunklock/economy/calculation/TraditionalMaterialStrategy.java",
-      "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java"
-    ],
-    "tests": ["mvn clean package (28 tests passed)"],
-    "notes": "Keeps first vanilla requirement when biome defines multiple entries."
-  },
-  {
-    "id": "fix-65-mysql-starting-chunk-persistence",
-    "type": "bugfix",
-    "title": "Fix MySQL starting chunk reassignment after restart",
-    "description": "After server restart, players could be assigned a new starting chunk because in-memory claims were empty and persisted spawn ownership was not restored in SingleWorldManager. Claim lookup now restores from persisted player spawn data before assigning a new chunk.",
-    "status": "done",
-    "user_note": "Fixed issue where /chunklock start could give a new chunk after restart on MySQL. Existing persisted claim is now restored and reused.",
-    "risk": "low",
-    "files_touched": [
-      "src/main/java/me/chunklock/managers/SingleWorldManager.java"
-    ],
-    "tests": ["runTests: 35 passed, 0 failed"],
-    "notes": "GitHub issue: #65"
-  },
-  {
-    "id": "fix-76-resource-scan-acacia-repetition",
-    "type": "bugfix",
-    "title": "Reduce repeated acacia costs and improve material cost scaling",
-    "description": "Resource-scan was over-selecting wood/acacia and flattening costs around fixed values due to strict availability capping.",
-    "status": "done",
-    "user_note": "Improved resource-scan variety and progression scaling: repeated wood/acacia picks are reduced and costs no longer flatten around fixed values during progression.",
-    "risk": "med",
-    "files_touched": [
-      "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java",
-      "src/test/java/me/chunklock/economy/calculation/ResourceBasedCostTest.java"
-    ],
-    "tests": [
-      "runTests ResourceBasedCostTest: 9 passed, 0 failed",
-      "runTests all: 35 passed, 0 failed"
-    ],
-    "notes": "GitHub issue: #76"
-  },
-  {
-    "id": "fix-77-resource-scan-economy-hardening",
-    "type": "bugfix",
-    "title": "Harden resource-scan pricing against scarcity exploits and improve consistency",
-    "description": "Reworked resource-scan to use deterministic candidate sorting, weighted wood de-prioritization, diminishing-return progression scaling, and a bounded soft availability modifier instead of hard availability caps.",
-    "status": "done",
-    "user_note": "Resource-scan now selects materials more consistently and fairly, prevents low-cost scarcity exploits, and shows players that prices are based on claimed-chunk resources.",
-    "risk": "med",
-    "files_touched": [
-      "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java",
-      "src/main/java/me/chunklock/ui/UnlockGuiBuilder.java",
-      "src/test/java/me/chunklock/economy/calculation/ResourceBasedCostTest.java"
-    ],
-    "tests": [
-      "runTests ResourceBasedCostTest: 9 passed, 0 failed",
-      "runTests all: 35 passed, 0 failed"
-    ],
-    "notes": "GitHub issue: #77"
-  },
-  {
-    "id": "fix-78-async-cost-calculation-concurrency",
-    "type": "bugfix",
-    "title": "Fix NoSuchElementException in ResourceBasedMaterialStrategy during async cost calculation",
-    "description": "The recent-selection history added for #77 used a plain HashMap of ArrayDeque, but calculateRequirement runs on async threads via AsyncCostCalculationService (runTaskAsynchronously and two CompletableFuture.supplyAsync call sites). Concurrent trimming could call removeFirst() on an empty deque and throw NoSuchElementException, and the unsynchronized HashMap risked corruption under concurrent computeIfAbsent. Switched to ConcurrentHashMap + ConcurrentLinkedDeque and replaced removeFirst() with pollFirst(), which returns null instead of throwing. Also added per-player cleanup on quit so the map does not grow unbounded on long-running servers.",
-    "status": "done",
-    "user_note": "Fixed an error that could occur while calculating unlock costs in resource-scan mode, which could cause the unlock menu to fail to open or show incorrect requirements.",
-    "risk": "low",
-    "files_touched": [
-      "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java",
-      "src/main/java/me/chunklock/economy/EconomyManager.java",
-      "src/main/java/me/chunklock/listeners/PlayerListener.java",
-      "src/test/java/me/chunklock/economy/calculation/ResourceBasedCostTest.java"
-    ],
-    "tests": [
-      "runTests ResourceBasedCostTest: 9 passed, 0 failed",
-      "runTests all: 29 passed, 0 failed",
-      "Regression verified: reverting pollFirst() to removeFirst() makes the new concurrency test fail with NoSuchElementException"
-    ],
-    "notes": "GitHub issue: #78. Root cause was introduced by the #77 work in the same file, so both ship together."
-  }
+﻿[
+    {
+        "id":  "mysql-db-command",
+        "type":  "feature",
+        "title":  "Add /chunklock database command for MySQL status",
+        "description":  "Admin command to check active storage backend, MySQL connection pool status, and trigger operations",
+        "status":  "done",
+        "user_note":  "Added \u0027/chunklock database\u0027 command to view storage backend status (MapDB or MySQL) with connection pool metrics, performance stats, and migration status",
+        "risk":  "low",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/commands/DatabaseCommand.java",
+                              "src/main/java/me/chunklock/commands/ChunklockCommandExecutor.java",
+                              "src/main/java/me/chunklock/ChunklockPlugin.java"
+                          ],
+        "tests":  [
+                      "All 26 existing unit tests pass"
+                  ],
+        "notes":  "Provides visibility into MySQL vs MapDB usage, connection health, and pool statistics"
+    },
+    {
+        "id":  "mysql-setup-guide",
+        "type":  "feature",
+        "title":  "Create comprehensive MySQL setup documentation",
+        "description":  "Dedicated guide covering MySQL installation, configuration, migration, and troubleshooting",
+        "status":  "done",
+        "user_note":  "Created comprehensive MySQL Setup Guide with step-by-step instructions for server setup, configuration, migration, performance tuning, and troubleshooting",
+        "risk":  "low",
+        "files_touched":  [
+                              "docs/MySQL-Setup-Guide.md"
+                          ],
+        "tests":  [
+                      "Documentation review"
+                  ],
+        "notes":  "Should include complete step-by-step setup, performance tuning, and common issues"
+    },
+    {
+        "id":  "mysql-admin-docs",
+        "type":  "feature",
+        "title":  "Update admin commands documentation with database command",
+        "description":  "Add database status command documentation to Admin-Commands.md wiki page",
+        "status":  "done",
+        "user_note":  "Updated Admin Commands documentation with comprehensive /chunklock database command reference including example outputs for both MapDB and MySQL modes",
+        "risk":  "low",
+        "files_touched":  [
+                              "docs/wiki/Admin-Commands.md"
+                          ],
+        "tests":  [
+                      "Documentation review"
+                  ],
+        "notes":  "Integrate with existing admin commands documentation"
+    },
+    {
+        "id":  "mysql-debug-enhance",
+        "type":  "feature",
+        "title":  "Enhance debug command to show MySQL connection details",
+        "description":  "Update /chunklock debug output to include MySQL-specific metrics when MySQL is active",
+        "status":  "done",
+        "user_note":  "Added \u0027/chunklock debug database\u0027 subcommand showing connection status, query performance, and pool statistics for MySQL or file sizes for MapDB",
+        "risk":  "low",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/commands/DebugCommand.java"
+                          ],
+        "tests":  [
+                      "All 26 unit tests pass"
+                  ],
+        "notes":  "Show connection pool stats, active connections, query performance if MySQL mode"
+    },
+    {
+        "id":  "fix-69-resource-based-unlock",
+        "type":  "bugfix",
+        "title":  "Fix resource-based unlock: players stuck without required materials",
+        "description":  "Players spawning in chunks without biome-required materials (e.g., Plains with no trees) could not progress. Added resource-scan cost mode that bases unlock costs on materials actually available in the player\u0027s owned chunks. Fixed GUI display/validation mismatch where biome items were shown but PaymentRequirement items were validated. Fixed items never being consumed on material unlock.",
+        "status":  "done",
+        "user_note":  "Added new \u0027resource-scan\u0027 cost mode that scans your owned chunks and only requires materials you can actually gather. Fixed unlock GUI showing wrong material requirements and items not being consumed on unlock.",
+        "risk":  "med",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/economy/calculation/OwnedChunkScanner.java",
+                              "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java",
+                              "src/main/java/me/chunklock/economy/EconomyManager.java",
+                              "src/main/java/me/chunklock/config/modular/EconomyConfig.java",
+                              "src/main/resources/economy.yml",
+                              "src/main/java/me/chunklock/ui/UnlockGui.java",
+                              "src/main/java/me/chunklock/ui/UnlockGuiBuilder.java"
+                          ],
+        "tests":  [
+                      "src/test/java/me/chunklock/economy/calculation/ResourceBasedCostTest.java"
+                  ],
+        "notes":  "Enable with materials.cost-mode: \u0027resource-scan\u0027 in economy.yml. Falls back to biome-based if scan returns no resources. Scans cached per-player with configurable TTL."
+    },
+    {
+        "id":  "fix-71-material-unlock-regression",
+        "type":  "bugfix",
+        "title":  "Fix false insufficient-material unlock failures",
+        "description":  "Fix regression where vanilla material unlock checks could fail despite sufficient inventory and show incorrect missing amounts.",
+        "status":  "done",
+        "user_note":  "Fixed a regression where chunk unlock could fail even when you had enough vanilla materials in inventory. Missing-item messages now show correct non-negative values.",
+        "risk":  "low",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/economy/items/VanillaItemRequirement.java",
+                              "src/main/java/me/chunklock/ui/UnlockGui.java",
+                              "src/main/java/me/chunklock/ui/UnlockGuiBuilder.java"
+                          ],
+        "tests":  [
+                      "mvn clean package (28 tests passed)"
+                  ],
+        "notes":  "GitHub issue: #71"
+    },
+    {
+        "id":  "fix-72-single-material-enforcement",
+        "type":  "bugfix",
+        "title":  "Restore single-resource requirement in materials mode",
+        "description":  "Material unlocks were enforcing multiple biome resources at once in some flows. Restored single-resource requirement behavior for affordability and payment consistency.",
+        "status":  "done",
+        "user_note":  "Materials unlock now requires one resource again (not multiple at once), matching legacy behavior and expected gameplay.",
+        "risk":  "low",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/economy/calculation/TraditionalMaterialStrategy.java",
+                              "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java"
+                          ],
+        "tests":  [
+                      "mvn clean package (28 tests passed)"
+                  ],
+        "notes":  "Keeps first vanilla requirement when biome defines multiple entries."
+    },
+    {
+        "id":  "fix-65-mysql-starting-chunk-persistence",
+        "type":  "bugfix",
+        "title":  "Fix MySQL starting chunk reassignment after restart",
+        "description":  "After server restart, players could be assigned a new starting chunk because in-memory claims were empty and persisted spawn ownership was not restored in SingleWorldManager. Claim lookup now restores from persisted player spawn data before assigning a new chunk.",
+        "status":  "done",
+        "user_note":  "Fixed issue where /chunklock start could give a new chunk after restart on MySQL. Existing persisted claim is now restored and reused.",
+        "risk":  "low",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/managers/SingleWorldManager.java"
+                          ],
+        "tests":  [
+                      "runTests: 35 passed, 0 failed"
+                  ],
+        "notes":  "GitHub issue: #65"
+    },
+    {
+        "id":  "fix-76-resource-scan-acacia-repetition",
+        "type":  "bugfix",
+        "title":  "Reduce repeated acacia costs and improve material cost scaling",
+        "description":  "Resource-scan was over-selecting wood/acacia and flattening costs around fixed values due to strict availability capping.",
+        "status":  "done",
+        "user_note":  "Improved resource-scan variety and progression scaling: repeated wood/acacia picks are reduced and costs no longer flatten around fixed values during progression.",
+        "risk":  "med",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java",
+                              "src/test/java/me/chunklock/economy/calculation/ResourceBasedCostTest.java"
+                          ],
+        "tests":  [
+                      "runTests ResourceBasedCostTest: 9 passed, 0 failed",
+                      "runTests all: 35 passed, 0 failed"
+                  ],
+        "notes":  "GitHub issue: #76"
+    },
+    {
+        "id":  "fix-77-resource-scan-economy-hardening",
+        "type":  "bugfix",
+        "title":  "Harden resource-scan pricing against scarcity exploits and improve consistency",
+        "description":  "Reworked resource-scan to use deterministic candidate sorting, weighted wood de-prioritization, diminishing-return progression scaling, and a bounded soft availability modifier instead of hard availability caps.",
+        "status":  "done",
+        "user_note":  "Resource-scan now selects materials more consistently and fairly, prevents low-cost scarcity exploits, and shows players that prices are based on claimed-chunk resources.",
+        "risk":  "med",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java",
+                              "src/main/java/me/chunklock/ui/UnlockGuiBuilder.java",
+                              "src/test/java/me/chunklock/economy/calculation/ResourceBasedCostTest.java"
+                          ],
+        "tests":  [
+                      "runTests ResourceBasedCostTest: 9 passed, 0 failed",
+                      "runTests all: 35 passed, 0 failed"
+                  ],
+        "notes":  "GitHub issue: #77"
+    },
+    {
+        "id":  "fix-78-async-cost-calculation-concurrency",
+        "type":  "bugfix",
+        "title":  "Fix NoSuchElementException in ResourceBasedMaterialStrategy during async cost calculation",
+        "description":  "The recent-selection history added for #77 used a plain HashMap of ArrayDeque, but calculateRequirement runs on async threads via AsyncCostCalculationService (runTaskAsynchronously and two CompletableFuture.supplyAsync call sites). Concurrent trimming could call removeFirst() on an empty deque and throw NoSuchElementException, and the unsynchronized HashMap risked corruption under concurrent computeIfAbsent. Switched to ConcurrentHashMap + ConcurrentLinkedDeque and replaced removeFirst() with pollFirst(), which returns null instead of throwing. Also added per-player cleanup on quit so the map does not grow unbounded on long-running servers.",
+        "status":  "done",
+        "user_note":  "Fixed an error that could occur while calculating unlock costs in resource-scan mode, which could cause the unlock menu to fail to open or show incorrect requirements.",
+        "risk":  "low",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/economy/calculation/ResourceBasedMaterialStrategy.java",
+                              "src/main/java/me/chunklock/economy/EconomyManager.java",
+                              "src/main/java/me/chunklock/listeners/PlayerListener.java",
+                              "src/test/java/me/chunklock/economy/calculation/ResourceBasedCostTest.java"
+                          ],
+        "tests":  [
+                      "runTests ResourceBasedCostTest: 9 passed, 0 failed",
+                      "runTests all: 29 passed, 0 failed",
+                      "Regression verified: reverting pollFirst() to removeFirst() makes the new concurrency test fail with NoSuchElementException"
+                  ],
+        "notes":  "GitHub issue: #78. Root cause was introduced by the #77 work in the same file, so both ship together."
+    },
+    {
+        "id":  "fix-74-hologram-state-eviction",
+        "type":  "bugfix",
+        "title":  "Bound the hologram state cache",
+        "description":  "Hologram state map grew without bound: 5 puts, 0 individual removes, clear() only on shutdown, and the periodic cleanup task was an empty stub. Added a stale-entry eviction policy plus a hard cap.",
+        "status":  "done",
+        "user_note":  "The hologram state cache no longer grows without bound during exploration; stale entries are evicted and the cache is hard-capped",
+        "risk":  "high",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/hologram/"
+                          ],
+        "tests":  [
+                      "HologramStateEvictionTest: 6 passed. Verified they catch the defect - disabling eviction fails 4 of 6, retaining 2000 entries vs ~540"
+                  ],
+        "notes":  "GitHub issue: #74. Locally validated Aug 29; cache plateaus as designed. Issue stays OPEN pending real-load data - the 64GB report from a heavily modified server at high player count was not reproduced."
+    },
+    {
+        "id":  "feat-74-debug-memory-command",
+        "type":  "feature",
+        "title":  "Add /chunklock debug memory",
+        "description":  "Surfaces hologram cache counters in chat rather than a raw stats map on the console, for validating the #74 eviction fix on a live server.",
+        "status":  "done",
+        "user_note":  "New \u0027/chunklock debug memory\u0027 command showing hologram cache totals, evictions and usage percentage",
+        "risk":  "low",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/commands/"
+                          ],
+        "tests":  [
+                      "35 passed, 0 failed"
+                  ],
+        "notes":  "The number to watch is cached-despawned: it should plateau while exploring, not climb."
+    },
+    {
+        "id":  "fix-82-unlock-gui-material-cycling",
+        "type":  "bugfix",
+        "title":  "Stop the unlock GUI re-rolling the required material",
+        "description":  "calculateRequirement read like a query but called rememberSelection, and computeSelectionScore penalises recent selections by -350. Against a four-candidate window this produced a strict 4-cycle - the reported gravel/clay/sand/dirt rotation - from ten pure-display call sites.",
+        "status":  "done",
+        "user_note":  "The unlock menu no longer changes the required material each time you open it",
+        "risk":  "med",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/economy/"
+                          ],
+        "tests":  [
+                      "41 tests passing, up from 35"
+                  ],
+        "notes":  "GitHub issue: #82. PR #85."
+    },
+    {
+        "id":  "feat-83-price-commitment",
+        "type":  "feature",
+        "title":  "Make chunk prices a commitment, with a priced re-roll",
+        "description":  "Persistence already existed but only TraditionalVaultStrategy called storeCost. Wired the resource-scan path through it, keyed per (player, chunk, config hash), plus a re-roll service with a 1h per-chunk cooldown or escalating Vault cost. GUI button at slot 33.",
+        "status":  "done",
+        "user_note":  "Once you have seen a price for a chunk it is honoured until you pay it or re-roll it, surviving relog, restart and cache expiry. New re-roll button for a different requirement",
+        "risk":  "high",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/economy/",
+                              "src/main/java/me/chunklock/gui/"
+                          ],
+        "tests":  [
+                      "RerollCostPolicyTest: 6 passed",
+                      "RerollChangesMaterialTest: 5 passed"
+                  ],
+        "notes":  "GitHub issue: #83. PR #89. Play-testing found the re-roll charging without changing the requirement (46f44c2) and offering itself when only one candidate existed (f73a61d, PR #93)."
+    },
+    {
+        "id":  "fix-83-reroll-no-alternatives",
+        "type":  "bugfix",
+        "title":  "Do not offer a re-roll that cannot change anything",
+        "description":  "Selection is deterministic, so a player whose territory yields exactly one obtainable material paid for an impossibility. GUI and payment path now both read EconomyManager.hasRerollAlternatives.",
+        "status":  "done",
+        "user_note":  "The re-roll button is greyed out, with the reason shown, when a re-roll could not change anything",
+        "risk":  "med",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/economy/",
+                              "src/main/java/me/chunklock/gui/"
+                          ],
+        "tests":  [
+                      "RerollAlternativesTest: 5 passed. 67 tests passing"
+                  ],
+        "notes":  "GitHub issue: #83. PR #93. Not yet play-tested."
+    },
+    {
+        "id":  "feat-86-target-chunk-pricing",
+        "type":  "feature",
+        "title":  "Price chunks from their own contents",
+        "description":  "Replaces owned-chunk aggregate pricing with per-chunk profiling: profile capture on the main thread, a persisted running material baseline, a distinctiveness metric (surface-weighted, relative to baseline), and the #69 obtainability ladder wired into ResourceBasedMaterialStrategy. Prototype measured raw abundance at 1-of-5 distinct chunks vs 5-of-5 for the chosen metric.",
+        "status":  "done",
+        "user_note":  "A chunk\u0027s cost is now based on what is in that chunk. Forests ask for wood, mountains andesite, deserts sand - and two adjacent chunks with different terrain price differently",
+        "risk":  "high",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/economy/calculation/",
+                              "src/main/java/me/chunklock/services/ChunkProfileStore.java"
+                          ],
+        "tests":  [
+                      "145 tests total, up from 35 when the work began",
+                      "Verified to catch a raw-abundance revert (4 failures) and a removed tier cap (3)"
+                  ],
+        "notes":  "GitHub issue: #86. PRs #94, #100, #102. Changes what every chunk costs and resets servers mid-progression - this is why the release is 2.3.0 and not 2.2.1."
+    },
+    {
+        "id":  "fix-86-selection-honours-ranking",
+        "type":  "bugfix",
+        "title":  "Honour the distinctiveness ranking when selecting a material",
+        "description":  "Candidates were re-scored as tier*1000+count - correct for the owned-chunk pool, wrong for the target-chunk pool. Below 3 unlocked chunks it produced a dirt/gravel/clay rotation; from 3 onward every chunk would have priced as stone.",
+        "status":  "done",
+        "user_note":  "Chunk prices favour what makes a chunk distinctive rather than what it holds the most of",
+        "risk":  "high",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/economy/calculation/"
+                          ],
+        "tests":  [
+                      "selectForPool pins the routing at the call site"
+                  ],
+        "notes":  "GitHub issue: #86. Found by play-testing, not by 128 passing tests. Would have shipped."
+    },
+    {
+        "id":  "fix-86-unlocked-chunk-counter",
+        "type":  "bugfix",
+        "title":  "Actually count unlocked chunks, and repair worlds where it never was",
+        "description":  "Nothing ever called incrementUnlockedChunks; a comment claiming otherwise described a call that did not exist. Every player read 0 forever, so getMaxTierForProgression(0) capped candidates at tier 3 and the progression cost multiplier stayed flat. getUnlockedChunkCount now treats 0 as never-tallied and recomputes once from the chunk database.",
+        "status":  "done",
+        "user_note":  "Unlocked chunks are now actually counted; existing worlds recount themselves once from stored chunk ownership",
+        "risk":  "high",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/gui/UnlockGui.java",
+                              "src/main/java/me/chunklock/economy/"
+                          ],
+        "tests":  [
+                      "ProgressionTierCapTest: 5 passed. 139 tests, up from 134"
+                  ],
+        "notes":  "Predates #86 entirely. Reported by the owner as an aside while describing a different symptom - the aside was the cause."
+    },
+    {
+        "id":  "fix-86-featureless-chunk-deepslate",
+        "type":  "bugfix",
+        "title":  "Stop featureless chunks pricing themselves in deepslate",
+        "description":  "The metric could say what a chunk was most above average in, but never whether it was distinctive at all. On a bland chunk every score hovers near 1.0 and the top entry wins by noise - and bulk depth stone is the noisiest candidate. Added a distinctiveness margin plus a filler discount.",
+        "status":  "done",
+        "user_note":  "A chunk with no real character falls back to territory-based pricing instead of picking a material at random",
+        "risk":  "med",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/economy/calculation/"
+                          ],
+        "tests":  [
+                      "145 tests passing"
+                  ],
+        "notes":  "GitHub issue: #86. Owner chose discount-not-ban so a genuine mountainside at 2.5x still headlines. DISTINCTIVENESS_MARGIN is 1.3 and unmeasured in practice - worth a play observation."
+    },
+    {
+        "id":  "fix-90-chunk-cost-merge-key",
+        "type":  "bugfix",
+        "title":  "Key the chunk cost MERGE on the unique constraint",
+        "description":  "storeCost used a bare MERGE INTO, which H2 keys on the PRIMARY KEY - the auto-increment id the statement never supplies - so every write failed with 90081 and chunk_costs was empty on every server.",
+        "status":  "done",
+        "user_note":  "Chunk costs are now written to the database at all. Every write had been failing silently",
+        "risk":  "med",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/services/ChunkCostDatabase.java"
+                          ],
+        "tests":  [
+                      "ChunkCostPersistenceTest runs real H2; verified it fails with 90081 without the fix. 62 tests passing"
+                  ],
+        "notes":  "GitHub issue: #90. PR #92. Live-verified: console spam gone."
+    },
+    {
+        "id":  "fix-95-route-pricing-storage",
+        "type":  "bugfix",
+        "title":  "Route chunk cost and profile storage on database.type",
+        "description":  "Not a connection swap - the SQL was H2-only and would fail on every MySQL write, and the || concat would have failed SILENTLY. Added SqlDialect and CostStorageBackend. Also fixed a latent #78-shaped threading bug.",
+        "status":  "done",
+        "user_note":  "Chunk cost and profile storage now follow your configured database.type. On multi-server MySQL setups, prices no longer diverge per node",
+        "risk":  "high",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/services/SqlDialect.java",
+                              "src/main/java/me/chunklock/services/CostStorageBackend.java"
+                          ],
+        "tests":  [
+                      "SqlDialectTest across 4 nested classes. 98 tests passing"
+                  ],
+        "notes":  "GitHub issue: #95. PR #96. Owner confirmed on a live MySQL server that chunks_counted matches the distinct chunk count on every baseline row, so the silent || collapse did not occur."
+    },
+    {
+        "id":  "fix-language-defaults-fallback",
+        "type":  "bugfix",
+        "title":  "Resolve message keys added after a server first start",
+        "description":  "LanguageManager writes lang/en.yml only when absent, and nothing reconciled an existing file with the jar copy. Any key added by a later update was missing and getMessage returned the raw key. Fixed with setDefaults plus copyDefaults(false), so admin edits keep priority and their file is never rewritten.",
+        "status":  "done",
+        "user_note":  "Messages added by plugin updates now display correctly on servers first started on an earlier version, instead of rendering as raw keys",
+        "risk":  "med",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/i18n/LanguageManager.java"
+                          ],
+        "tests":  [
+                      "LanguageDefaultsFallbackTest: 53 passing, up from 47"
+                  ],
+        "notes":  "General, not specific to #83 - affects every message added since a given server first started."
+    },
+    {
+        "id":  "fix-starting-chunk-void-spawn",
+        "type":  "bugfix",
+        "title":  "Stop players spawning in the void after /chunklock start",
+        "description":  "Two defects. findValidStartingChunk ran async and called world.getChunkAt, which off the main thread returns an ungenerated chunk, so every height lookup reported world minimum and clamped spawn to Y=-63. And SingleWorldManager stored the claim in memory only, never calling setChunk, so respawn found no saved spawn.",
+        "status":  "done",
+        "user_note":  "Players no longer spawn in the void after \u0027/chunklock start\u0027, and the assigned spawn is saved so dying does not drop you back into it",
+        "risk":  "high",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/world/SingleWorldManager.java",
+                              "src/main/java/me/chunklock/util/ChunkUtils.java"
+                          ],
+        "tests":  [
+                      "35 passed, 0 failed"
+                  ],
+        "notes":  "Also explains the \u0027Can\u0027t keep up! Running 6776ms behind\u0027 warning in the same log - async chunk access forcing sync main-thread work."
+    },
+    {
+        "id":  "fix-hologram-provider-warning",
+        "type":  "bugfix",
+        "title":  "Warn clearly when holograms are enabled but no provider loads",
+        "description":  "A single INFO line conflated a deliberate disable with a failed provider load. Now a failed provider prints a warning block naming the provider, whether the plugin is present, where to download it, and the Java-version pitfall. isProviderDisabled is now case-insensitive.",
+        "status":  "done",
+        "user_note":  "When holograms are enabled but the provider fails to load, the log now names the provider and what to check instead of one info line that scrolled past",
+        "risk":  "low",
+        "files_touched":  [
+                              "src/main/java/me/chunklock/hologram/HologramService.java",
+                              "docs/wiki/Troubleshooting.md"
+                          ],
+        "tests":  [
+                      "35 passed, 0 failed"
+                  ],
+        "notes":  "Prompted by a server running without holograms for a whole session: FancyHolograms was built for a newer Java, so the server skipped it silently. Also corrected README and Troubleshooting docs that claimed a nonexistent internal fallback."
+    },
+    {
+        "id":  "chore-docs-truth-pass",
+        "type":  "chore",
+        "title":  "Documentation truth pass",
+        "description":  "Removed the fossil dependency-reduced-pom.xml stale at 1.2.7 and gitignored it, fixed the README install comment, and dated docs/project-charter.md stating its gaps rather than rewriting it. Also rewrote the SpigotMC resource-scan copy to match the implementation.",
+        "status":  "done",
+        "user_note":  "Documentation no longer advertises behaviour the plugin does not have",
+        "risk":  "low",
+        "files_touched":  [
+                              "README.md",
+                              "docs/project-charter.md",
+                              "docs/SpigotMC-Description.md",
+                              ".gitignore"
+                          ],
+        "tests":  [
+                      "98 tests passing, jar builds"
+                  ],
+        "notes":  "PR #99. The charter\u0027s \u0027500 licenses at 89 dollars\u0027 line was a revenue projection later mistaken for fact - Chunklock is free. SpigotMC-Description.md is UTF-16 LE with BOM."
+    },
+    {
+        "id":  "chore-issue-templates-triage",
+        "type":  "chore",
+        "title":  "Replace stock issue templates and document triage",
+        "description":  "The bug template was GitHub\u0027s web-app boilerplate asking for iPhone model and browser version. Replaced with server software, Java version, cost strategy, hologram provider, storage backend and console output, plus a separate performance template. Label scheme documented in TRIAGE.md.",
+        "status":  "done",
+        "user_note":  "Issue templates now ask for the details a Minecraft plugin bug actually needs",
+        "risk":  "low",
+        "files_touched":  [
+                              ".github/ISSUE_TEMPLATE/",
+                              "TRIAGE.md"
+                          ],
+        "tests":  [
+                      "n/a - no code change"
+                  ],
+        "notes":  "#74 showed performance reports need different information than functional bugs."
+    }
 ]
