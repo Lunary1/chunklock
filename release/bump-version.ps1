@@ -12,11 +12,14 @@
     PowerShell 7+ : utf8 = no BOM, and utf8BOM exists
     Windows PS 5.1: utf8 = WITH BOM, and utf8BOM does not exist at all
 
-  This machine runs 5.1 (pwsh 7 is not installed). Running the old commands
-  there stripped pom.xml's BOM and re-encoded every emoji in README.md,
-  producing a 40-line diff on a file that should have changed one line.
+  Both are installed on this machine, and which one you get is not guaranteed -
+  Windows still opens 5.1 by default in several places. The 2.3.0 release ran
+  in 5.1, which stripped pom.xml's BOM and re-encoded every emoji in README.md,
+  producing a 40-line diff on a file that should have changed one line, while
+  plugin.yml silently never got bumped at all.
 
-  This script uses explicit .NET encoders instead, so it is correct on both.
+  This script uses explicit .NET encoders instead, so it is correct under
+  either shell. Verified running identically on 5.1 and 7.6.5.
 
 .PARAMETER NewVersion
   The version to write, e.g. "3.0.0". Bare number, no leading "v".
@@ -62,6 +65,7 @@ function Get-HasBom([string]$Path) {
 # ReadAllText auto-detects and strips a BOM into the string, so BOM state is
 # carried separately and restored on write - never inferred from the content.
 function Update-VersionInFile {
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [string]$Path,
         [string]$Pattern,
