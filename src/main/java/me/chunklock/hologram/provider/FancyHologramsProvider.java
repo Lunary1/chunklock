@@ -5,6 +5,7 @@ import me.chunklock.hologram.api.HologramProvider;
 import me.chunklock.hologram.core.HologramData;
 import me.chunklock.ChunklockPlugin;
 
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -377,6 +378,8 @@ public final class FancyHologramsProvider implements HologramProvider {
         private Method setPersistentMethod;
         private Method setBillboardMethod;
         private Method setRotationMethod;
+        private Method getLocationMethod;
+        private Method setLocationMethod;
         private Method getNameMethod;
         private Method forceShowHologramMethod;
         private Method updateShownStateMethod;
@@ -460,6 +463,13 @@ public final class FancyHologramsProvider implements HologramProvider {
                 setRotationMethod = textHologramDataClass.getMethod("setRotation", float.class, float.class);
             } catch (Exception e) { /* Ignore */ }
 
+            // Fallback path for FancyHolograms 2.10+, which dropped setRotation and carries
+            // orientation on the hologram's Location instead. See setRotation(...) below.
+            try {
+                getLocationMethod = textHologramDataClass.getMethod("getLocation");
+                setLocationMethod = textHologramDataClass.getMethod("setLocation", Location.class);
+            } catch (Exception e) { /* Location-based rotation not available */ }
+
             try {
                 forceShowHologramMethod = hologramClass.getMethod("forceShowHologram", Player.class);
             } catch (Exception e) { /* Ignore */ }
@@ -468,14 +478,22 @@ public final class FancyHologramsProvider implements HologramProvider {
                 updateShownStateMethod = hologramClass.getMethod("updateShownStateFor", Player.class);
             } catch (Exception e) { /* Ignore */ }
 
-            // Try to find background/transparency methods
+            // setBackground takes an org.bukkit.Color, not an int - the old int lookup never
+            // resolved, so the background was never actually made transparent.
             try {
-                setBackgroundMethod = textHologramDataClass.getMethod("setBackground", int.class);
+                setBackgroundMethod = textHologramDataClass.getMethod("setBackground", Color.class);
             } catch (Exception e) { /* Background method not available */ }
 
+            // The shadow toggle is setTextShadow(boolean), and has been since at least 2.4.2 -
+            // the old lookup for "setShadow" never resolved, so shadows were never actually
+            // disabled. Kept as a fallback in case the name moves again.
             try {
-                setShadowMethod = textHologramDataClass.getMethod("setShadow", boolean.class);
-            } catch (Exception e) { /* Shadow method not available */ }
+                setShadowMethod = textHologramDataClass.getMethod("setTextShadow", boolean.class);
+            } catch (Exception e) {
+                try {
+                    setShadowMethod = textHologramDataClass.getMethod("setShadow", boolean.class);
+                } catch (Exception ex) { /* Shadow method not available */ }
+            }
         }
 
         private void cacheVisibilityComponents() {
@@ -664,8 +682,9 @@ public final class FancyHologramsProvider implements HologramProvider {
         public boolean setTransparentBackground(Object hologramData) {
             if (setBackgroundMethod == null) return false;
             try {
-                // Set background to transparent (0x00000000) or fully transparent
-                setBackgroundMethod.invoke(hologramData, 0x00000000);
+                // Fully transparent background: alpha 0. Color.fromARGB is what FancyHolograms
+                // reads the alpha channel from.
+                setBackgroundMethod.invoke(hologramData, Color.fromARGB(0, 0, 0, 0));
                 return true;
             } catch (Exception e) {
                 return false;
@@ -683,9 +702,27 @@ public final class FancyHologramsProvider implements HologramProvider {
         }
 
         public boolean setRotation(Object hologramData, float yaw, float pitch) {
-            if (setRotationMethod == null) return false;
+            if (setRotationMethod != null) {
+                try {
+                    setRotationMethod.invoke(hologramData, yaw, pitch);
+                    return true;
+                } catch (Exception e) {
+                    return false;
+                }
+            }
+
+            // FancyHolograms 2.10 dropped setRotation(float, float); orientation now travels on the
+            // hologram's own Location. Re-apply it as a rotated copy of the current location so the
+            // yaw/pitch are not silently lost.
+            if (getLocationMethod == null || setLocationMethod == null) return false;
             try {
-                setRotationMethod.invoke(hologramData, yaw, pitch);
+                Object current = getLocationMethod.invoke(hologramData);
+                if (!(current instanceof Location location)) return false;
+
+                Location rotated = location.clone();
+                rotated.setYaw(yaw);
+                rotated.setPitch(pitch);
+                setLocationMethod.invoke(hologramData, rotated);
                 return true;
             } catch (Exception e) {
                 return false;

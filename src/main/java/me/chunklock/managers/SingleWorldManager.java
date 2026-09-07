@@ -205,7 +205,7 @@ public class SingleWorldManager {
             border.setCenter(0, 0);
             border.setSize(worldDiameter);
             border.setWarningDistance(100);
-            border.setWarningTime(10);
+            border.setWarningTimeTicks(10 * 20); // 10 seconds; the removed setWarningTime took seconds, this takes ticks
             
             plugin.getLogger().info("World created successfully: " + chunklockWorldName);
             admin.sendMessage(Component.text("🌍 World created: " + chunklockWorldName)
