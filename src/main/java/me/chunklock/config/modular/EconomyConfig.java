@@ -12,7 +12,7 @@ import java.util.Map;
  * Configuration handler for economy.yml
  * Manages economy and payment system settings.
  */
-public class EconomyConfig {
+public final class EconomyConfig {
     private final Plugin plugin;
     private FileConfiguration config;
 

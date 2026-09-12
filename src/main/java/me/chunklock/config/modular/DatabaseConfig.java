@@ -10,7 +10,7 @@ import java.io.File;
  * Configuration handler for database.yml
  * Manages persistent storage backend settings.
  */
-public class DatabaseConfig {
+public final class DatabaseConfig {
     private final Plugin plugin;
     private FileConfiguration config;
 

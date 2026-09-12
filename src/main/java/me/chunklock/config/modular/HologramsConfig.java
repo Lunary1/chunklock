@@ -10,7 +10,7 @@ import java.io.File;
  * Configuration handler for holograms.yml
  * Manages hologram display settings.
  */
-public class HologramsConfig {
+public final class HologramsConfig {
     private final Plugin plugin;
     private FileConfiguration config;
 

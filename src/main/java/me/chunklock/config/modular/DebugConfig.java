@@ -10,7 +10,7 @@ import java.io.File;
  * Configuration handler for debug.yml
  * Manages debug and logging options.
  */
-public class DebugConfig {
+public final class DebugConfig {
     private final Plugin plugin;
     private FileConfiguration config;
 

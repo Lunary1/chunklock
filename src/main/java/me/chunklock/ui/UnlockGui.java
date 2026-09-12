@@ -327,9 +327,6 @@ public class UnlockGui {
     }
     
     /**
-     * Process an unlock attempt from a player.
-     */
-    /**
      * Handle a click on the re-roll button (#83).
      *
      * <p>Payment is taken by {@link me.chunklock.economy.EconomyManager#tryRerollChunkPrice},

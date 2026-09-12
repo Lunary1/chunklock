@@ -6,16 +6,16 @@
 
   <groupId>me.chunklock</groupId>
   <artifactId>chunklock</artifactId>
-  <version>2.3.0</version>
+  <version>3.0.0-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>Chunklock</name>
 
   <properties>
-    <java.version>17</java.version>
-    <paper.version>1.21.10-R0.1-SNAPSHOT</paper.version>
-    <maven.compiler.source>17</maven.compiler.source>
-    <maven.compiler.target>17</maven.compiler.target>
+    <java.version>25</java.version>
+    <paper.version>26.1.2.build.74-stable</paper.version>
+    <maven.compiler.source>25</maven.compiler.source>
+    <maven.compiler.target>25</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
@@ -47,7 +47,7 @@
   </repositories>
 
   <dependencies>
-    <!-- Paper API targeting 1.20.4 for Pufferfish compatibility -->
+    <!-- Paper API - see paper.version property -->
     <dependency>
       <groupId>io.papermc.paper</groupId>
       <artifactId>paper-api</artifactId>
@@ -59,7 +59,7 @@
     <dependency>
       <groupId>de.oliver</groupId>
       <artifactId>FancyHolograms</artifactId>
-      <version>2.4.2</version>
+      <version>2.10.0</version>
       <scope>provided</scope>
     </dependency>
   
@@ -160,6 +160,14 @@
           <release>${java.version}</release>
           <encoding>UTF-8</encoding>
           <proc>none</proc>
+          <!--
+            Lint was off, so warnings only ever appeared in an editor and never in a build.
+            The tree is at zero; keeping this on means the next one shows up in CI. Not
+            -Werror: a new JDK can add warnings, and that should not break the release.
+          -->
+          <compilerArgs>
+            <arg>-Xlint:all</arg>
+          </compilerArgs>
         </configuration>
       </plugin>
 
@@ -167,7 +175,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>3.4.1</version>
+        <version>3.6.2</version>
         <configuration>
           <createDependencyReducedPom>false</createDependencyReducedPom>
           <relocations>

@@ -19,6 +19,11 @@ public class MySqlConnectionProvider {
         this.databaseConfig = databaseConfig;
     }
 
+    /**
+     * The unnamed resource below is deliberate: the connection is opened only to prove the pool
+     * can reach the server, and try-with-resources hands it straight back. Naming it and using
+     * it would be the misleading version.
+     */
     public boolean initialize() {
         try {
             HikariConfig config = new HikariConfig();
@@ -39,7 +44,7 @@ public class MySqlConnectionProvider {
 
             dataSource = new HikariDataSource(config);
 
-            try (Connection ignored = getConnection()) {
+            try (Connection _ = getConnection()) {
                 plugin.getLogger().info("✅ MySQL connection pool initialized");
             }
 

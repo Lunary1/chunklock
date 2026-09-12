@@ -49,14 +49,10 @@ public class ChunkPreAllocationService {
      * Load debug configuration from config.yml
      */
     private void loadDebugConfiguration() {
-        // Use modular debug config
-        me.chunklock.config.modular.DebugConfig debugConfig = null;
-        if (plugin instanceof me.chunklock.ChunklockPlugin) {
-            debugConfig = ((me.chunklock.ChunklockPlugin) plugin).getConfigManager().getDebugConfig();
-        } else {
-            debugConfig = new me.chunklock.config.modular.DebugConfig(plugin);
-        }
-        boolean masterDebug = debugConfig != null ? debugConfig.isEnabled() : false;
+        // Use modular debug config. The field is already a ChunklockPlugin, so the old
+        // instanceof branch and its cast could never take the alternative path.
+        me.chunklock.config.modular.DebugConfig debugConfig = plugin.getConfigManager().getDebugConfig();
+        boolean masterDebug = debugConfig != null && debugConfig.isEnabled();
         this.debugLogging = masterDebug && (debugConfig != null ? debugConfig.isPerformanceDebug() : false);
     }
     

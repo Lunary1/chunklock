@@ -10,7 +10,7 @@ import java.io.File;
  * Configuration handler for performance.yml
  * Manages performance tuning settings.
  */
-public class PerformanceConfig {
+public final class PerformanceConfig {
     private final Plugin plugin;
     private FileConfiguration config;
 

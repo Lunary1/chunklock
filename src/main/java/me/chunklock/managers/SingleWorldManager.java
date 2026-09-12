@@ -2,10 +2,10 @@ package me.chunklock.managers;
 
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.util.chunk.ChunkUtils;
+import me.chunklock.util.world.WorldFolderResolver;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.*;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -23,7 +23,6 @@ import java.util.logging.Level;
 public class SingleWorldManager {
     
     private final ChunklockPlugin plugin;
-    private final FileConfiguration config;
     private final Random random = new Random();
     
     // World configuration
@@ -43,7 +42,6 @@ public class SingleWorldManager {
     
     public SingleWorldManager(ChunklockPlugin plugin) {
         this.plugin = plugin;
-        this.config = plugin.getConfig();
         loadConfiguration();
     }
     
@@ -75,11 +73,14 @@ public class SingleWorldManager {
             // Start pre-allocation service for existing world
             startPreAllocationService(world);
         } else {
-            // Check if world exists on disk
-            java.io.File worldFolder = new java.io.File(Bukkit.getWorldContainer(), chunklockWorldName);
-            if (worldFolder.exists() && worldFolder.isDirectory()) {
+            // Check if world exists on disk. Paper 26.1 nests dimensions under
+            // world/dimensions/<namespace>/, so the folder is not in the container root - see #103.
+            java.io.File worldFolder = WorldFolderResolver.resolveExisting(
+                Bukkit.getWorldContainer(), chunklockWorldName);
+            if (worldFolder != null) {
                 // World exists on disk, try to load it
-                plugin.getLogger().info("Found existing ChunkLock world '" + chunklockWorldName + "' on disk, loading...");
+                plugin.getLogger().info("Found existing ChunkLock world '" + chunklockWorldName
+                    + "' on disk at " + worldFolder.getAbsolutePath() + ", loading...");
                 try {
                     WorldCreator creator = new WorldCreator(chunklockWorldName);
                     world = creator.createWorld();
@@ -131,14 +132,22 @@ public class SingleWorldManager {
     public CompletableFuture<Boolean> setupChunklockWorld(int diameter, Player admin) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         
-        // Update configuration
+        // Update configuration. This must persist to worlds.yml, which is what loadConfiguration()
+        // reads on startup - writing to config.yml here left the diameter reverting to its default
+        // on every restart (#103).
         this.worldDiameter = diameter;
-        config.set("world.name", chunklockWorldName);
-        config.set("world.diameter", diameter);
-        if (!config.contains("claims.min-distance-between-claims")) {
-            config.set("claims.min-distance-between-claims", minDistanceBetweenClaims);
+        me.chunklock.config.modular.WorldsConfig worldsConfig = plugin.getConfigManager() != null
+            ? plugin.getConfigManager().getWorldsConfig()
+            : null;
+        if (worldsConfig != null) {
+            if (!worldsConfig.saveWorldSettings(chunklockWorldName, diameter)) {
+                plugin.getLogger().warning(
+                    "Chunklock world settings could not be saved; the diameter will reset on restart.");
+            }
+        } else {
+            plugin.getLogger().warning(
+                "WorldsConfig unavailable - world settings not persisted, the diameter will reset on restart.");
         }
-        plugin.saveConfig();
         
         // Run world creation asynchronously
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -205,7 +214,7 @@ public class SingleWorldManager {
             border.setCenter(0, 0);
             border.setSize(worldDiameter);
             border.setWarningDistance(100);
-            border.setWarningTime(10);
+            border.setWarningTimeTicks(10 * 20); // 10 seconds; the removed setWarningTime took seconds, this takes ticks
             
             plugin.getLogger().info("World created successfully: " + chunklockWorldName);
             admin.sendMessage(Component.text("🌍 World created: " + chunklockWorldName)
@@ -573,10 +582,13 @@ public class SingleWorldManager {
             return true;
         }
         
-        // If not loaded, check if it exists on disk and try to load it
-        java.io.File worldFolder = new java.io.File(Bukkit.getWorldContainer(), chunklockWorldName);
-        if (worldFolder.exists() && worldFolder.isDirectory()) {
-            plugin.getLogger().info("ChunkLock world exists on disk but not loaded, attempting to load...");
+        // If not loaded, check if it exists on disk and try to load it. Paper 26.1 nests
+        // dimensions under world/dimensions/<namespace>/ rather than the container root - see #103.
+        java.io.File worldFolder = WorldFolderResolver.resolveExisting(
+            Bukkit.getWorldContainer(), chunklockWorldName);
+        if (worldFolder != null) {
+            plugin.getLogger().info("ChunkLock world exists on disk at " + worldFolder.getAbsolutePath()
+                + " but is not loaded, attempting to load...");
             try {
                 WorldCreator creator = new WorldCreator(chunklockWorldName);
                 world = creator.createWorld();

@@ -180,7 +180,6 @@ class FeaturelessChunkTest {
             OwnedChunkScanner.getMaterialTier(material));
     }
 
-    @SafeVarargs
     private static List<ChunkProfileStore.ProfileEntry> profile(ChunkProfileStore.ProfileEntry... entries) {
         return new ArrayList<>(List.of(entries));
     }

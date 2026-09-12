@@ -1,7 +1,7 @@
 ﻿name: Chunklock
-version: "2.3.0"
+version: "3.0.0-SNAPSHOT"
 main: me.chunklock.ChunklockPlugin
-api-version: 1.21
+api-version: '26.1'
 author: LunaryCraft Dev Team
 description: Advanced chunk-locking system with visual effects, glass borders and strategic progression
 softdepend: [FancyHolograms, Vault, mmoitems, oraxen]

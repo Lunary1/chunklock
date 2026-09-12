@@ -488,9 +488,10 @@ public class ChunklockPlugin extends JavaPlugin implements Listener {
                     progressTracker, chunkLockManager, unlockGui, teamManager, 
                     teamCommandHandler, biomeUnlockRegistry, playerDataManager, singleWorldManager);
                 
-                if (getCommand("chunklock") != null) {
-                    getCommand("chunklock").setExecutor(chunklockCmd);
-                    getCommand("chunklock").setTabCompleter(chunklockCmd);
+                var command = getCommand("chunklock");
+                if (command != null) {
+                    command.setExecutor(chunklockCmd);
+                    command.setTabCompleter(chunklockCmd);
                     getLogger().info("✅ Command system ready");
                     return true;
                 }

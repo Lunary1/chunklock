@@ -10,7 +10,7 @@ import java.util.Map;
  * @version 1.3.0
  * @since 1.3.0
  */
-public class EconomyConfig {
+public final class EconomyConfig {
     
     private final FileConfiguration config;
     
@@ -80,8 +80,7 @@ public class EconomyConfig {
      * @return Map of biome names to multipliers
      */
     public Map<String, Object> getBiomeMultipliers() {
-        return (Map<String, Object>) config.getConfigurationSection("economy.vault.biome-multipliers")
-                .getValues(false);
+        return sectionValues("economy.vault.biome-multipliers");
     }
     
     /**
@@ -90,8 +89,19 @@ public class EconomyConfig {
      * @return Map of difficulty names to multipliers
      */
     public Map<String, Object> getDifficultyMultipliers() {
-        return (Map<String, Object>) config.getConfigurationSection("economy.vault.difficulty-multipliers")
-                .getValues(false);
+        return sectionValues("economy.vault.difficulty-multipliers");
+    }
+
+    /**
+     * Reads a configuration section's values, or an empty map when the section is absent.
+     *
+     * <p>The casts these two getters used to carry were redundant, and reaching straight through
+     * {@code getConfigurationSection(...)} threw a NullPointerException whenever the section was
+     * missing from the file - a config typo crashed the caller rather than falling back.
+     */
+    private Map<String, Object> sectionValues(String path) {
+        org.bukkit.configuration.ConfigurationSection section = config.getConfigurationSection(path);
+        return section != null ? section.getValues(false) : java.util.Collections.emptyMap();
     }
     
     /**

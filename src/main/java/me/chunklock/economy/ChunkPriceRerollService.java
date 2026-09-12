@@ -181,8 +181,7 @@ public class ChunkPriceRerollService {
 
     /**
      * What a re-roll would cost right now, in whichever currency this server uses.
-     */
-    /**
+     *
      * @param available          whether the button should be clickable at all
      * @param alternativesExist  whether a re-roll could produce a different material. False
      *                           forces {@code available} false and is reported separately so
