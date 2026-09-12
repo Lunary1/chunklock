@@ -309,7 +309,6 @@ class TargetChunkCandidateSourceTest {
             OwnedChunkScanner.getMaterialTier(material));
     }
 
-    @SafeVarargs
     private static List<ChunkProfileStore.ProfileEntry> profile(ChunkProfileStore.ProfileEntry... entries) {
         return List.of(entries);
     }
