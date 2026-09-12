@@ -35,7 +35,7 @@ import java.util.logging.Level;
  * creating a visual boundary that players can right-click to open unlock GUIs.
  * Only operates in worlds where ChunkLock is enabled.
  */
-public class ChunkBorderManager {
+public final class ChunkBorderManager {
     
     private final ChunkLockManager chunkLockManager;
     private final UnlockGui unlockGui;

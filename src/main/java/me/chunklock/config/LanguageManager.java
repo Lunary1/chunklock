@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
  * @author Chunklock Team
  * @version 2.0.0
  */
-public class LanguageManager {
+public final class LanguageManager {
     
     private static final String DEFAULT_LANGUAGE = "en";
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("%([a-zA-Z0-9_]+)%");

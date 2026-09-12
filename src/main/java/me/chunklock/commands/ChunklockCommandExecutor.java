@@ -15,7 +15,7 @@ import me.chunklock.ChunklockPlugin;
  * 
  * This replaces the original ChunklockCommand.java with a cleaner modular approach.
  */
-public class ChunklockCommandExecutor extends ChunklockCommandManager {
+public final class ChunklockCommandExecutor extends ChunklockCommandManager {
     
     private final PlayerProgressTracker progressTracker;
     private final ChunkLockManager chunkLockManager;

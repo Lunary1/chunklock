@@ -10,7 +10,7 @@ import java.io.File;
  * Configuration handler for worlds.yml
  * Manages world configuration settings.
  */
-public class WorldsConfig {
+public final class WorldsConfig {
     private final Plugin plugin;
     private FileConfiguration config;
 

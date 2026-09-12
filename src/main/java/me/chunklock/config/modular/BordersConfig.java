@@ -11,7 +11,7 @@ import java.io.File;
  * Configuration handler for borders.yml
  * Manages glass border system settings.
  */
-public class BordersConfig {
+public final class BordersConfig {
     private final Plugin plugin;
     private FileConfiguration config;
 

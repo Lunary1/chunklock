@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-public class EnhancedTeamManager {
+public final class EnhancedTeamManager {
     private final JavaPlugin plugin;
     private final Map<String, Team> teams = new ConcurrentHashMap<>();
     private final Map<UUID, String> playerToTeam = new ConcurrentHashMap<>();

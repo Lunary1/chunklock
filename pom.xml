@@ -160,6 +160,14 @@
           <release>${java.version}</release>
           <encoding>UTF-8</encoding>
           <proc>none</proc>
+          <!--
+            Lint was off, so warnings only ever appeared in an editor and never in a build.
+            The tree is at zero; keeping this on means the next one shows up in CI. Not
+            -Werror: a new JDK can add warnings, and that should not break the release.
+          -->
+          <compilerArgs>
+            <arg>-Xlint:all</arg>
+          </compilerArgs>
         </configuration>
       </plugin>
 

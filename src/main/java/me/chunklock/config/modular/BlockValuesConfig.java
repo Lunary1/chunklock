@@ -13,7 +13,7 @@ import java.util.Map;
  * Configuration handler for block-values.yml
  * Manages block values and biome weights for chunk scoring.
  */
-public class BlockValuesConfig {
+public final class BlockValuesConfig {
     private final Plugin plugin;
     private FileConfiguration config;
     private final Map<String, Integer> thresholds = new HashMap<>();

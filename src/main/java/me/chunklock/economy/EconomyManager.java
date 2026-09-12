@@ -30,7 +30,7 @@ import java.util.logging.Level;
  * Unified economy manager that handles both material-based and vault-based payments.
  * Allows admins to choose their preferred economy type via configuration.
  */
-public class EconomyManager {
+public final class EconomyManager {
     
     public enum EconomyType {
         MATERIALS("materials"),
@@ -561,15 +561,6 @@ public class EconomyManager {
     }
 
     /**
-     * Record that a player completed an unlock paying the given requirement, so the
-     * resource-scan strategy can vary what it asks for next time.
-     *
-     * <p>Only completed unlocks advance that history. Calculating a cost for display -
-     * opening the unlock GUI, drawing a hologram, pre-calculating adjacent chunks - must
-     * leave it untouched, or the requirement shown for a chunk changes as the player looks
-     * at it (issue #82).</p>
-     */
-    /**
      * The re-roll policy for committed chunk prices (#83).
      *
      * <p>Lives here because it needs the Vault service, which this class already owns, and
@@ -660,6 +651,15 @@ public class EconomyManager {
         return true;
     }
 
+    /**
+     * Record that a player completed an unlock paying the given requirement, so the
+     * resource-scan strategy can vary what it asks for next time.
+     *
+     * <p>Only completed unlocks advance that history. Calculating a cost for display -
+     * opening the unlock GUI, drawing a hologram, pre-calculating adjacent chunks - must
+     * leave it untouched, or the requirement shown for a chunk changes as the player looks
+     * at it (issue #82).</p>
+     */
     public void recordCompletedUnlock(Player player, PaymentRequirement requirement) {
         if (player == null || requirement == null) return;
         if (!(calculationStrategy instanceof ResourceBasedMaterialStrategy resourceStrategy)) {

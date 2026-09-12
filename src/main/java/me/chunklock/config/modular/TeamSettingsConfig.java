@@ -10,7 +10,7 @@ import java.io.File;
  * Configuration handler for team-settings.yml
  * Manages team system configuration.
  */
-public class TeamSettingsConfig {
+public final class TeamSettingsConfig {
     private final Plugin plugin;
     private FileConfiguration config;
 

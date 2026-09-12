@@ -11,7 +11,7 @@ import java.io.File;
  * Configuration handler for biome-unlocks.yml
  * Manages biome-specific unlock requirements.
  */
-public class BiomeUnlocksConfig {
+public final class BiomeUnlocksConfig {
     private final Plugin plugin;
     private FileConfiguration config;
 

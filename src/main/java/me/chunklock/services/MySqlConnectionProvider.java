@@ -19,6 +19,12 @@ public class MySqlConnectionProvider {
         this.databaseConfig = databaseConfig;
     }
 
+    /**
+     * The unused resource below is deliberate: the connection is opened only to prove the pool
+     * can reach the server, and try-with-resources hands it straight back. Naming it and using
+     * it would be the misleading version.
+     */
+    @SuppressWarnings("try")
     public boolean initialize() {
         try {
             HikariConfig config = new HikariConfig();
