@@ -1,4 +1,20 @@
 {
-  "java.compile.nullAnalysis.mode": "automatic",
+  // Null analysis is deliberately off rather than "automatic".
+  //
+  // Automatic mode infers null type annotations across the Bukkit, Paper and Vault
+  // APIs, none of which are annotated for it. The result was ~30 editor-only reports
+  // that the compiler does not produce - the build is at zero warnings with -Xlint:all
+  // on, and `mvn clean compile` confirms it. Nearly all of them were one pattern:
+  // iterating Bukkit.getOnlinePlayers(), whose elements are never null in practice.
+  //
+  // The mode also reported a Vault null guard as dead code while separately warning
+  // that the same type "doesn't seem to be designed with null type annotations in
+  // mind" - it contradicted itself, and acting on it would have deleted a real
+  // defensive check against a third-party plugin.
+  //
+  // A checker that reports ~30 false positives is one whose output stops being read,
+  // which is the failure mode that hid the three real warnings cleared in 61af36a.
+  // Turn this back to "automatic" only alongside annotated platform stubs.
+  "java.compile.nullAnalysis.mode": "disabled",
   "java.configuration.updateBuildConfiguration": "automatic"
 }
