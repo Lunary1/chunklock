@@ -23,6 +23,8 @@
 
 .PARAMETER NewVersion
   The version to write, e.g. "3.0.0". Bare number, no leading "v".
+  A pre-release suffix is allowed for test builds, e.g. "3.0.0-SNAPSHOT".
+  Releases are always bare - only ever tag and ship a bare version.
 
 .PARAMETER RepoRoot
   Repo root. Defaults to the parent of the folder holding this script.
@@ -37,7 +39,7 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidatePattern('^\d+\.\d+\.\d+$')]
+    [ValidatePattern('^\d+\.\d+\.\d+(-[A-Za-z0-9.]+)?$')]
     [string]$NewVersion,
 
     [string]$RepoRoot
@@ -104,7 +106,7 @@ Write-Host ""
 #    dependency <version> tags, which are indented deeper.
 $null = Update-VersionInFile `
     -Path (Join-Path $RepoRoot 'pom.xml') `
-    -Pattern '(?m)(?<=^  <version>)[\d.]+(?=</version>)' `
+    -Pattern '(?m)(?<=^  <version>)[\d.]+(?:-[A-Za-z0-9.]+)?(?=</version>)' `
     -Replacement $NewVersion `
     -Label 'pom.xml <version>'
 
@@ -112,7 +114,7 @@ $null = Update-VersionInFile `
 #    encoder above, the CRLF by never splitting the string into lines.
 $null = Update-VersionInFile `
     -Path (Join-Path $RepoRoot 'src\main\resources\plugin.yml') `
-    -Pattern 'version: "[\d.]+"' `
+    -Pattern 'version: "[\d.]+(?:-[A-Za-z0-9.]+)?"' `
     -Replacement ('version: "' + $NewVersion + '"') `
     -Label 'plugin.yml version'
 
@@ -120,7 +122,7 @@ $null = Update-VersionInFile `
 #    hard-breaks - the lookbehind stops before them, so they survive.
 $null = Update-VersionInFile `
     -Path (Join-Path $RepoRoot 'README.md') `
-    -Pattern '(?m)(?<=^\*\*Version\*\*: )[\d.]+' `
+    -Pattern '(?m)(?<=^\*\*Version\*\*: )[\d.]+(?:-[A-Za-z0-9.]+)?' `
     -Replacement $NewVersion `
     -Label 'README.md header'
 

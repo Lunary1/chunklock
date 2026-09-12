@@ -1,5 +1,5 @@
 ﻿name: Chunklock
-version: "2.3.0"
+version: "3.0.0-SNAPSHOT"
 main: me.chunklock.ChunklockPlugin
 api-version: '26.1'
 author: LunaryCraft Dev Team
