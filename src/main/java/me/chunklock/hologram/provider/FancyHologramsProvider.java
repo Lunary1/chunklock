@@ -257,9 +257,25 @@ public final class FancyHologramsProvider implements HologramProvider {
             // Use FIXED billboard for stationary display (no rotation with player)
             reflection.setFixedBillboard(hologramData);
 
-            // Set transparent background and disable shadow to reduce visual clutter
+            // Transparent background, but keep the text shadow ON.
+            //
+            // These two were a matched pair that had never actually run: both reflective
+            // lookups resolved to null on every shipped version, so holograms kept
+            // FancyHolograms' dark backing plate and its shadow. Repairing the lookups in
+            // 10073eb enabled both at once - the plate disappeared and the shadow went with
+            // it, leaving text sitting directly on the stained-glass border with nothing
+            // separating it. Confirmed unreadable on a live server.
+            //
+            // The shadow is what Minecraft provides for exactly this: it costs nothing on a
+            // clean background and carries the contrast when the background is transparent.
+            // Borders are stained glass in arbitrary colours, so there is no single colour
+            // the text can assume behind it.
+            //
+            // Both of these are hardcoded, which is the real limitation - a server with pale
+            // borders may well want the plate back. Making them configurable is queued with
+            // the first-run setup work (#97).
             reflection.setTransparentBackground(hologramData);
-            reflection.disableShadow(hologramData);
+            reflection.enableShadow(hologramData);
 
             // Set rotation to face the chunk (custom orientation)
             reflection.setRotation(hologramData, data.getYaw(), data.getPitch());
@@ -691,10 +707,14 @@ public final class FancyHologramsProvider implements HologramProvider {
             }
         }
 
-        public boolean disableShadow(Object hologramData) {
+        /**
+         * Turns the text shadow on. The background is transparent, so the shadow is the only
+         * thing giving the text contrast against whatever border block sits behind it.
+         */
+        public boolean enableShadow(Object hologramData) {
             if (setShadowMethod == null) return false;
             try {
-                setShadowMethod.invoke(hologramData, false);
+                setShadowMethod.invoke(hologramData, true);
                 return true;
             } catch (Exception e) {
                 return false;

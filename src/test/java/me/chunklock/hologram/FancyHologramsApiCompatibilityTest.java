@@ -39,7 +39,9 @@ public class FancyHologramsApiCompatibilityTest {
 
     /**
      * At least one of the two shadow spellings must resolve, and the provider tries the
-     * current name first. If both disappear, holograms render with a shadow and nothing warns.
+     * current name first. If both disappear the toggle silently does nothing and nothing warns -
+     * which now means text loses its shadow against a transparent background and turns
+     * unreadable over a stained-glass border, rather than merely keeping one it did not want.
      */
     @Test
     void aShadowToggleResolvesUnderOneOfItsTwoNames() {
