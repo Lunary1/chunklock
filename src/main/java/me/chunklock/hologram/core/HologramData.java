@@ -67,13 +67,27 @@ public class HologramData {
         private final Location location;
         private List<String> lines;
         private double viewDistance = 32.0;
-        private float yaw = 0.0f;
-        private float pitch = 0.0f;
+        private float yaw;
+        private float pitch;
         private boolean persistent = false;
 
+        /**
+         * Orientation defaults to the location's own yaw and pitch (issue #104).
+         *
+         * <p>It used to default to zero, and no caller ever set it. Border holograms are placed by
+         * {@code HologramLocationUtils}, which stamps the correct per-wall facing onto the Location
+         * it returns - and the provider renders them with a FIXED billboard, so that yaw is the
+         * only thing deciding which way the text points. Dropping it here made every hologram face
+         * south, leaving three of the four chunk walls edge-on and unreadable.
+         *
+         * <p>Taking the default from the Location keeps the two in step, so a new call site cannot
+         * reintroduce the bug by forgetting to copy the angle across.
+         */
         public Builder(HologramId id, Location location) {
             this.id = id;
             this.location = location;
+            this.yaw = location != null ? location.getYaw() : 0.0f;
+            this.pitch = location != null ? location.getPitch() : 0.0f;
         }
 
         public Builder lines(List<String> lines) {
