@@ -2,7 +2,9 @@ package me.chunklock.services;
 
 import me.chunklock.ChunklockPlugin;
 import me.chunklock.models.ChunkData;
+import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
 import java.util.*;
@@ -22,6 +24,15 @@ public class ChunkDatabase implements ChunkStore {
     private final Map<String, ChunkData> memoryCache = new ConcurrentHashMap<>();
     private static final long MEMORY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
     private final Map<String, Long> cacheTimestamps = new ConcurrentHashMap<>();
+
+    // Commits are grouped: a transactional commit forces a disk sync, and
+    // saveChunk runs on the main thread for every chunk the plugin evaluates.
+    // One commit per chunk froze the server for hundreds of milliseconds when
+    // borders were scanned. Writes now land in the transaction and a task
+    // commits them once per second, plus once on close.
+    private static final long COMMIT_INTERVAL_TICKS = 20L;
+    private volatile boolean dirty = false;
+    private BukkitTask commitTask;
 
     public ChunkDatabase(ChunklockPlugin plugin) {
         this.plugin = plugin;
@@ -47,6 +58,9 @@ public class ChunkDatabase implements ChunkStore {
                     .valueSerializer(org.mapdb.Serializer.JAVA)
                     .createOrOpen();
             chunkMap = map;
+
+            commitTask = Bukkit.getScheduler().runTaskTimer(plugin, this::commitIfDirty,
+                    COMMIT_INTERVAL_TICKS, COMMIT_INTERVAL_TICKS);
 
             plugin.getLogger().info("✅ ChunkDatabase initialized: " + databaseFile.getName());
             return true;
@@ -90,7 +104,7 @@ public class ChunkDatabase implements ChunkStore {
     public void saveChunk(String chunkKey, ChunkData data) {
         try {
             chunkMap.put(chunkKey, data);
-            db.commit();
+            dirty = true;
             
             // Update cache
             memoryCache.put(chunkKey, data);
@@ -109,7 +123,7 @@ public class ChunkDatabase implements ChunkStore {
     public void deleteChunk(String chunkKey) {
         try {
             chunkMap.remove(chunkKey);
-            db.commit();
+            dirty = true;
             
             // Remove from cache
             memoryCache.remove(chunkKey);
@@ -162,7 +176,24 @@ public class ChunkDatabase implements ChunkStore {
         return worldName + ":" + x + ":" + z;
     }
 
+    private void commitIfDirty() {
+        if (!dirty || db == null || db.isClosed()) {
+            return;
+        }
+        dirty = false;
+        try {
+            db.commit();
+        } catch (Exception e) {
+            dirty = true;
+            plugin.getLogger().severe("Failed to commit chunk database: " + e.getMessage());
+        }
+    }
+
     public void close() {
+        if (commitTask != null) {
+            commitTask.cancel();
+            commitTask = null;
+        }
         try {
             if (db != null && !db.isClosed()) {
                 // Commit any pending transactions before closing
