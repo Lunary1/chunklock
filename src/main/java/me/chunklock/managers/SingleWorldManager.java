@@ -113,6 +113,14 @@ public class SingleWorldManager {
      * Helper method to start the chunk pre-allocation service
      */
     private void startPreAllocationService(World world) {
+        // Disabled: nothing consumes the pool (getPreAllocatedChunk() has no
+        // caller; starting chunks come from findValidStartingChunk). Filling it
+        // ran world.getChunkAt() synchronously on the main thread every five
+        // seconds, which froze the server for 10-25 s after /chunklock setup.
+        if (true) {
+            plugin.getLogger().fine("Chunk pre-allocation service not started: the pool is unused");
+            return;
+        }
         try {
             me.chunklock.services.ChunkPreAllocationService preAllocationService = 
                 ChunklockPlugin.getInstance().getChunkPreAllocationService();
