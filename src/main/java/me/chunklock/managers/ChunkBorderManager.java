@@ -24,6 +24,7 @@ import me.chunklock.border.BorderConfigLoader;
 import me.chunklock.border.BorderPlacementService;
 import me.chunklock.border.BorderUpdateQueue;
 import me.chunklock.border.BorderStateManager;
+import me.chunklock.border.ClientBorderView;
 import me.chunklock.util.chunk.ChunkCoordinate;
 
 import java.util.*;
@@ -44,6 +45,8 @@ public final class ChunkBorderManager {
     private final PlayerProgressTracker progressTracker;
     private final BorderConfigLoader configLoader = new BorderConfigLoader();
     private BorderPlacementService placementService;
+    private ClientBorderView clientView;
+    private boolean clientSide;
     private final BorderStateManager borderState;
     private final BorderUpdateQueue updateQueue;
     
@@ -74,6 +77,12 @@ public final class ChunkBorderManager {
         loadConfiguration();
         this.borderState = new BorderStateManager();
         this.placementService = new BorderPlacementService(chunkLockManager, teamManager, createConfigObject());
+        // Switching client-side on or off needs a restart, not a reload.
+        if (clientSide) {
+            this.clientView = new ClientBorderView(plugin, borderMaterial);
+            this.placementService.setClientView(clientView);
+            Bukkit.getPluginManager().registerEvents(clientView, plugin);
+        }
         this.updateQueue = new BorderUpdateQueue(plugin, maxBorderUpdatesPerTick, this::updateBordersForPlayer);
     }
     
@@ -126,6 +135,7 @@ public final class ChunkBorderManager {
 
         enabled = cfg.enabled;
         useFullHeight = cfg.useFullHeight;
+        clientSide = cfg.clientSide;
         borderHeight = cfg.borderHeight;
         minYOffset = cfg.minYOffset;
         maxYOffset = cfg.maxYOffset;
@@ -164,6 +174,9 @@ public final class ChunkBorderManager {
     public void reloadConfiguration() {
         loadConfiguration();
         this.placementService = new BorderPlacementService(chunkLockManager, teamManager, createConfigObject());
+        if (clientView != null) {
+            this.placementService.setClientView(clientView);
+        }
         
         // If borders were disabled, clean up all existing borders
         if (!enabled) {
@@ -216,11 +229,26 @@ public final class ChunkBorderManager {
                 plugin.getLogger().info("Updating borders for player " + player.getName() + " in world " + player.getWorld().getName());
             }
             
-            // Remove existing borders first
-            removeBordersForPlayer(player);
+            // Remove existing borders first. Client-side, only the state is
+            // reset: the client is synced once, with the difference, below.
+            if (clientView == null) {
+                removeBordersForPlayer(player);
+            }
             
             // Find all unlocked chunks for this player in the nearby area
             Set<ChunkCoordinate> unlockedChunks = findUnlockedChunks(player);
+
+            // Client-side: rebuilding every border location costs tens of
+            // thousands of Location objects. Compare the list of border sides
+            // first; most chunk changes leave it untouched.
+            Set<Long> signature = null;
+            if (clientView != null) {
+                signature = borderSignature(player, unlockedChunks);
+                if (clientView.hasSignature(player.getUniqueId(), signature)) {
+                    return;
+                }
+                borderState.removeAllBordersForPlayer(player.getUniqueId());
+            }
             
             if (debugLogging) {
                 plugin.getLogger().info("Found " + unlockedChunks.size() + " unlocked chunks for " + player.getName());
@@ -253,11 +281,33 @@ public final class ChunkBorderManager {
                     plugin.getLogger().info("No unlocked chunks found for " + player.getName() + ", no borders to place");
                 }
             }
+
+            if (clientView != null) {
+                clientView.sync(player, borderState.getPlayerBorders(player.getUniqueId()));
+                clientView.setSignature(player.getUniqueId(), signature);
+            }
             
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, 
                 "Error updating borders for player " + player.getName(), e);
         }
+    }
+
+    /** Each border side as (chunk x, chunk z, direction), packed into a long. */
+    private Set<Long> borderSignature(Player player, Set<ChunkCoordinate> unlockedChunks) {
+        Set<Long> signature = new HashSet<>();
+        for (ChunkCoordinate coord : unlockedChunks) {
+            World chunkWorld = Bukkit.getWorld(coord.world);
+            if (chunkWorld == null || !isWorldEnabled(chunkWorld)) {
+                continue;
+            }
+            Chunk chunk = chunkWorld.getChunkAt(coord.x, coord.z);
+            long base = (((long) coord.x << 32) | (coord.z & 0xffffffffL)) << 2;
+            for (BorderPlacementService.BorderDirection dir : placementService.getSidesTouchingLockedChunks(chunk, player)) {
+                signature.add(base | dir.ordinal());
+            }
+        }
+        return signature;
     }
     
     /**
@@ -310,6 +360,11 @@ public final class ChunkBorderManager {
      */
     public void removeBordersForPlayer(Player player) {
         UUID playerId = player.getUniqueId();
+        if (clientView != null) {
+            borderState.removeAllBordersForPlayer(playerId);
+            clientView.sync(player, null);
+            return;
+        }
         Map<Location, BlockData> borders = borderState.removeAllBordersForPlayer(playerId);
         
         if (borders.isEmpty()) {
@@ -424,6 +479,10 @@ public final class ChunkBorderManager {
                 } catch (Exception ignored) {
                 }
             }
+
+            if (clientView != null) {
+                clientView.sync(player, borderState.getPlayerBorders(player.getUniqueId()));
+            }
         }, updateDelay);
     }
     
@@ -453,7 +512,10 @@ public final class ChunkBorderManager {
             return;
         }
         Material type = clickedBlock.getType();
-        if (type != borderMaterial) {
+        boolean onBorder = clientView != null
+            ? clientView.isShown(player.getUniqueId(), clickedBlock.getLocation())
+            : type == borderMaterial;
+        if (!onBorder) {
             return;
         }
 
@@ -645,6 +707,7 @@ public final class ChunkBorderManager {
         BorderConfig cfg = new BorderConfig();
         cfg.enabled = enabled;
         cfg.useFullHeight = useFullHeight;
+        cfg.clientSide = clientSide;
         cfg.borderHeight = borderHeight;
         cfg.minYOffset = minYOffset;
         cfg.maxYOffset = maxYOffset;

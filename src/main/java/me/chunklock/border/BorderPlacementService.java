@@ -13,12 +13,19 @@ import org.bukkit.entity.Player;
 import java.util.*;
 
 public class BorderPlacementService {
+
     private final ChunkLockManager chunkLockManager;
     private final BorderConfig config;
+    /** Set when borders are client-side: nothing is written to the world. */
+    private ClientBorderView clientView;
 
     public BorderPlacementService(ChunkLockManager chunkLockManager, TeamManager teamManager, BorderConfig config) {
         this.chunkLockManager = chunkLockManager;
         this.config = config;
+    }
+
+    public void setClientView(ClientBorderView clientView) {
+        this.clientView = clientView;
     }
 
     public void createBordersForChunk(Player player, Chunk chunk, BorderStateManager borderState) {
@@ -39,6 +46,13 @@ public class BorderPlacementService {
                     
                     // CHANGED: Only check for the single border material from config
                     if (block.getType() == config.borderMaterial) continue;
+
+                    if (clientView != null) {
+                        // Client-side borders: record the location only, the
+                        // world keeps its real block.
+                        borderState.addBorderBlock(id, loc, clientView.placeholder(), lockedCoord);
+                        continue;
+                    }
 
                     // Use BorderStateManager instead of direct map access
                     borderState.addBorderBlock(id, loc, block.getBlockData().clone(), lockedCoord);
@@ -65,7 +79,7 @@ public class BorderPlacementService {
                 if (!chunkLockManager.isLocked(neighbor)) {
                     for (Location loc : getBorderLocationsForSide(chunk, dir, player)) {
                         BlockData data = borderState.removeBorderBlock(id, loc);
-                        if (data != null) {
+                        if (data != null && clientView == null) {
                             Block block = loc.getBlock();
                             // CHANGED: Only check for the single border material from config
                             if (block.getType() == config.borderMaterial) {
@@ -83,7 +97,7 @@ public class BorderPlacementService {
         }
     }
 
-    private EnumSet<BorderDirection> getSidesTouchingLockedChunks(Chunk chunk, Player player) {
+    public EnumSet<BorderDirection> getSidesTouchingLockedChunks(Chunk chunk, Player player) {
         EnumSet<BorderDirection> sides = EnumSet.noneOf(BorderDirection.class);
         World world = chunk.getWorld();
         UUID id = player.getUniqueId();

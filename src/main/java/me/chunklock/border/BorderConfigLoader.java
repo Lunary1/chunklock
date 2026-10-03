@@ -28,6 +28,7 @@ public class BorderConfigLoader {
         if (bordersConfig != null) {
             c.enabled = bordersConfig.isEnabled();
             c.useFullHeight = bordersConfig.isUseFullHeight();
+            c.clientSide = bordersConfig.isClientSide();
             c.borderHeight = bordersConfig.getBorderHeight();
             c.minYOffset = bordersConfig.getMinYOffset();
             c.maxYOffset = bordersConfig.getMaxYOffset();
@@ -43,6 +44,7 @@ public class BorderConfigLoader {
             // Fallback defaults
             c.enabled = true;
             c.useFullHeight = true;
+            c.clientSide = false;
             c.borderHeight = 3;
             c.minYOffset = -2;
             c.maxYOffset = 4;

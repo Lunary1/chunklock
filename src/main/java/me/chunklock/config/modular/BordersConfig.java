@@ -32,6 +32,10 @@ public final class BordersConfig {
         return config.getBoolean("enabled", true);
     }
 
+    public boolean isClientSide() {
+        return config.getBoolean("client-side", false);
+    }
+
     public boolean isUseFullHeight() {
         return config.getBoolean("use-full-height", true);
     }

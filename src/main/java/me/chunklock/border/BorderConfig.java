@@ -5,6 +5,7 @@ import org.bukkit.Material;
 public class BorderConfig {
     public boolean enabled;
     public boolean useFullHeight;
+    public boolean clientSide;
     public int borderHeight;
     public int minYOffset;
     public int maxYOffset;
